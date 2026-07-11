@@ -1,4 +1,7 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:file_picker/file_picker.dart';
 
 import 'core/media/media_item.dart';
 import 'core/media/media_library_store.dart';
@@ -48,25 +51,44 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final _store = MediaLibraryStore();
   final _scanner = MediaScanner();
-  final _pathController = TextEditingController();
+  final _searchController = TextEditingController();
 
   var _roots = <String>[];
   var _items = <MediaItem>[];
   var _skippedPaths = <String>[];
   var _loading = true;
   var _scanning = false;
+  var _query = '';
+  MediaItem? _selectedItem;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(() {
+      setState(() {
+        _query = _searchController.text.trim().toLowerCase();
+      });
+    });
     _loadLibrary();
   }
 
   @override
   void dispose() {
-    _pathController.dispose();
+    _searchController.dispose();
     super.dispose();
+  }
+
+  List<MediaItem> get _filteredItems {
+    if (_query.isEmpty) {
+      return _items;
+    }
+
+    return _items.where((item) {
+      return item.title.toLowerCase().contains(_query) ||
+          item.path.toLowerCase().contains(_query) ||
+          item.extension.toLowerCase().contains(_query);
+    }).toList();
   }
 
   Future<void> _loadLibrary() async {
@@ -78,6 +100,7 @@ class _HomePageState extends State<HomePage> {
       setState(() {
         _roots = snapshot.roots;
         _items = snapshot.items;
+        _selectedItem = snapshot.items.isEmpty ? null : snapshot.items.first;
         _loading = false;
       });
     } catch (error) {
@@ -91,9 +114,12 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _addRoot() async {
-    final path = _pathController.text.trim();
-    if (path.isEmpty || _roots.contains(path)) {
+  Future<void> _selectRoot() async {
+    final path = await FilePicker.platform.getDirectoryPath(
+      dialogTitle: '选择影视文件夹',
+      lockParentWindow: true,
+    );
+    if (path == null || path.trim().isEmpty || _roots.contains(path)) {
       return;
     }
 
@@ -102,7 +128,6 @@ class _HomePageState extends State<HomePage> {
 
     setState(() {
       _roots = updatedRoots;
-      _pathController.clear();
     });
   }
 
@@ -135,8 +160,22 @@ class _HomePageState extends State<HomePage> {
       if (!mounted) {
         return;
       }
+      final selectedPath = _selectedItem?.path;
+      MediaItem? nextSelectedItem;
+      if (selectedPath != null) {
+        for (final item in result.items) {
+          if (item.path == selectedPath) {
+            nextSelectedItem = item;
+            break;
+          }
+        }
+      }
+
       setState(() {
         _items = result.items;
+        _selectedItem =
+            nextSelectedItem ??
+            (result.items.isEmpty ? null : result.items.first);
         _skippedPaths = result.skippedPaths;
         _scanning = false;
       });
@@ -151,12 +190,33 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _openItemLocation(MediaItem item) async {
+    try {
+      if (Platform.isWindows) {
+        await Process.start('explorer.exe', ['/select,', item.path]);
+        return;
+      }
+
+      if (Platform.isMacOS) {
+        await Process.start('open', ['-R', item.path]);
+        return;
+      }
+
+      await Process.start('xdg-open', [File(item.path).parent.path]);
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = '打开文件位置失败：$error';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -170,9 +230,8 @@ class _HomePageState extends State<HomePage> {
                 width: 360,
                 child: _LibraryPanel(
                   roots: _roots,
-                  pathController: _pathController,
                   scanning: _scanning,
-                  onAddRoot: _addRoot,
+                  onSelectRoot: _selectRoot,
                   onRemoveRoot: _removeRoot,
                   onScan: _scan,
                 ),
@@ -180,9 +239,19 @@ class _HomePageState extends State<HomePage> {
               const SizedBox(width: 24),
               Expanded(
                 child: _MediaShelf(
-                  items: _items,
+                  items: _filteredItems,
+                  totalItems: _items.length,
+                  searchController: _searchController,
+                  selectedItem: _selectedItem,
                   skippedPaths: _skippedPaths,
                   error: _error,
+                  onSelectItem: (item) {
+                    setState(() {
+                      _selectedItem = item;
+                    });
+                  },
+                  onClearSearch: _searchController.clear,
+                  onOpenLocation: _openItemLocation,
                 ),
               ),
             ],
@@ -196,17 +265,15 @@ class _HomePageState extends State<HomePage> {
 class _LibraryPanel extends StatelessWidget {
   const _LibraryPanel({
     required this.roots,
-    required this.pathController,
     required this.scanning,
-    required this.onAddRoot,
+    required this.onSelectRoot,
     required this.onRemoveRoot,
     required this.onScan,
   });
 
   final List<String> roots;
-  final TextEditingController pathController;
   final bool scanning;
-  final VoidCallback onAddRoot;
+  final VoidCallback onSelectRoot;
   final ValueChanged<String> onRemoveRoot;
   final VoidCallback onScan;
 
@@ -225,24 +292,13 @@ class _LibraryPanel extends StatelessWidget {
           style: TextStyle(color: Theme.of(context).colorScheme.outline),
         ),
         const SizedBox(height: 28),
-        TextField(
-          controller: pathController,
-          decoration: const InputDecoration(
-            labelText: '媒体目录路径',
-            hintText: r'D:\Movies',
-            border: OutlineInputBorder(),
-            prefixIcon: Icon(Icons.folder_outlined),
-          ),
-          onSubmitted: (_) => onAddRoot(),
-        ),
-        const SizedBox(height: 12),
         Row(
           children: [
             Expanded(
               child: FilledButton.icon(
-                onPressed: onAddRoot,
-                icon: const Icon(Icons.add),
-                label: const Text('添加目录'),
+                onPressed: onSelectRoot,
+                icon: const Icon(Icons.create_new_folder_outlined),
+                label: const Text('选择目录'),
               ),
             ),
             const SizedBox(width: 10),
@@ -259,17 +315,14 @@ class _LibraryPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 24),
-        Text(
-          '媒体库目录',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
+        Text('媒体库目录', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
         Expanded(
           child: roots.isEmpty
               ? const _EmptyState(
                   icon: Icons.folder_open,
                   title: '尚未添加目录',
-                  message: '输入本地影视文件夹路径后开始扫描。',
+                  message: '选择一个或多个本地影视文件夹后开始扫描。',
                 )
               : ListView.separated(
                   itemCount: roots.length,
@@ -302,13 +355,25 @@ class _LibraryPanel extends StatelessWidget {
 class _MediaShelf extends StatelessWidget {
   const _MediaShelf({
     required this.items,
+    required this.totalItems,
+    required this.searchController,
+    required this.selectedItem,
     required this.skippedPaths,
     required this.error,
+    required this.onSelectItem,
+    required this.onClearSearch,
+    required this.onOpenLocation,
   });
 
   final List<MediaItem> items;
+  final int totalItems;
+  final TextEditingController searchController;
+  final MediaItem? selectedItem;
   final List<String> skippedPaths;
   final String? error;
+  final ValueChanged<MediaItem> onSelectItem;
+  final VoidCallback onClearSearch;
+  final ValueChanged<MediaItem> onOpenLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -328,37 +393,84 @@ class _MediaShelf extends StatelessWidget {
           ),
           const SizedBox(height: 12),
         ],
-        Text(
-          '最近添加',
-          style: Theme.of(context).textTheme.headlineSmall,
+        Row(
+          children: [
+            Expanded(
+              child: Text(
+                '影片库',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+            ),
+            Text(
+              '${items.length} / $totalItems',
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            ),
+          ],
         ),
         const SizedBox(height: 12),
+        TextField(
+          controller: searchController,
+          decoration: InputDecoration(
+            hintText: '搜索片名、路径、格式',
+            border: const OutlineInputBorder(),
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: searchController.text.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: '清空搜索',
+                    onPressed: onClearSearch,
+                    icon: const Icon(Icons.close),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 16),
         Expanded(
           child: items.isEmpty
               ? const _EmptyState(
                   icon: Icons.movie_filter_outlined,
                   title: '还没有影片',
-                  message: '添加目录并扫描后，这里会显示本地视频文件。',
+                  message: '添加目录并扫描后，或调整搜索条件后重试。',
                 )
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final columns = (constraints.maxWidth / 220)
-                        .floor()
-                        .clamp(2, 6)
-                        .toInt();
-                    return GridView.builder(
-                      itemCount: items.length,
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        crossAxisSpacing: 14,
-                        mainAxisSpacing: 14,
-                        childAspectRatio: 0.72,
+              : Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final columns = (constraints.maxWidth / 220)
+                              .floor()
+                              .clamp(2, 5)
+                              .toInt();
+                          return GridView.builder(
+                            itemCount: items.length,
+                            gridDelegate:
+                                SliverGridDelegateWithFixedCrossAxisCount(
+                                  crossAxisCount: columns,
+                                  crossAxisSpacing: 14,
+                                  mainAxisSpacing: 14,
+                                  childAspectRatio: 0.72,
+                                ),
+                            itemBuilder: (context, index) {
+                              final item = items[index];
+                              return _MediaCard(
+                                item: item,
+                                selected: item.path == selectedItem?.path,
+                                onTap: () => onSelectItem(item),
+                              );
+                            },
+                          );
+                        },
                       ),
-                      itemBuilder: (context, index) {
-                        return _MediaCard(item: items[index]);
-                      },
-                    );
-                  },
+                    ),
+                    const SizedBox(width: 16),
+                    SizedBox(
+                      width: 320,
+                      child: _MediaDetailPanel(
+                        item: selectedItem,
+                        onOpenLocation: onOpenLocation,
+                      ),
+                    ),
+                  ],
                 ),
         ),
       ],
@@ -421,10 +533,7 @@ class _StatCard extends StatelessWidget {
                 style: TextStyle(color: Theme.of(context).colorScheme.outline),
               ),
               const SizedBox(height: 8),
-              Text(
-                value,
-                style: Theme.of(context).textTheme.headlineMedium,
-              ),
+              Text(value, style: Theme.of(context).textTheme.headlineMedium),
             ],
           ),
         ),
@@ -434,73 +543,195 @@ class _StatCard extends StatelessWidget {
 }
 
 class _MediaCard extends StatelessWidget {
-  const _MediaCard({required this.item});
+  const _MediaCard({
+    required this.item,
+    required this.selected,
+    required this.onTap,
+  });
 
   final MediaItem item;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF2D3036), Color(0xFF111216)],
+      shape: RoundedRectangleBorder(
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        side: BorderSide(
+          color: selected ? colorScheme.primary : Colors.transparent,
+          width: 1.4,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: const BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF2D3036), Color(0xFF111216)],
+                  ),
                 ),
+                child: const Icon(Icons.movie, size: 52),
               ),
-              child: const Icon(Icons.movie, size: 52),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  '${item.extension.toUpperCase()}  ${_formatDate(item.addedAt)}',
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.outline,
-                    fontSize: 12,
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    item.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  item.path,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: Theme.of(context).colorScheme.outline,
-                    fontSize: 11,
+                  const SizedBox(height: 8),
+                  Text(
+                    '${item.extension.toUpperCase()}  ${formatDate(item.addedAt)}',
+                    style: TextStyle(color: colorScheme.outline, fontSize: 12),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 8),
+                  Text(
+                    item.path,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(color: colorScheme.outline, fontSize: 11),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  static String _formatDate(DateTime date) {
+  static String formatDate(DateTime date) {
     final local = date.toLocal();
     return '${local.year}-${_twoDigits(local.month)}-${_twoDigits(local.day)}';
   }
 
   static String _twoDigits(int value) {
     return value.toString().padLeft(2, '0');
+  }
+}
+
+class _MediaDetailPanel extends StatelessWidget {
+  const _MediaDetailPanel({required this.item, required this.onOpenLocation});
+
+  final MediaItem? item;
+  final ValueChanged<MediaItem> onOpenLocation;
+
+  @override
+  Widget build(BuildContext context) {
+    final selectedItem = item;
+    if (selectedItem == null) {
+      return const _EmptyState(
+        icon: Icons.info_outline,
+        title: '未选择影片',
+        message: '选择一部影片后查看文件详情。',
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(18),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Container(
+              height: 170,
+              decoration: const BoxDecoration(
+                borderRadius: BorderRadius.all(Radius.circular(8)),
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF30343B), Color(0xFF15161A)],
+                ),
+              ),
+              child: const Icon(Icons.local_movies_outlined, size: 64),
+            ),
+            const SizedBox(height: 18),
+            Text(
+              selectedItem.title,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 18),
+            _DetailRow(
+              label: '格式',
+              value: selectedItem.extension.toUpperCase(),
+            ),
+            _DetailRow(
+              label: '大小',
+              value: _StatsBar._formatBytes(selectedItem.sizeBytes),
+            ),
+            _DetailRow(
+              label: '添加',
+              value: _MediaCard.formatDate(selectedItem.addedAt),
+            ),
+            _DetailRow(
+              label: '修改',
+              value: _MediaCard.formatDate(selectedItem.modifiedAt),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '文件路径',
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            ),
+            const SizedBox(height: 6),
+            SelectableText(
+              selectedItem.path,
+              style: const TextStyle(fontSize: 12),
+            ),
+            const Spacer(),
+            FilledButton.icon(
+              onPressed: () => onOpenLocation(selectedItem),
+              icon: const Icon(Icons.folder_open),
+              label: const Text('打开位置'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailRow extends StatelessWidget {
+  const _DetailRow({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 48,
+            child: Text(
+              label,
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            ),
+          ),
+          Expanded(
+            child: Text(value, maxLines: 1, overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
+    );
   }
 }
 

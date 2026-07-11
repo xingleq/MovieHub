@@ -4,10 +4,7 @@ import 'dart:io';
 import 'media_item.dart';
 
 class MediaLibrarySnapshot {
-  const MediaLibrarySnapshot({
-    required this.roots,
-    required this.items,
-  });
+  const MediaLibrarySnapshot({required this.roots, required this.items});
 
   final List<String> roots;
   final List<MediaItem> items;
@@ -17,7 +14,7 @@ class MediaLibrarySnapshot {
 
 class MediaLibraryStore {
   MediaLibraryStore({Directory? storageDirectory})
-      : _storageDirectory = storageDirectory ?? _defaultStorageDirectory();
+    : _storageDirectory = storageDirectory ?? _defaultStorageDirectory();
 
   final Directory _storageDirectory;
 

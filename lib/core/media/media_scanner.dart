@@ -3,10 +3,7 @@ import 'dart:io';
 import 'media_item.dart';
 
 class MediaScanResult {
-  const MediaScanResult({
-    required this.items,
-    required this.skippedPaths,
-  });
+  const MediaScanResult({required this.items, required this.skippedPaths});
 
   final List<MediaItem> items;
   final List<String> skippedPaths;

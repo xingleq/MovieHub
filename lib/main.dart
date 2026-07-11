@@ -59,6 +59,7 @@ class _HomePageState extends State<HomePage> {
   var _loading = true;
   var _scanning = false;
   var _query = '';
+  var _favoritesOnly = false;
   MediaItem? _selectedItem;
   String? _error;
 
@@ -80,15 +81,21 @@ class _HomePageState extends State<HomePage> {
   }
 
   List<MediaItem> get _filteredItems {
-    if (_query.isEmpty) {
-      return _items;
-    }
-
     return _items.where((item) {
+      if (_favoritesOnly && !item.favorite) {
+        return false;
+      }
+      if (_query.isEmpty) {
+        return true;
+      }
       return item.title.toLowerCase().contains(_query) ||
           item.path.toLowerCase().contains(_query) ||
           item.extension.toLowerCase().contains(_query);
     }).toList();
+  }
+
+  int get _favoriteCount {
+    return _items.where((item) => item.favorite).length;
   }
 
   Future<void> _loadLibrary() async {
@@ -213,6 +220,30 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _toggleFavorite(MediaItem item) async {
+    final updatedItems = _items.map((current) {
+      if (current.path != item.path) {
+        return current;
+      }
+      return current.copyWith(favorite: !current.favorite);
+    }).toList();
+
+    MediaItem? updatedSelectedItem;
+    for (final updatedItem in updatedItems) {
+      if (updatedItem.path == _selectedItem?.path) {
+        updatedSelectedItem = updatedItem;
+        break;
+      }
+    }
+
+    await _store.save(MediaLibrarySnapshot(roots: _roots, items: updatedItems));
+
+    setState(() {
+      _items = updatedItems;
+      _selectedItem = updatedSelectedItem;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -241,7 +272,9 @@ class _HomePageState extends State<HomePage> {
                 child: _MediaShelf(
                   items: _filteredItems,
                   totalItems: _items.length,
+                  favoriteCount: _favoriteCount,
                   searchController: _searchController,
+                  favoritesOnly: _favoritesOnly,
                   selectedItem: _selectedItem,
                   skippedPaths: _skippedPaths,
                   error: _error,
@@ -251,6 +284,12 @@ class _HomePageState extends State<HomePage> {
                     });
                   },
                   onClearSearch: _searchController.clear,
+                  onFavoritesOnlyChanged: (value) {
+                    setState(() {
+                      _favoritesOnly = value;
+                    });
+                  },
+                  onToggleFavorite: _toggleFavorite,
                   onOpenLocation: _openItemLocation,
                 ),
               ),
@@ -356,23 +395,31 @@ class _MediaShelf extends StatelessWidget {
   const _MediaShelf({
     required this.items,
     required this.totalItems,
+    required this.favoriteCount,
     required this.searchController,
+    required this.favoritesOnly,
     required this.selectedItem,
     required this.skippedPaths,
     required this.error,
     required this.onSelectItem,
     required this.onClearSearch,
+    required this.onFavoritesOnlyChanged,
+    required this.onToggleFavorite,
     required this.onOpenLocation,
   });
 
   final List<MediaItem> items;
   final int totalItems;
+  final int favoriteCount;
   final TextEditingController searchController;
+  final bool favoritesOnly;
   final MediaItem? selectedItem;
   final List<String> skippedPaths;
   final String? error;
   final ValueChanged<MediaItem> onSelectItem;
   final VoidCallback onClearSearch;
+  final ValueChanged<bool> onFavoritesOnlyChanged;
+  final ValueChanged<MediaItem> onToggleFavorite;
   final ValueChanged<MediaItem> onOpenLocation;
 
   @override
@@ -380,7 +427,7 @@ class _MediaShelf extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _StatsBar(items: items),
+        _StatsBar(items: items, favoriteCount: favoriteCount),
         const SizedBox(height: 20),
         if (error != null) ...[
           _MessageBanner(icon: Icons.error_outline, message: error!),
@@ -408,20 +455,45 @@ class _MediaShelf extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-        TextField(
-          controller: searchController,
-          decoration: InputDecoration(
-            hintText: '搜索片名、路径、格式',
-            border: const OutlineInputBorder(),
-            prefixIcon: const Icon(Icons.search),
-            suffixIcon: searchController.text.isEmpty
-                ? null
-                : IconButton(
-                    tooltip: '清空搜索',
-                    onPressed: onClearSearch,
-                    icon: const Icon(Icons.close),
-                  ),
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: searchController,
+                decoration: InputDecoration(
+                  hintText: '搜索片名、路径、格式',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: searchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '清空搜索',
+                          onPressed: onClearSearch,
+                          icon: const Icon(Icons.close),
+                        ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            SegmentedButton<bool>(
+              segments: const [
+                ButtonSegment(
+                  value: false,
+                  icon: Icon(Icons.grid_view),
+                  label: Text('全部'),
+                ),
+                ButtonSegment(
+                  value: true,
+                  icon: Icon(Icons.favorite),
+                  label: Text('收藏'),
+                ),
+              ],
+              selected: {favoritesOnly},
+              onSelectionChanged: (selection) {
+                onFavoritesOnlyChanged(selection.first);
+              },
+            ),
+          ],
         ),
         const SizedBox(height: 16),
         Expanded(
@@ -456,6 +528,7 @@ class _MediaShelf extends StatelessWidget {
                                 item: item,
                                 selected: item.path == selectedItem?.path,
                                 onTap: () => onSelectItem(item),
+                                onToggleFavorite: () => onToggleFavorite(item),
                               );
                             },
                           );
@@ -467,6 +540,7 @@ class _MediaShelf extends StatelessWidget {
                       width: 320,
                       child: _MediaDetailPanel(
                         item: selectedItem,
+                        onToggleFavorite: onToggleFavorite,
                         onOpenLocation: onOpenLocation,
                       ),
                     ),
@@ -479,9 +553,10 @@ class _MediaShelf extends StatelessWidget {
 }
 
 class _StatsBar extends StatelessWidget {
-  const _StatsBar({required this.items});
+  const _StatsBar({required this.items, required this.favoriteCount});
 
   final List<MediaItem> items;
+  final int favoriteCount;
 
   @override
   Widget build(BuildContext context) {
@@ -490,6 +565,8 @@ class _StatsBar extends StatelessWidget {
     return Row(
       children: [
         _StatCard(label: '影片', value: '${items.length}'),
+        const SizedBox(width: 12),
+        _StatCard(label: '收藏', value: '$favoriteCount'),
         const SizedBox(width: 12),
         _StatCard(label: '容量', value: _formatBytes(totalSize)),
       ],
@@ -547,11 +624,13 @@ class _MediaCard extends StatelessWidget {
     required this.item,
     required this.selected,
     required this.onTap,
+    required this.onToggleFavorite,
   });
 
   final MediaItem item;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -572,15 +651,32 @@ class _MediaCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: Container(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                    colors: [Color(0xFF2D3036), Color(0xFF111216)],
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: Container(
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [Color(0xFF2D3036), Color(0xFF111216)],
+                        ),
+                      ),
+                      child: const Icon(Icons.movie, size: 52),
+                    ),
                   ),
-                ),
-                child: const Icon(Icons.movie, size: 52),
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: IconButton.filledTonal(
+                      tooltip: item.favorite ? '取消收藏' : '收藏',
+                      onPressed: onToggleFavorite,
+                      icon: Icon(
+                        item.favorite ? Icons.favorite : Icons.favorite_border,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
             Padding(
@@ -626,9 +722,14 @@ class _MediaCard extends StatelessWidget {
 }
 
 class _MediaDetailPanel extends StatelessWidget {
-  const _MediaDetailPanel({required this.item, required this.onOpenLocation});
+  const _MediaDetailPanel({
+    required this.item,
+    required this.onToggleFavorite,
+    required this.onOpenLocation,
+  });
 
   final MediaItem? item;
+  final ValueChanged<MediaItem> onToggleFavorite;
   final ValueChanged<MediaItem> onOpenLocation;
 
   @override
@@ -695,10 +796,28 @@ class _MediaDetailPanel extends StatelessWidget {
               style: const TextStyle(fontSize: 12),
             ),
             const Spacer(),
-            FilledButton.icon(
-              onPressed: () => onOpenLocation(selectedItem),
-              icon: const Icon(Icons.folder_open),
-              label: const Text('打开位置'),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.tonalIcon(
+                    onPressed: () => onToggleFavorite(selectedItem),
+                    icon: Icon(
+                      selectedItem.favorite
+                          ? Icons.favorite
+                          : Icons.favorite_border,
+                    ),
+                    label: Text(selectedItem.favorite ? '已收藏' : '收藏'),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: () => onOpenLocation(selectedItem),
+                    icon: const Icon(Icons.folder_open),
+                    label: const Text('打开位置'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),

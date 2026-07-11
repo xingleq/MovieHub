@@ -8,6 +8,7 @@ class MediaItem {
     required this.sizeBytes,
     required this.modifiedAt,
     required this.addedAt,
+    required this.favorite,
   });
 
   final String path;
@@ -16,6 +17,7 @@ class MediaItem {
   final int sizeBytes;
   final DateTime modifiedAt;
   final DateTime addedAt;
+  final bool favorite;
 
   factory MediaItem.fromFile(File file, {DateTime? addedAt}) {
     final stat = file.statSync();
@@ -31,6 +33,7 @@ class MediaItem {
       sizeBytes: stat.size,
       modifiedAt: stat.modified,
       addedAt: addedAt ?? DateTime.now(),
+      favorite: false,
     );
   }
 
@@ -42,6 +45,7 @@ class MediaItem {
       sizeBytes: json['sizeBytes'] as int,
       modifiedAt: DateTime.parse(json['modifiedAt'] as String),
       addedAt: DateTime.parse(json['addedAt'] as String),
+      favorite: json['favorite'] as bool? ?? false,
     );
   }
 
@@ -53,6 +57,7 @@ class MediaItem {
       'sizeBytes': sizeBytes,
       'modifiedAt': modifiedAt.toIso8601String(),
       'addedAt': addedAt.toIso8601String(),
+      'favorite': favorite,
     };
   }
 
@@ -64,6 +69,19 @@ class MediaItem {
       sizeBytes: sizeBytes,
       modifiedAt: modifiedAt,
       addedAt: previous?.addedAt ?? addedAt,
+      favorite: previous?.favorite ?? favorite,
+    );
+  }
+
+  MediaItem copyWith({bool? favorite}) {
+    return MediaItem(
+      path: path,
+      title: title,
+      extension: extension,
+      sizeBytes: sizeBytes,
+      modifiedAt: modifiedAt,
+      addedAt: addedAt,
+      favorite: favorite ?? this.favorite,
     );
   }
 

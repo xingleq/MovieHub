@@ -2,11 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 
 class TmdbSettings {
-  const TmdbSettings({required this.accessToken});
+  const TmdbSettings({required this.accessToken, required this.proxy});
 
   final String accessToken;
+  final String proxy;
 
-  static const empty = TmdbSettings(accessToken: '');
+  static const empty = TmdbSettings(accessToken: '', proxy: '');
 }
 
 class TmdbSettingsStore {
@@ -33,7 +34,10 @@ class TmdbSettingsStore {
     }
 
     final json = jsonDecode(content) as Map<String, Object?>;
-    return TmdbSettings(accessToken: json['tmdbAccessToken'] as String? ?? '');
+    return TmdbSettings(
+      accessToken: json['tmdbAccessToken'] as String? ?? '',
+      proxy: json['tmdbProxy'] as String? ?? '',
+    );
   }
 
   Future<void> save(TmdbSettings settings) async {
@@ -41,7 +45,10 @@ class TmdbSettingsStore {
       await _storageDirectory.create(recursive: true);
     }
 
-    final payload = {'tmdbAccessToken': settings.accessToken};
+    final payload = {
+      'tmdbAccessToken': settings.accessToken,
+      'tmdbProxy': settings.proxy,
+    };
     await _storageFile.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),
     );

@@ -57,6 +57,7 @@ class _HomePageState extends State<HomePage> {
   final _settingsStore = TmdbSettingsStore();
   final _searchController = TextEditingController();
   final _tmdbTokenController = TextEditingController();
+  final _tmdbProxyController = TextEditingController();
 
   var _roots = <String>[];
   var _items = <MediaItem>[];
@@ -66,6 +67,7 @@ class _HomePageState extends State<HomePage> {
   var _query = '';
   var _favoritesOnly = false;
   var _tmdbAccessToken = '';
+  var _tmdbProxy = '';
   String? _metadataLoadingPath;
   MediaItem? _selectedItem;
   String? _error;
@@ -85,6 +87,7 @@ class _HomePageState extends State<HomePage> {
   void dispose() {
     _searchController.dispose();
     _tmdbTokenController.dispose();
+    _tmdbProxyController.dispose();
     super.dispose();
   }
 
@@ -118,7 +121,9 @@ class _HomePageState extends State<HomePage> {
         _items = snapshot.items;
         _selectedItem = snapshot.items.isEmpty ? null : snapshot.items.first;
         _tmdbAccessToken = settings.accessToken;
+        _tmdbProxy = settings.proxy;
         _tmdbTokenController.text = settings.accessToken;
+        _tmdbProxyController.text = settings.proxy;
         _loading = false;
       });
     } catch (error) {
@@ -134,10 +139,12 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _saveTmdbToken() async {
     final token = _tmdbTokenController.text.trim();
-    await _settingsStore.save(TmdbSettings(accessToken: token));
+    final proxy = _tmdbProxyController.text.trim();
+    await _settingsStore.save(TmdbSettings(accessToken: token, proxy: proxy));
 
     setState(() {
       _tmdbAccessToken = token;
+      _tmdbProxy = proxy;
       _error = null;
     });
   }
@@ -282,6 +289,7 @@ class _HomePageState extends State<HomePage> {
       final match = await _tmdbClient.searchMovie(
         accessToken: _tmdbAccessToken,
         query: item.title,
+        proxy: _tmdbProxy,
       );
 
       if (match == null) {
@@ -360,6 +368,7 @@ class _HomePageState extends State<HomePage> {
                   roots: _roots,
                   scanning: _scanning,
                   tmdbTokenController: _tmdbTokenController,
+                  tmdbProxyController: _tmdbProxyController,
                   hasTmdbToken: _tmdbAccessToken.isNotEmpty,
                   onSelectRoot: _selectRoot,
                   onRemoveRoot: _removeRoot,
@@ -408,6 +417,7 @@ class _LibraryPanel extends StatelessWidget {
     required this.roots,
     required this.scanning,
     required this.tmdbTokenController,
+    required this.tmdbProxyController,
     required this.hasTmdbToken,
     required this.onSelectRoot,
     required this.onRemoveRoot,
@@ -418,6 +428,7 @@ class _LibraryPanel extends StatelessWidget {
   final List<String> roots;
   final bool scanning;
   final TextEditingController tmdbTokenController;
+  final TextEditingController tmdbProxyController;
   final bool hasTmdbToken;
   final VoidCallback onSelectRoot;
   final ValueChanged<String> onRemoveRoot;
@@ -460,6 +471,16 @@ class _LibraryPanel extends StatelessWidget {
                   : const Icon(Icons.sync),
             ),
           ],
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: tmdbProxyController,
+          decoration: const InputDecoration(
+            labelText: '代理（可选）',
+            hintText: '127.0.0.1:7890',
+            border: OutlineInputBorder(),
+            prefixIcon: Icon(Icons.lan_outlined),
+          ),
         ),
         const SizedBox(height: 24),
         Text('TMDB', style: Theme.of(context).textTheme.titleMedium),

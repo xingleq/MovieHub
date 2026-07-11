@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:io';
 
 class TmdbMovieMatch {
@@ -37,6 +38,7 @@ class TmdbClient {
   Future<TmdbMovieMatch?> searchMovie({
     required String accessToken,
     required String query,
+    required String proxy,
   }) async {
     final normalizedQuery = query.trim();
     if (accessToken.trim().isEmpty || normalizedQuery.isEmpty) {
@@ -50,17 +52,26 @@ class TmdbClient {
       'page': '1',
     });
 
-    final client = HttpClient();
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 10)
+      ..findProxy = (uri) => _findProxy(uri, proxy);
     try {
-      final request = await client.getUrl(uri);
+      final request = await client
+          .getUrl(uri)
+          .timeout(const Duration(seconds: 10));
       request.headers.set(
         HttpHeaders.authorizationHeader,
         'Bearer ${accessToken.trim()}',
       );
       request.headers.set(HttpHeaders.acceptHeader, 'application/json');
 
-      final response = await request.close();
-      final body = await response.transform(utf8.decoder).join();
+      final response = await request.close().timeout(
+        const Duration(seconds: 20),
+      );
+      final body = await response
+          .transform(utf8.decoder)
+          .join()
+          .timeout(const Duration(seconds: 20));
 
       if (response.statusCode < 200 || response.statusCode >= 300) {
         throw TmdbException(
@@ -77,9 +88,34 @@ class TmdbClient {
       }
 
       return TmdbMovieMatch.fromJson(results.first as Map<String, Object?>);
+    } on TimeoutException {
+      throw const TmdbNetworkException(
+        '连接 TMDB 超时。请检查网络，或在 TMDB 设置里填写本机代理，例如 127.0.0.1:7890。',
+      );
+    } on SocketException catch (error) {
+      throw TmdbNetworkException('无法连接 TMDB：${error.message}。请检查网络，或配置本机代理。');
     } finally {
       client.close(force: true);
     }
+  }
+
+  static String _findProxy(Uri uri, String proxy) {
+    final normalizedProxy = proxy.trim();
+    if (normalizedProxy.isNotEmpty) {
+      final proxyUri = normalizedProxy.contains('://')
+          ? Uri.tryParse(normalizedProxy)
+          : Uri.tryParse('http://$normalizedProxy');
+      final host = proxyUri?.host;
+      final port = proxyUri?.port;
+      if (host != null && host.isNotEmpty && port != null && port > 0) {
+        return 'PROXY $host:$port';
+      }
+    }
+
+    return HttpClient.findProxyFromEnvironment(
+      uri,
+      environment: Platform.environment,
+    );
   }
 
   static String posterUrl(String posterPath) {
@@ -97,6 +133,17 @@ class TmdbException implements Exception {
   final String message;
   final int statusCode;
   final String body;
+
+  @override
+  String toString() {
+    return message;
+  }
+}
+
+class TmdbNetworkException implements Exception {
+  const TmdbNetworkException(this.message);
+
+  final String message;
 
   @override
   String toString() {

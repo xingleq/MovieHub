@@ -6,6 +6,8 @@ import 'package:file_picker/file_picker.dart';
 import 'core/media/media_item.dart';
 import 'core/media/media_library_store.dart';
 import 'core/media/media_scanner.dart';
+import 'core/tmdb/tmdb_client.dart';
+import 'core/tmdb/tmdb_settings_store.dart';
 
 void main() {
   runApp(const MovieHubApp());
@@ -51,7 +53,10 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   final _store = MediaLibraryStore();
   final _scanner = MediaScanner();
+  final _tmdbClient = TmdbClient();
+  final _settingsStore = TmdbSettingsStore();
   final _searchController = TextEditingController();
+  final _tmdbTokenController = TextEditingController();
 
   var _roots = <String>[];
   var _items = <MediaItem>[];
@@ -60,6 +65,8 @@ class _HomePageState extends State<HomePage> {
   var _scanning = false;
   var _query = '';
   var _favoritesOnly = false;
+  var _tmdbAccessToken = '';
+  String? _metadataLoadingPath;
   MediaItem? _selectedItem;
   String? _error;
 
@@ -71,12 +78,13 @@ class _HomePageState extends State<HomePage> {
         _query = _searchController.text.trim().toLowerCase();
       });
     });
-    _loadLibrary();
+    _loadAppState();
   }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _tmdbTokenController.dispose();
     super.dispose();
   }
 
@@ -98,9 +106,10 @@ class _HomePageState extends State<HomePage> {
     return _items.where((item) => item.favorite).length;
   }
 
-  Future<void> _loadLibrary() async {
+  Future<void> _loadAppState() async {
     try {
       final snapshot = await _store.load();
+      final settings = await _settingsStore.load();
       if (!mounted) {
         return;
       }
@@ -108,6 +117,8 @@ class _HomePageState extends State<HomePage> {
         _roots = snapshot.roots;
         _items = snapshot.items;
         _selectedItem = snapshot.items.isEmpty ? null : snapshot.items.first;
+        _tmdbAccessToken = settings.accessToken;
+        _tmdbTokenController.text = settings.accessToken;
         _loading = false;
       });
     } catch (error) {
@@ -119,6 +130,16 @@ class _HomePageState extends State<HomePage> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _saveTmdbToken() async {
+    final token = _tmdbTokenController.text.trim();
+    await _settingsStore.save(TmdbSettings(accessToken: token));
+
+    setState(() {
+      _tmdbAccessToken = token;
+      _error = null;
+    });
   }
 
   Future<void> _selectRoot() async {
@@ -244,6 +265,82 @@ class _HomePageState extends State<HomePage> {
     });
   }
 
+  Future<void> _matchTmdb(MediaItem item) async {
+    if (_tmdbAccessToken.trim().isEmpty) {
+      setState(() {
+        _error = '请先保存 TMDB 令牌。';
+      });
+      return;
+    }
+
+    setState(() {
+      _metadataLoadingPath = item.path;
+      _error = null;
+    });
+
+    try {
+      final match = await _tmdbClient.searchMovie(
+        accessToken: _tmdbAccessToken,
+        query: item.title,
+      );
+
+      if (match == null) {
+        if (!mounted) {
+          return;
+        }
+        setState(() {
+          _metadataLoadingPath = null;
+          _error = 'TMDB 未找到匹配结果：${item.title}';
+        });
+        return;
+      }
+
+      final updatedItems = _items.map((current) {
+        if (current.path != item.path) {
+          return current;
+        }
+        return current.copyWith(
+          tmdbId: match.id,
+          tmdbTitle: match.title,
+          overview: match.overview,
+          posterPath: match.posterPath,
+          backdropPath: match.backdropPath,
+          releaseDate: match.releaseDate,
+          voteAverage: match.voteAverage,
+        );
+      }).toList();
+
+      MediaItem? updatedSelectedItem;
+      for (final updatedItem in updatedItems) {
+        if (updatedItem.path == _selectedItem?.path) {
+          updatedSelectedItem = updatedItem;
+          break;
+        }
+      }
+
+      await _store.save(
+        MediaLibrarySnapshot(roots: _roots, items: updatedItems),
+      );
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _items = updatedItems;
+        _selectedItem = updatedSelectedItem;
+        _metadataLoadingPath = null;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _metadataLoadingPath = null;
+        _error = 'TMDB 匹配失败：$error';
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -262,9 +359,12 @@ class _HomePageState extends State<HomePage> {
                 child: _LibraryPanel(
                   roots: _roots,
                   scanning: _scanning,
+                  tmdbTokenController: _tmdbTokenController,
+                  hasTmdbToken: _tmdbAccessToken.isNotEmpty,
                   onSelectRoot: _selectRoot,
                   onRemoveRoot: _removeRoot,
                   onScan: _scan,
+                  onSaveTmdbToken: _saveTmdbToken,
                 ),
               ),
               const SizedBox(width: 24),
@@ -276,6 +376,7 @@ class _HomePageState extends State<HomePage> {
                   searchController: _searchController,
                   favoritesOnly: _favoritesOnly,
                   selectedItem: _selectedItem,
+                  metadataLoadingPath: _metadataLoadingPath,
                   skippedPaths: _skippedPaths,
                   error: _error,
                   onSelectItem: (item) {
@@ -290,6 +391,7 @@ class _HomePageState extends State<HomePage> {
                     });
                   },
                   onToggleFavorite: _toggleFavorite,
+                  onMatchTmdb: _matchTmdb,
                   onOpenLocation: _openItemLocation,
                 ),
               ),
@@ -305,16 +407,22 @@ class _LibraryPanel extends StatelessWidget {
   const _LibraryPanel({
     required this.roots,
     required this.scanning,
+    required this.tmdbTokenController,
+    required this.hasTmdbToken,
     required this.onSelectRoot,
     required this.onRemoveRoot,
     required this.onScan,
+    required this.onSaveTmdbToken,
   });
 
   final List<String> roots;
   final bool scanning;
+  final TextEditingController tmdbTokenController;
+  final bool hasTmdbToken;
   final VoidCallback onSelectRoot;
   final ValueChanged<String> onRemoveRoot;
   final VoidCallback onScan;
+  final VoidCallback onSaveTmdbToken;
 
   @override
   Widget build(BuildContext context) {
@@ -350,6 +458,33 @@ class _LibraryPanel extends StatelessWidget {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.sync),
+            ),
+          ],
+        ),
+        const SizedBox(height: 24),
+        Text('TMDB', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: tmdbTokenController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'API 读取令牌',
+                  border: const OutlineInputBorder(),
+                  prefixIcon: const Icon(Icons.key),
+                  suffixIcon: hasTmdbToken
+                      ? const Icon(Icons.check_circle_outline)
+                      : null,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            IconButton.filledTonal(
+              tooltip: '保存 TMDB 令牌',
+              onPressed: onSaveTmdbToken,
+              icon: const Icon(Icons.save),
             ),
           ],
         ),
@@ -399,12 +534,14 @@ class _MediaShelf extends StatelessWidget {
     required this.searchController,
     required this.favoritesOnly,
     required this.selectedItem,
+    required this.metadataLoadingPath,
     required this.skippedPaths,
     required this.error,
     required this.onSelectItem,
     required this.onClearSearch,
     required this.onFavoritesOnlyChanged,
     required this.onToggleFavorite,
+    required this.onMatchTmdb,
     required this.onOpenLocation,
   });
 
@@ -414,12 +551,14 @@ class _MediaShelf extends StatelessWidget {
   final TextEditingController searchController;
   final bool favoritesOnly;
   final MediaItem? selectedItem;
+  final String? metadataLoadingPath;
   final List<String> skippedPaths;
   final String? error;
   final ValueChanged<MediaItem> onSelectItem;
   final VoidCallback onClearSearch;
   final ValueChanged<bool> onFavoritesOnlyChanged;
   final ValueChanged<MediaItem> onToggleFavorite;
+  final ValueChanged<MediaItem> onMatchTmdb;
   final ValueChanged<MediaItem> onOpenLocation;
 
   @override
@@ -540,7 +679,10 @@ class _MediaShelf extends StatelessWidget {
                       width: 320,
                       child: _MediaDetailPanel(
                         item: selectedItem,
+                        loadingMetadata:
+                            selectedItem?.path == metadataLoadingPath,
                         onToggleFavorite: onToggleFavorite,
+                        onMatchTmdb: onMatchTmdb,
                         onOpenLocation: onOpenLocation,
                       ),
                     ),
@@ -685,7 +827,7 @@ class _MediaCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    item.title,
+                    item.tmdbTitle ?? item.title,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w700),
@@ -724,12 +866,16 @@ class _MediaCard extends StatelessWidget {
 class _MediaDetailPanel extends StatelessWidget {
   const _MediaDetailPanel({
     required this.item,
+    required this.loadingMetadata,
     required this.onToggleFavorite,
+    required this.onMatchTmdb,
     required this.onOpenLocation,
   });
 
   final MediaItem? item;
+  final bool loadingMetadata;
   final ValueChanged<MediaItem> onToggleFavorite;
+  final ValueChanged<MediaItem> onMatchTmdb;
   final ValueChanged<MediaItem> onOpenLocation;
 
   @override
@@ -749,26 +895,35 @@ class _MediaDetailPanel extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Container(
-              height: 170,
-              decoration: const BoxDecoration(
-                borderRadius: BorderRadius.all(Radius.circular(8)),
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [Color(0xFF30343B), Color(0xFF15161A)],
-                ),
-              ),
-              child: const Icon(Icons.local_movies_outlined, size: 64),
-            ),
+            _PosterPreview(item: selectedItem),
             const SizedBox(height: 18),
             Text(
-              selectedItem.title,
+              selectedItem.tmdbTitle ?? selectedItem.title,
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: Theme.of(context).textTheme.titleLarge,
             ),
+            if (selectedItem.tmdbTitle != null &&
+                selectedItem.tmdbTitle != selectedItem.title) ...[
+              const SizedBox(height: 6),
+              Text(
+                selectedItem.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(color: Theme.of(context).colorScheme.outline),
+              ),
+            ],
             const SizedBox(height: 18),
+            if (selectedItem.tmdbId != null) ...[
+              _DetailRow(label: 'TMDB', value: '#${selectedItem.tmdbId}'),
+              _DetailRow(
+                label: '评分',
+                value: selectedItem.voteAverage == null
+                    ? '-'
+                    : selectedItem.voteAverage!.toStringAsFixed(1),
+              ),
+              _DetailRow(label: '上映', value: selectedItem.releaseDate ?? '-'),
+            ],
             _DetailRow(
               label: '格式',
               value: selectedItem.extension.toUpperCase(),
@@ -785,6 +940,21 @@ class _MediaDetailPanel extends StatelessWidget {
               label: '修改',
               value: _MediaCard.formatDate(selectedItem.modifiedAt),
             ),
+            if (selectedItem.overview != null &&
+                selectedItem.overview!.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                '简介',
+                style: TextStyle(color: Theme.of(context).colorScheme.outline),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                selectedItem.overview!,
+                maxLines: 5,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontSize: 12, height: 1.35),
+              ),
+            ],
             const SizedBox(height: 12),
             Text(
               '文件路径',
@@ -796,6 +966,19 @@ class _MediaDetailPanel extends StatelessWidget {
               style: const TextStyle(fontSize: 12),
             ),
             const Spacer(),
+            FilledButton.icon(
+              onPressed: loadingMetadata
+                  ? null
+                  : () => onMatchTmdb(selectedItem),
+              icon: loadingMetadata
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cloud_sync_outlined),
+              label: Text(selectedItem.tmdbId == null ? '匹配 TMDB' : '重新匹配'),
+            ),
+            const SizedBox(height: 10),
             Row(
               children: [
                 Expanded(
@@ -822,6 +1005,54 @@ class _MediaDetailPanel extends StatelessWidget {
           ],
         ),
       ),
+    );
+  }
+}
+
+class _PosterPreview extends StatelessWidget {
+  const _PosterPreview({required this.item});
+
+  final MediaItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final posterPath = item.posterPath;
+    if (posterPath != null && posterPath.isNotEmpty) {
+      return ClipRRect(
+        borderRadius: const BorderRadius.all(Radius.circular(8)),
+        child: Image.network(
+          TmdbClient.posterUrl(posterPath),
+          height: 220,
+          fit: BoxFit.cover,
+          errorBuilder: (context, error, stackTrace) {
+            return const _PosterPlaceholder(height: 220);
+          },
+        ),
+      );
+    }
+
+    return const _PosterPlaceholder(height: 170);
+  }
+}
+
+class _PosterPlaceholder extends StatelessWidget {
+  const _PosterPlaceholder({required this.height});
+
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: height,
+      decoration: const BoxDecoration(
+        borderRadius: BorderRadius.all(Radius.circular(8)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF30343B), Color(0xFF15161A)],
+        ),
+      ),
+      child: const Icon(Icons.local_movies_outlined, size: 64),
     );
   }
 }

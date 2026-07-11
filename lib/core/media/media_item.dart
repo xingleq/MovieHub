@@ -9,6 +9,13 @@ class MediaItem {
     required this.modifiedAt,
     required this.addedAt,
     required this.favorite,
+    required this.tmdbId,
+    required this.tmdbTitle,
+    required this.overview,
+    required this.posterPath,
+    required this.backdropPath,
+    required this.releaseDate,
+    required this.voteAverage,
   });
 
   final String path;
@@ -18,6 +25,13 @@ class MediaItem {
   final DateTime modifiedAt;
   final DateTime addedAt;
   final bool favorite;
+  final int? tmdbId;
+  final String? tmdbTitle;
+  final String? overview;
+  final String? posterPath;
+  final String? backdropPath;
+  final String? releaseDate;
+  final double? voteAverage;
 
   factory MediaItem.fromFile(File file, {DateTime? addedAt}) {
     final stat = file.statSync();
@@ -34,6 +48,13 @@ class MediaItem {
       modifiedAt: stat.modified,
       addedAt: addedAt ?? DateTime.now(),
       favorite: false,
+      tmdbId: null,
+      tmdbTitle: null,
+      overview: null,
+      posterPath: null,
+      backdropPath: null,
+      releaseDate: null,
+      voteAverage: null,
     );
   }
 
@@ -46,6 +67,13 @@ class MediaItem {
       modifiedAt: DateTime.parse(json['modifiedAt'] as String),
       addedAt: DateTime.parse(json['addedAt'] as String),
       favorite: json['favorite'] as bool? ?? false,
+      tmdbId: json['tmdbId'] as int?,
+      tmdbTitle: json['tmdbTitle'] as String?,
+      overview: json['overview'] as String?,
+      posterPath: json['posterPath'] as String?,
+      backdropPath: json['backdropPath'] as String?,
+      releaseDate: json['releaseDate'] as String?,
+      voteAverage: (json['voteAverage'] as num?)?.toDouble(),
     );
   }
 
@@ -58,6 +86,13 @@ class MediaItem {
       'modifiedAt': modifiedAt.toIso8601String(),
       'addedAt': addedAt.toIso8601String(),
       'favorite': favorite,
+      'tmdbId': tmdbId,
+      'tmdbTitle': tmdbTitle,
+      'overview': overview,
+      'posterPath': posterPath,
+      'backdropPath': backdropPath,
+      'releaseDate': releaseDate,
+      'voteAverage': voteAverage,
     };
   }
 
@@ -70,10 +105,26 @@ class MediaItem {
       modifiedAt: modifiedAt,
       addedAt: previous?.addedAt ?? addedAt,
       favorite: previous?.favorite ?? favorite,
+      tmdbId: previous?.tmdbId ?? tmdbId,
+      tmdbTitle: previous?.tmdbTitle ?? tmdbTitle,
+      overview: previous?.overview ?? overview,
+      posterPath: previous?.posterPath ?? posterPath,
+      backdropPath: previous?.backdropPath ?? backdropPath,
+      releaseDate: previous?.releaseDate ?? releaseDate,
+      voteAverage: previous?.voteAverage ?? voteAverage,
     );
   }
 
-  MediaItem copyWith({bool? favorite}) {
+  MediaItem copyWith({
+    bool? favorite,
+    int? tmdbId,
+    String? tmdbTitle,
+    String? overview,
+    String? posterPath,
+    String? backdropPath,
+    String? releaseDate,
+    double? voteAverage,
+  }) {
     return MediaItem(
       path: path,
       title: title,
@@ -82,6 +133,13 @@ class MediaItem {
       modifiedAt: modifiedAt,
       addedAt: addedAt,
       favorite: favorite ?? this.favorite,
+      tmdbId: tmdbId ?? this.tmdbId,
+      tmdbTitle: tmdbTitle ?? this.tmdbTitle,
+      overview: overview ?? this.overview,
+      posterPath: posterPath ?? this.posterPath,
+      backdropPath: backdropPath ?? this.backdropPath,
+      releaseDate: releaseDate ?? this.releaseDate,
+      voteAverage: voteAverage ?? this.voteAverage,
     );
   }
 

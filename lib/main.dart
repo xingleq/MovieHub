@@ -137,7 +137,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-  Future<void> _saveTmdbToken() async {
+  Future<void> _saveTmdbSettings() async {
     final token = _tmdbTokenController.text.trim();
     final proxy = _tmdbProxyController.text.trim();
     await _settingsStore.save(TmdbSettings(accessToken: token, proxy: proxy));
@@ -273,23 +273,31 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _matchTmdb(MediaItem item) async {
-    if (_tmdbAccessToken.trim().isEmpty) {
+    final token = _tmdbTokenController.text.trim();
+    final proxy = _tmdbProxyController.text.trim();
+    if (token.isEmpty) {
       setState(() {
-        _error = '请先保存 TMDB 令牌。';
+        _error = '请先填写 TMDB 令牌。';
       });
       return;
     }
 
+    if (token != _tmdbAccessToken || proxy != _tmdbProxy) {
+      await _settingsStore.save(TmdbSettings(accessToken: token, proxy: proxy));
+    }
+
     setState(() {
+      _tmdbAccessToken = token;
+      _tmdbProxy = proxy;
       _metadataLoadingPath = item.path;
       _error = null;
     });
 
     try {
       final match = await _tmdbClient.searchMovie(
-        accessToken: _tmdbAccessToken,
+        accessToken: token,
         query: item.title,
-        proxy: _tmdbProxy,
+        proxy: proxy,
       );
 
       if (match == null) {
@@ -373,7 +381,7 @@ class _HomePageState extends State<HomePage> {
                   onSelectRoot: _selectRoot,
                   onRemoveRoot: _removeRoot,
                   onScan: _scan,
-                  onSaveTmdbToken: _saveTmdbToken,
+                  onSaveTmdbSettings: _saveTmdbSettings,
                 ),
               ),
               const SizedBox(width: 24),
@@ -422,7 +430,7 @@ class _LibraryPanel extends StatelessWidget {
     required this.onSelectRoot,
     required this.onRemoveRoot,
     required this.onScan,
-    required this.onSaveTmdbToken,
+    required this.onSaveTmdbSettings,
   });
 
   final List<String> roots;
@@ -433,7 +441,7 @@ class _LibraryPanel extends StatelessWidget {
   final VoidCallback onSelectRoot;
   final ValueChanged<String> onRemoveRoot;
   final VoidCallback onScan;
-  final VoidCallback onSaveTmdbToken;
+  final VoidCallback onSaveTmdbSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -503,8 +511,8 @@ class _LibraryPanel extends StatelessWidget {
             ),
             const SizedBox(width: 10),
             IconButton.filledTonal(
-              tooltip: '保存 TMDB 令牌',
-              onPressed: onSaveTmdbToken,
+              tooltip: '保存 TMDB 设置',
+              onPressed: onSaveTmdbSettings,
               icon: const Icon(Icons.save),
             ),
           ],

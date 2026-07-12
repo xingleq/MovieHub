@@ -733,10 +733,13 @@ class _StatsBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final totalSize = items.fold<int>(0, (sum, item) => sum + item.sizeBytes);
+    final episodeCount = items.where((item) => item.isEpisode).length;
 
     return Row(
       children: [
         _StatCard(label: '影片', value: '${items.length}'),
+        const SizedBox(width: 12),
+        _StatCard(label: '剧集', value: '$episodeCount'),
         const SizedBox(width: 12),
         _StatCard(label: '收藏', value: '$favoriteCount'),
         const SizedBox(width: 12),
@@ -864,7 +867,11 @@ class _MediaCard extends StatelessWidget {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '${item.extension.toUpperCase()}  ${formatDate(item.addedAt)}',
+                    [
+                      item.extension.toUpperCase(),
+                      if (item.episodeLabel != null) item.episodeLabel!,
+                      formatDate(item.addedAt),
+                    ].join('  '),
                     style: TextStyle(color: colorScheme.outline, fontSize: 12),
                   ),
                   const SizedBox(height: 8),
@@ -957,6 +964,10 @@ class _MediaDetailPanel extends StatelessWidget {
                     : selectedItem.voteAverage!.toStringAsFixed(1),
               ),
               _DetailRow(label: '上映', value: selectedItem.releaseDate ?? '-'),
+            ],
+            if (selectedItem.isEpisode) ...[
+              _DetailRow(label: '剧名', value: selectedItem.seriesTitle ?? '-'),
+              _DetailRow(label: '季集', value: selectedItem.episodeLabel ?? '-'),
             ],
             _DetailRow(
               label: '格式',

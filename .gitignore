@@ -38,6 +38,7 @@ migrate_working_dir/
 # Local app data / temporary output
 *.tmp
 *.temp
+Snipaste_*.png
 
 # Symbolication related
 app.*.symbols

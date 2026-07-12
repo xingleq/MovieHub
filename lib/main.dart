@@ -866,6 +866,7 @@ class _MediaShelf extends StatelessWidget {
                                 item: item,
                                 selected: item.path == selectedItem?.path,
                                 onTap: () => onSelectItem(item),
+                                onPlay: () => onPlay(item),
                                 onToggleFavorite: () => onToggleFavorite(item),
                               );
                             },
@@ -969,12 +970,14 @@ class _MediaCard extends StatelessWidget {
     required this.item,
     required this.selected,
     required this.onTap,
+    required this.onPlay,
     required this.onToggleFavorite,
   });
 
   final MediaItem item;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onPlay;
   final VoidCallback onToggleFavorite;
 
   @override
@@ -992,6 +995,7 @@ class _MediaCard extends StatelessWidget {
       ),
       child: InkWell(
         onTap: onTap,
+        onDoubleTap: onPlay,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -999,15 +1003,40 @@ class _MediaCard extends StatelessWidget {
               child: Stack(
                 children: [
                   Positioned.fill(
-                    child: Container(
-                      decoration: const BoxDecoration(
+                    child:
+                        item.posterPath != null && item.posterPath!.isNotEmpty
+                        ? Image.network(
+                            TmdbClient.posterUrl(item.posterPath!),
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return _CardPosterPlaceholder(
+                                colorScheme: colorScheme,
+                              );
+                            },
+                          )
+                        : _CardPosterPlaceholder(colorScheme: colorScheme),
+                  ),
+                  Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
                         gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Color(0xFF2D3036), Color(0xFF111216)],
+                          begin: Alignment.topCenter,
+                          end: Alignment.bottomCenter,
+                          colors: [
+                            Colors.black.withValues(alpha: 0.1),
+                            Colors.black.withValues(alpha: 0.55),
+                          ],
                         ),
                       ),
-                      child: const Icon(Icons.movie, size: 52),
+                    ),
+                  ),
+                  Positioned(
+                    top: 8,
+                    left: 8,
+                    child: IconButton.filled(
+                      tooltip: '播放',
+                      onPressed: onPlay,
+                      icon: const Icon(Icons.play_arrow),
                     ),
                   ),
                   Positioned(
@@ -1040,6 +1069,8 @@ class _MediaCard extends StatelessWidget {
                     [
                       item.extension.toUpperCase(),
                       if (item.episodeLabel != null) item.episodeLabel!,
+                      if (item.voteAverage != null)
+                        item.voteAverage!.toStringAsFixed(1),
                       formatDate(item.addedAt),
                     ].join('  '),
                     style: TextStyle(color: colorScheme.outline, fontSize: 12),
@@ -1067,6 +1098,26 @@ class _MediaCard extends StatelessWidget {
 
   static String _twoDigits(int value) {
     return value.toString().padLeft(2, '0');
+  }
+}
+
+class _CardPosterPlaceholder extends StatelessWidget {
+  const _CardPosterPlaceholder({required this.colorScheme});
+
+  final ColorScheme colorScheme;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF2D3036), Color(0xFF111216)],
+        ),
+      ),
+      child: Icon(Icons.movie, size: 52, color: colorScheme.outline),
+    );
   }
 }
 
@@ -1099,133 +1150,141 @@ class _MediaDetailPanel extends StatelessWidget {
     }
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            _PosterPreview(item: selectedItem),
-            const SizedBox(height: 18),
-            Text(
-              selectedItem.tmdbTitle ?? selectedItem.title,
-              maxLines: 3,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.titleLarge,
-            ),
-            if (selectedItem.tmdbTitle != null &&
-                selectedItem.tmdbTitle != selectedItem.title) ...[
-              const SizedBox(height: 6),
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _PosterPreview(item: selectedItem),
+              const SizedBox(height: 18),
               Text(
-                selectedItem.title,
-                maxLines: 1,
+                selectedItem.tmdbTitle ?? selectedItem.title,
+                maxLines: 3,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: Theme.of(context).colorScheme.outline),
+                style: Theme.of(context).textTheme.titleLarge,
               ),
-            ],
-            const SizedBox(height: 18),
-            if (selectedItem.tmdbId != null) ...[
-              _DetailRow(label: 'TMDB', value: '#${selectedItem.tmdbId}'),
-              _DetailRow(
-                label: '类型',
-                value: selectedItem.tmdbMediaType == 'tv' ? '电视剧' : '电影',
-              ),
-              _DetailRow(
-                label: '评分',
-                value: selectedItem.voteAverage == null
-                    ? '-'
-                    : selectedItem.voteAverage!.toStringAsFixed(1),
-              ),
-              _DetailRow(label: '上映', value: selectedItem.releaseDate ?? '-'),
-            ],
-            if (selectedItem.isEpisode) ...[
-              _DetailRow(label: '剧名', value: selectedItem.seriesTitle ?? '-'),
-              _DetailRow(label: '季集', value: selectedItem.episodeLabel ?? '-'),
-            ],
-            _DetailRow(
-              label: '格式',
-              value: selectedItem.extension.toUpperCase(),
-            ),
-            _DetailRow(
-              label: '大小',
-              value: _StatsBar._formatBytes(selectedItem.sizeBytes),
-            ),
-            _DetailRow(
-              label: '添加',
-              value: _MediaCard.formatDate(selectedItem.addedAt),
-            ),
-            _DetailRow(
-              label: '修改',
-              value: _MediaCard.formatDate(selectedItem.modifiedAt),
-            ),
-            if (selectedItem.overview != null &&
-                selectedItem.overview!.trim().isNotEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                '简介',
-                style: TextStyle(color: Theme.of(context).colorScheme.outline),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                selectedItem.overview!,
-                maxLines: 5,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(fontSize: 12, height: 1.35),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Text(
-              '文件路径',
-              style: TextStyle(color: Theme.of(context).colorScheme.outline),
-            ),
-            const SizedBox(height: 6),
-            SelectableText(
-              selectedItem.path,
-              style: const TextStyle(fontSize: 12),
-            ),
-            const Spacer(),
-            FilledButton.icon(
-              onPressed: () => onPlay(selectedItem),
-              icon: const Icon(Icons.play_arrow),
-              label: const Text('播放'),
-            ),
-            const SizedBox(height: 10),
-            FilledButton.icon(
-              onPressed: loadingMetadata
-                  ? null
-                  : () => onMatchTmdb(selectedItem),
-              icon: loadingMetadata
-                  ? const SizedBox.square(
-                      dimension: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.cloud_sync_outlined),
-              label: Text(selectedItem.tmdbId == null ? '匹配 TMDB' : '重新匹配'),
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: FilledButton.tonalIcon(
-                    onPressed: () => onToggleFavorite(selectedItem),
-                    icon: Icon(
-                      selectedItem.favorite
-                          ? Icons.favorite
-                          : Icons.favorite_border,
-                    ),
-                    label: Text(selectedItem.favorite ? '已收藏' : '收藏'),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: () => onOpenLocation(selectedItem),
-                    icon: const Icon(Icons.folder_open),
-                    label: const Text('打开位置'),
+              if (selectedItem.tmdbTitle != null &&
+                  selectedItem.tmdbTitle != selectedItem.title) ...[
+                const SizedBox(height: 6),
+                Text(
+                  selectedItem.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.outline,
                   ),
                 ),
               ],
-            ),
-          ],
+              const SizedBox(height: 18),
+              if (selectedItem.tmdbId != null) ...[
+                _DetailRow(label: 'TMDB', value: '#${selectedItem.tmdbId}'),
+                _DetailRow(
+                  label: '类型',
+                  value: selectedItem.tmdbMediaType == 'tv' ? '电视剧' : '电影',
+                ),
+                _DetailRow(
+                  label: '评分',
+                  value: selectedItem.voteAverage == null
+                      ? '-'
+                      : selectedItem.voteAverage!.toStringAsFixed(1),
+                ),
+                _DetailRow(label: '上映', value: selectedItem.releaseDate ?? '-'),
+              ],
+              if (selectedItem.isEpisode) ...[
+                _DetailRow(label: '剧名', value: selectedItem.seriesTitle ?? '-'),
+                _DetailRow(
+                  label: '季集',
+                  value: selectedItem.episodeLabel ?? '-',
+                ),
+              ],
+              _DetailRow(
+                label: '格式',
+                value: selectedItem.extension.toUpperCase(),
+              ),
+              _DetailRow(
+                label: '大小',
+                value: _StatsBar._formatBytes(selectedItem.sizeBytes),
+              ),
+              _DetailRow(
+                label: '添加',
+                value: _MediaCard.formatDate(selectedItem.addedAt),
+              ),
+              _DetailRow(
+                label: '修改',
+                value: _MediaCard.formatDate(selectedItem.modifiedAt),
+              ),
+              if (selectedItem.overview != null &&
+                  selectedItem.overview!.trim().isNotEmpty) ...[
+                const SizedBox(height: 8),
+                Text(
+                  '简介',
+                  style: TextStyle(
+                    color: Theme.of(context).colorScheme.outline,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  selectedItem.overview!,
+                  maxLines: 5,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, height: 1.35),
+                ),
+              ],
+              const SizedBox(height: 12),
+              Text(
+                '文件路径',
+                style: TextStyle(color: Theme.of(context).colorScheme.outline),
+              ),
+              const SizedBox(height: 6),
+              SelectableText(
+                selectedItem.path,
+                style: const TextStyle(fontSize: 12),
+              ),
+              FilledButton.icon(
+                onPressed: () => onPlay(selectedItem),
+                icon: const Icon(Icons.play_arrow),
+                label: const Text('播放'),
+              ),
+              const SizedBox(height: 10),
+              FilledButton.icon(
+                onPressed: loadingMetadata
+                    ? null
+                    : () => onMatchTmdb(selectedItem),
+                icon: loadingMetadata
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.cloud_sync_outlined),
+                label: Text(selectedItem.tmdbId == null ? '匹配 TMDB' : '重新匹配'),
+              ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      onPressed: () => onToggleFavorite(selectedItem),
+                      icon: Icon(
+                        selectedItem.favorite
+                            ? Icons.favorite
+                            : Icons.favorite_border,
+                      ),
+                      label: Text(selectedItem.favorite ? '已收藏' : '收藏'),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () => onOpenLocation(selectedItem),
+                      icon: const Icon(Icons.folder_open),
+                      label: const Text('打开位置'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

@@ -2,6 +2,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 import 'core/media/media_item.dart';
 import 'core/media/media_library_store.dart';
@@ -10,6 +12,8 @@ import 'core/tmdb/tmdb_client.dart';
 import 'core/tmdb/tmdb_settings_store.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  MediaKit.ensureInitialized();
   runApp(const MovieHubApp());
 }
 
@@ -476,6 +480,12 @@ class _HomePageState extends State<HomePage> {
     return items.isEmpty ? null : items.first;
   }
 
+  Future<void> _openPlayer(MediaItem item) async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(builder: (context) => PlayerPage(item: item)),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -532,6 +542,7 @@ class _HomePageState extends State<HomePage> {
                   onToggleFavorite: _toggleFavorite,
                   onMatchTmdb: _matchTmdb,
                   onMatchAllTmdb: _matchAllTmdb,
+                  onPlay: _openPlayer,
                   onOpenLocation: _openItemLocation,
                 ),
               ),
@@ -698,6 +709,7 @@ class _MediaShelf extends StatelessWidget {
     required this.onToggleFavorite,
     required this.onMatchTmdb,
     required this.onMatchAllTmdb,
+    required this.onPlay,
     required this.onOpenLocation,
   });
 
@@ -719,6 +731,7 @@ class _MediaShelf extends StatelessWidget {
   final ValueChanged<MediaItem> onToggleFavorite;
   final ValueChanged<MediaItem> onMatchTmdb;
   final VoidCallback onMatchAllTmdb;
+  final ValueChanged<MediaItem> onPlay;
   final ValueChanged<MediaItem> onOpenLocation;
 
   @override
@@ -869,6 +882,7 @@ class _MediaShelf extends StatelessWidget {
                             selectedItem?.path == metadataLoadingPath,
                         onToggleFavorite: onToggleFavorite,
                         onMatchTmdb: onMatchTmdb,
+                        onPlay: onPlay,
                         onOpenLocation: onOpenLocation,
                       ),
                     ),
@@ -1062,6 +1076,7 @@ class _MediaDetailPanel extends StatelessWidget {
     required this.loadingMetadata,
     required this.onToggleFavorite,
     required this.onMatchTmdb,
+    required this.onPlay,
     required this.onOpenLocation,
   });
 
@@ -1069,6 +1084,7 @@ class _MediaDetailPanel extends StatelessWidget {
   final bool loadingMetadata;
   final ValueChanged<MediaItem> onToggleFavorite;
   final ValueChanged<MediaItem> onMatchTmdb;
+  final ValueChanged<MediaItem> onPlay;
   final ValueChanged<MediaItem> onOpenLocation;
 
   @override
@@ -1167,6 +1183,12 @@ class _MediaDetailPanel extends StatelessWidget {
               style: const TextStyle(fontSize: 12),
             ),
             const Spacer(),
+            FilledButton.icon(
+              onPressed: () => onPlay(selectedItem),
+              icon: const Icon(Icons.play_arrow),
+              label: const Text('播放'),
+            ),
+            const SizedBox(height: 10),
             FilledButton.icon(
               onPressed: loadingMetadata
                   ? null
@@ -1282,6 +1304,51 @@ class _DetailRow extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class PlayerPage extends StatefulWidget {
+  const PlayerPage({super.key, required this.item});
+
+  final MediaItem item;
+
+  @override
+  State<PlayerPage> createState() => _PlayerPageState();
+}
+
+class _PlayerPageState extends State<PlayerPage> {
+  late final Player _player;
+  late final VideoController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _player = Player();
+    _controller = VideoController(_player);
+    _player.open(Media(widget.item.path));
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(
+          widget.item.tmdbTitle ?? widget.item.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      body: Center(child: Video(controller: _controller)),
     );
   }
 }

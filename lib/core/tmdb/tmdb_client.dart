@@ -11,6 +11,7 @@ class TmdbMovieMatch {
     required this.backdropPath,
     required this.releaseDate,
     required this.voteAverage,
+    required this.mediaType,
   });
 
   final int id;
@@ -20,16 +21,19 @@ class TmdbMovieMatch {
   final String? backdropPath;
   final String? releaseDate;
   final double voteAverage;
+  final String mediaType;
 
   factory TmdbMovieMatch.fromJson(Map<String, Object?> json) {
+    final mediaType = json['media_type'] as String? ?? 'movie';
     return TmdbMovieMatch(
       id: json['id'] as int,
       title: (json['title'] ?? json['name'] ?? '') as String,
       overview: (json['overview'] ?? '') as String,
       posterPath: json['poster_path'] as String?,
       backdropPath: json['backdrop_path'] as String?,
-      releaseDate: json['release_date'] as String?,
+      releaseDate: (json['release_date'] ?? json['first_air_date']) as String?,
       voteAverage: (json['vote_average'] as num? ?? 0).toDouble(),
+      mediaType: mediaType,
     );
   }
 }
@@ -40,54 +44,26 @@ class TmdbClient {
     required String query,
     required String proxy,
   }) async {
-    final normalizedQuery = query.trim();
-    if (accessToken.trim().isEmpty || normalizedQuery.isEmpty) {
+    final candidates = _queryCandidates(query);
+    if (accessToken.trim().isEmpty || candidates.isEmpty) {
       return null;
     }
-
-    final uri = Uri.https('api.themoviedb.org', '/3/search/movie', {
-      'query': normalizedQuery,
-      'language': 'zh-CN',
-      'include_adult': 'false',
-      'page': '1',
-    });
 
     final client = HttpClient()
       ..connectionTimeout = const Duration(seconds: 10)
       ..findProxy = (uri) => _findProxy(uri, proxy);
     try {
-      final request = await client
-          .getUrl(uri)
-          .timeout(const Duration(seconds: 10));
-      request.headers.set(
-        HttpHeaders.authorizationHeader,
-        'Bearer ${accessToken.trim()}',
-      );
-      request.headers.set(HttpHeaders.acceptHeader, 'application/json');
-
-      final response = await request.close().timeout(
-        const Duration(seconds: 20),
-      );
-      final body = await response
-          .transform(utf8.decoder)
-          .join()
-          .timeout(const Duration(seconds: 20));
-
-      if (response.statusCode < 200 || response.statusCode >= 300) {
-        throw TmdbException(
-          'TMDB 请求失败：HTTP ${response.statusCode}',
-          response.statusCode,
-          body,
+      for (final candidate in candidates) {
+        final match = await _searchMulti(
+          client: client,
+          accessToken: accessToken,
+          query: candidate,
         );
+        if (match != null) {
+          return match;
+        }
       }
-
-      final payload = jsonDecode(body) as Map<String, Object?>;
-      final results = payload['results'] as List<Object?>? ?? [];
-      if (results.isEmpty) {
-        return null;
-      }
-
-      return TmdbMovieMatch.fromJson(results.first as Map<String, Object?>);
+      return null;
     } on TimeoutException {
       throw const TmdbNetworkException(
         '连接 TMDB 超时。请检查网络，或在 TMDB 设置里填写本机代理，例如 127.0.0.1:7890。',
@@ -97,6 +73,91 @@ class TmdbClient {
     } finally {
       client.close(force: true);
     }
+  }
+
+  Future<TmdbMovieMatch?> _searchMulti({
+    required HttpClient client,
+    required String accessToken,
+    required String query,
+  }) async {
+    final uri = Uri.https('api.themoviedb.org', '/3/search/multi', {
+      'query': query,
+      'language': 'zh-CN',
+      'include_adult': 'false',
+      'page': '1',
+    });
+
+    final request = await client
+        .getUrl(uri)
+        .timeout(const Duration(seconds: 10));
+    request.headers.set(
+      HttpHeaders.authorizationHeader,
+      'Bearer ${accessToken.trim()}',
+    );
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+
+    final response = await request.close().timeout(const Duration(seconds: 20));
+    final body = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 20));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw TmdbException(
+        'TMDB 请求失败：HTTP ${response.statusCode}',
+        response.statusCode,
+        body,
+      );
+    }
+
+    final payload = jsonDecode(body) as Map<String, Object?>;
+    final results = payload['results'] as List<Object?>? ?? [];
+    for (final result in results.whereType<Map<String, Object?>>()) {
+      final mediaType = result['media_type'] as String?;
+      if (mediaType == 'movie' || mediaType == 'tv') {
+        return TmdbMovieMatch.fromJson(result);
+      }
+    }
+    return null;
+  }
+
+  static List<String> _queryCandidates(String rawQuery) {
+    final clean = rawQuery
+        .replaceAll(RegExp(r'[\[\]【】()（）{}]'), ' ')
+        .replaceAll(RegExp(r'\bS\d{1,2}E\d{1,3}\b', caseSensitive: false), ' ')
+        .replaceAll(RegExp(r'\b\d{1,2}x\d{1,3}\b', caseSensitive: false), ' ')
+        .replaceAll(
+          RegExp(
+            r'\b(720p|1080p|2160p|4k|bluray|brrip|webrip|web-dl|x264|x265|h264|h265|hevc|aac|dts|hdr)\b',
+            caseSensitive: false,
+          ),
+          ' ',
+        )
+        .replaceAll(RegExp(r'[._,，]+'), ' ')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim();
+
+    final candidates = <String>[];
+    final englishMatches =
+        RegExp(r'[A-Za-z][A-Za-z0-9]*(?:\s+[A-Za-z][A-Za-z0-9]*)*')
+            .allMatches(clean)
+            .map((match) => match.group(0)!.trim())
+            .where((value) => value.length >= 3)
+            .toList()
+          ..sort((a, b) => b.length.compareTo(a.length));
+
+    if (englishMatches.isNotEmpty) {
+      candidates.add(englishMatches.first);
+    }
+    if (clean.isNotEmpty) {
+      candidates.add(clean);
+    }
+    final original = rawQuery.trim();
+    if (original.isNotEmpty) {
+      candidates.add(original);
+    }
+
+    return candidates.toSet().toList(growable: false);
   }
 
   static String _findProxy(Uri uri, String proxy) {

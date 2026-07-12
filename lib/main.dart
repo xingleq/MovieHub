@@ -323,6 +323,7 @@ class _HomePageState extends State<HomePage> {
           backdropPath: match.backdropPath,
           releaseDate: match.releaseDate,
           voteAverage: match.voteAverage,
+          tmdbMediaType: match.mediaType,
         );
       }).toList();
 
@@ -945,6 +946,10 @@ class _MediaDetailPanel extends StatelessWidget {
             const SizedBox(height: 18),
             if (selectedItem.tmdbId != null) ...[
               _DetailRow(label: 'TMDB', value: '#${selectedItem.tmdbId}'),
+              _DetailRow(
+                label: '类型',
+                value: selectedItem.tmdbMediaType == 'tv' ? '电视剧' : '电影',
+              ),
               _DetailRow(
                 label: '评分',
                 value: selectedItem.voteAverage == null

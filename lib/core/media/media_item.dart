@@ -16,6 +16,7 @@ class MediaItem {
     required this.backdropPath,
     required this.releaseDate,
     required this.voteAverage,
+    required this.tmdbMediaType,
   });
 
   final String path;
@@ -32,6 +33,7 @@ class MediaItem {
   final String? backdropPath;
   final String? releaseDate;
   final double? voteAverage;
+  final String? tmdbMediaType;
 
   factory MediaItem.fromFile(File file, {DateTime? addedAt}) {
     final stat = file.statSync();
@@ -55,6 +57,7 @@ class MediaItem {
       backdropPath: null,
       releaseDate: null,
       voteAverage: null,
+      tmdbMediaType: null,
     );
   }
 
@@ -74,6 +77,7 @@ class MediaItem {
       backdropPath: json['backdropPath'] as String?,
       releaseDate: json['releaseDate'] as String?,
       voteAverage: (json['voteAverage'] as num?)?.toDouble(),
+      tmdbMediaType: json['tmdbMediaType'] as String?,
     );
   }
 
@@ -93,6 +97,7 @@ class MediaItem {
       'backdropPath': backdropPath,
       'releaseDate': releaseDate,
       'voteAverage': voteAverage,
+      'tmdbMediaType': tmdbMediaType,
     };
   }
 
@@ -112,6 +117,7 @@ class MediaItem {
       backdropPath: previous?.backdropPath ?? backdropPath,
       releaseDate: previous?.releaseDate ?? releaseDate,
       voteAverage: previous?.voteAverage ?? voteAverage,
+      tmdbMediaType: previous?.tmdbMediaType ?? tmdbMediaType,
     );
   }
 
@@ -124,6 +130,7 @@ class MediaItem {
     String? backdropPath,
     String? releaseDate,
     double? voteAverage,
+    String? tmdbMediaType,
   }) {
     return MediaItem(
       path: path,
@@ -140,6 +147,7 @@ class MediaItem {
       backdropPath: backdropPath ?? this.backdropPath,
       releaseDate: releaseDate ?? this.releaseDate,
       voteAverage: voteAverage ?? this.voteAverage,
+      tmdbMediaType: tmdbMediaType ?? this.tmdbMediaType,
     );
   }
 

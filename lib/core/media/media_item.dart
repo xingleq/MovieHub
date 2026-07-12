@@ -20,6 +20,9 @@ class MediaItem {
     required this.releaseDate,
     required this.voteAverage,
     required this.tmdbMediaType,
+    required this.playbackPositionMs,
+    required this.playbackDurationMs,
+    required this.lastPlayedAt,
   });
 
   final String path;
@@ -40,6 +43,9 @@ class MediaItem {
   final String? releaseDate;
   final double? voteAverage;
   final String? tmdbMediaType;
+  final int playbackPositionMs;
+  final int playbackDurationMs;
+  final DateTime? lastPlayedAt;
 
   bool get isEpisode {
     return seasonNumber != null && episodeNumber != null;
@@ -52,6 +58,13 @@ class MediaItem {
       return null;
     }
     return 'S${_twoDigits(season)}E${_twoDigits(episode)}';
+  }
+
+  double get playbackProgress {
+    if (playbackDurationMs <= 0 || playbackPositionMs <= 0) {
+      return 0;
+    }
+    return (playbackPositionMs / playbackDurationMs).clamp(0, 1).toDouble();
   }
 
   factory MediaItem.fromFile(File file, {DateTime? addedAt}) {
@@ -84,6 +97,9 @@ class MediaItem {
       releaseDate: null,
       voteAverage: null,
       tmdbMediaType: null,
+      playbackPositionMs: 0,
+      playbackDurationMs: 0,
+      lastPlayedAt: null,
     );
   }
 
@@ -107,6 +123,11 @@ class MediaItem {
       releaseDate: json['releaseDate'] as String?,
       voteAverage: (json['voteAverage'] as num?)?.toDouble(),
       tmdbMediaType: json['tmdbMediaType'] as String?,
+      playbackPositionMs: json['playbackPositionMs'] as int? ?? 0,
+      playbackDurationMs: json['playbackDurationMs'] as int? ?? 0,
+      lastPlayedAt: json['lastPlayedAt'] == null
+          ? null
+          : DateTime.parse(json['lastPlayedAt'] as String),
     );
   }
 
@@ -130,6 +151,9 @@ class MediaItem {
       'releaseDate': releaseDate,
       'voteAverage': voteAverage,
       'tmdbMediaType': tmdbMediaType,
+      'playbackPositionMs': playbackPositionMs,
+      'playbackDurationMs': playbackDurationMs,
+      'lastPlayedAt': lastPlayedAt?.toIso8601String(),
     };
   }
 
@@ -153,6 +177,9 @@ class MediaItem {
       releaseDate: previous?.releaseDate ?? releaseDate,
       voteAverage: previous?.voteAverage ?? voteAverage,
       tmdbMediaType: previous?.tmdbMediaType ?? tmdbMediaType,
+      playbackPositionMs: previous?.playbackPositionMs ?? playbackPositionMs,
+      playbackDurationMs: previous?.playbackDurationMs ?? playbackDurationMs,
+      lastPlayedAt: previous?.lastPlayedAt ?? lastPlayedAt,
     );
   }
 
@@ -169,6 +196,9 @@ class MediaItem {
     String? releaseDate,
     double? voteAverage,
     String? tmdbMediaType,
+    int? playbackPositionMs,
+    int? playbackDurationMs,
+    DateTime? lastPlayedAt,
   }) {
     return MediaItem(
       path: path,
@@ -189,6 +219,9 @@ class MediaItem {
       releaseDate: releaseDate ?? this.releaseDate,
       voteAverage: voteAverage ?? this.voteAverage,
       tmdbMediaType: tmdbMediaType ?? this.tmdbMediaType,
+      playbackPositionMs: playbackPositionMs ?? this.playbackPositionMs,
+      playbackDurationMs: playbackDurationMs ?? this.playbackDurationMs,
+      lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,
     );
   }
 

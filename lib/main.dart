@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -483,8 +484,42 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _openPlayer(MediaItem item) async {
     await Navigator.of(context).push(
-      MaterialPageRoute<void>(builder: (context) => PlayerPage(item: item)),
+      MaterialPageRoute<void>(
+        builder: (context) =>
+            PlayerPage(item: item, onProgressChanged: _savePlaybackProgress),
+      ),
     );
+  }
+
+  Future<void> _savePlaybackProgress(
+    MediaItem item,
+    Duration position,
+    Duration duration,
+  ) async {
+    if (duration.inMilliseconds <= 0) {
+      return;
+    }
+
+    final updatedItems = _items.map((current) {
+      if (current.path != item.path) {
+        return current;
+      }
+      return current.copyWith(
+        playbackPositionMs: position.inMilliseconds,
+        playbackDurationMs: duration.inMilliseconds,
+        lastPlayedAt: DateTime.now(),
+      );
+    }).toList();
+
+    await _store.save(MediaLibrarySnapshot(roots: _roots, items: updatedItems));
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _items = updatedItems;
+      _selectedItem = _findItemByPath(updatedItems, _selectedItem?.path);
+    });
   }
 
   Future<void> _openSettings() async {
@@ -1078,6 +1113,8 @@ class _MediaCard extends StatelessWidget {
                       if (item.episodeLabel != null) item.episodeLabel!,
                       if (item.voteAverage != null)
                         item.voteAverage!.toStringAsFixed(1),
+                      if (item.playbackProgress > 0)
+                        '${(item.playbackProgress * 100).round()}%',
                       formatDate(item.addedAt),
                     ].join('  '),
                     style: TextStyle(color: colorScheme.outline, fontSize: 12),
@@ -1221,6 +1258,12 @@ class _MediaDetailPanel extends StatelessWidget {
                 label: '修改',
                 value: _MediaCard.formatDate(selectedItem.modifiedAt),
               ),
+              if (selectedItem.playbackDurationMs > 0)
+                _DetailRow(
+                  label: '进度',
+                  value:
+                      '${(selectedItem.playbackProgress * 100).round()}%  ${_formatDuration(Duration(milliseconds: selectedItem.playbackPositionMs))} / ${_formatDuration(Duration(milliseconds: selectedItem.playbackDurationMs))}',
+                ),
               if (selectedItem.overview != null &&
                   selectedItem.overview!.trim().isNotEmpty) ...[
                 const SizedBox(height: 8),
@@ -1432,10 +1475,30 @@ class _DetailRow extends StatelessWidget {
   }
 }
 
+String _formatDuration(Duration duration) {
+  final hours = duration.inHours;
+  final minutes = duration.inMinutes.remainder(60).toString().padLeft(2, '0');
+  final seconds = duration.inSeconds.remainder(60).toString().padLeft(2, '0');
+  if (hours > 0) {
+    return '$hours:$minutes:$seconds';
+  }
+  return '$minutes:$seconds';
+}
+
 class PlayerPage extends StatefulWidget {
-  const PlayerPage({super.key, required this.item});
+  const PlayerPage({
+    super.key,
+    required this.item,
+    required this.onProgressChanged,
+  });
 
   final MediaItem item;
+  final Future<void> Function(
+    MediaItem item,
+    Duration position,
+    Duration duration,
+  )
+  onProgressChanged;
 
   @override
   State<PlayerPage> createState() => _PlayerPageState();
@@ -1444,17 +1507,41 @@ class PlayerPage extends StatefulWidget {
 class _PlayerPageState extends State<PlayerPage> {
   late final Player _player;
   late final VideoController _controller;
+  late final StreamSubscription<Duration> _positionSubscription;
+  late final StreamSubscription<Duration> _durationSubscription;
+  var _lastPosition = Duration.zero;
+  var _lastDuration = Duration.zero;
 
   @override
   void initState() {
     super.initState();
     _player = Player();
     _controller = VideoController(_player);
-    _player.open(Media(widget.item.path));
+    _positionSubscription = _player.stream.position.listen((position) {
+      _lastPosition = position;
+    });
+    _durationSubscription = _player.stream.duration.listen((duration) {
+      _lastDuration = duration;
+    });
+    unawaited(_openMedia());
+  }
+
+  Future<void> _openMedia() async {
+    await _player.open(Media(widget.item.path));
+    if (widget.item.playbackPositionMs > 5000) {
+      await _player.seek(
+        Duration(milliseconds: widget.item.playbackPositionMs),
+      );
+    }
   }
 
   @override
   void dispose() {
+    unawaited(_positionSubscription.cancel());
+    unawaited(_durationSubscription.cancel());
+    unawaited(
+      widget.onProgressChanged(widget.item, _lastPosition, _lastDuration),
+    );
     _player.dispose();
     super.dispose();
   }

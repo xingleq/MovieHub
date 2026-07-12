@@ -69,6 +69,9 @@ class _HomePageState extends State<HomePage> {
   var _tmdbAccessToken = '';
   var _tmdbProxy = '';
   String? _metadataLoadingPath;
+  var _metadataBatchRunning = false;
+  var _metadataBatchDone = 0;
+  var _metadataBatchTotal = 0;
   MediaItem? _selectedItem;
   String? _error;
 
@@ -358,6 +361,121 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _matchAllTmdb() async {
+    if (_metadataBatchRunning) {
+      return;
+    }
+
+    final token = _tmdbTokenController.text.trim();
+    final proxy = _tmdbProxyController.text.trim();
+    if (token.isEmpty) {
+      setState(() {
+        _error = '请先填写 TMDB 令牌。';
+      });
+      return;
+    }
+
+    final pendingItems = _items.where((item) => item.tmdbId == null).toList();
+    if (pendingItems.isEmpty) {
+      setState(() {
+        _error = '没有需要匹配的影片。';
+      });
+      return;
+    }
+
+    if (token != _tmdbAccessToken || proxy != _tmdbProxy) {
+      await _settingsStore.save(TmdbSettings(accessToken: token, proxy: proxy));
+    }
+
+    setState(() {
+      _tmdbAccessToken = token;
+      _tmdbProxy = proxy;
+      _metadataBatchRunning = true;
+      _metadataBatchDone = 0;
+      _metadataBatchTotal = pendingItems.length;
+      _metadataLoadingPath = null;
+      _error = null;
+    });
+
+    var updatedItems = List<MediaItem>.of(_items);
+    var failedCount = 0;
+    final selectedPath = _selectedItem?.path;
+
+    for (final item in pendingItems) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _metadataLoadingPath = item.path;
+      });
+
+      try {
+        final match = await _tmdbClient.searchMovie(
+          accessToken: token,
+          query: item.title,
+          proxy: proxy,
+        );
+
+        if (match == null) {
+          failedCount++;
+        } else {
+          updatedItems = updatedItems.map((current) {
+            if (current.path != item.path) {
+              return current;
+            }
+            return current.copyWith(
+              tmdbId: match.id,
+              tmdbTitle: match.title,
+              overview: match.overview,
+              posterPath: match.posterPath,
+              backdropPath: match.backdropPath,
+              releaseDate: match.releaseDate,
+              voteAverage: match.voteAverage,
+              tmdbMediaType: match.mediaType,
+            );
+          }).toList();
+
+          await _store.save(
+            MediaLibrarySnapshot(roots: _roots, items: updatedItems),
+          );
+        }
+      } catch (_) {
+        failedCount++;
+      }
+
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _items = updatedItems;
+        _selectedItem = _findItemByPath(updatedItems, selectedPath);
+        _metadataBatchDone++;
+      });
+    }
+
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _metadataBatchRunning = false;
+      _metadataLoadingPath = null;
+      _error = failedCount == 0 ? null : '批量匹配完成，$failedCount 个条目未匹配。';
+    });
+  }
+
+  MediaItem? _findItemByPath(List<MediaItem> items, String? path) {
+    if (path == null) {
+      return items.isEmpty ? null : items.first;
+    }
+    for (final item in items) {
+      if (item.path == path) {
+        return item;
+      }
+    }
+    return items.isEmpty ? null : items.first;
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
@@ -395,6 +513,9 @@ class _HomePageState extends State<HomePage> {
                   favoritesOnly: _favoritesOnly,
                   selectedItem: _selectedItem,
                   metadataLoadingPath: _metadataLoadingPath,
+                  metadataBatchRunning: _metadataBatchRunning,
+                  metadataBatchDone: _metadataBatchDone,
+                  metadataBatchTotal: _metadataBatchTotal,
                   skippedPaths: _skippedPaths,
                   error: _error,
                   onSelectItem: (item) {
@@ -410,6 +531,7 @@ class _HomePageState extends State<HomePage> {
                   },
                   onToggleFavorite: _toggleFavorite,
                   onMatchTmdb: _matchTmdb,
+                  onMatchAllTmdb: _matchAllTmdb,
                   onOpenLocation: _openItemLocation,
                 ),
               ),
@@ -565,6 +687,9 @@ class _MediaShelf extends StatelessWidget {
     required this.favoritesOnly,
     required this.selectedItem,
     required this.metadataLoadingPath,
+    required this.metadataBatchRunning,
+    required this.metadataBatchDone,
+    required this.metadataBatchTotal,
     required this.skippedPaths,
     required this.error,
     required this.onSelectItem,
@@ -572,6 +697,7 @@ class _MediaShelf extends StatelessWidget {
     required this.onFavoritesOnlyChanged,
     required this.onToggleFavorite,
     required this.onMatchTmdb,
+    required this.onMatchAllTmdb,
     required this.onOpenLocation,
   });
 
@@ -582,6 +708,9 @@ class _MediaShelf extends StatelessWidget {
   final bool favoritesOnly;
   final MediaItem? selectedItem;
   final String? metadataLoadingPath;
+  final bool metadataBatchRunning;
+  final int metadataBatchDone;
+  final int metadataBatchTotal;
   final List<String> skippedPaths;
   final String? error;
   final ValueChanged<MediaItem> onSelectItem;
@@ -589,6 +718,7 @@ class _MediaShelf extends StatelessWidget {
   final ValueChanged<bool> onFavoritesOnlyChanged;
   final ValueChanged<MediaItem> onToggleFavorite;
   final ValueChanged<MediaItem> onMatchTmdb;
+  final VoidCallback onMatchAllTmdb;
   final ValueChanged<MediaItem> onOpenLocation;
 
   @override
@@ -620,6 +750,19 @@ class _MediaShelf extends StatelessWidget {
             Text(
               '${items.length} / $totalItems',
               style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            ),
+            const SizedBox(width: 12),
+            FilledButton.tonalIcon(
+              onPressed: metadataBatchRunning || totalItems == 0
+                  ? null
+                  : onMatchAllTmdb,
+              icon: metadataBatchRunning
+                  ? const SizedBox.square(
+                      dimension: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cloud_sync_outlined),
+              label: const Text('匹配全部'),
             ),
           ],
         ),
@@ -664,6 +807,19 @@ class _MediaShelf extends StatelessWidget {
             ),
           ],
         ),
+        if (metadataBatchRunning) ...[
+          const SizedBox(height: 12),
+          LinearProgressIndicator(
+            value: metadataBatchTotal == 0
+                ? null
+                : metadataBatchDone / metadataBatchTotal,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '正在匹配 $metadataBatchDone / $metadataBatchTotal',
+            style: TextStyle(color: Theme.of(context).colorScheme.outline),
+          ),
+        ],
         const SizedBox(height: 16),
         Expanded(
           child: items.isEmpty

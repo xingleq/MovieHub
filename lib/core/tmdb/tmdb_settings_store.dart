@@ -2,10 +2,18 @@ import 'dart:convert';
 import 'dart:io';
 
 class TmdbSettings {
-  const TmdbSettings({required this.accessToken, required this.proxy});
+  const TmdbSettings({
+    required this.accessToken,
+    required this.proxy,
+    this.backgroundImagePath = '',
+  });
 
   final String accessToken;
   final String proxy;
+
+  /// Optional local wallpaper shown behind the whole app (personal use — the
+  /// user picks their own image file).
+  final String backgroundImagePath;
 
   static const empty = TmdbSettings(accessToken: '', proxy: '');
 }
@@ -37,6 +45,7 @@ class TmdbSettingsStore {
     return TmdbSettings(
       accessToken: json['tmdbAccessToken'] as String? ?? '',
       proxy: json['tmdbProxy'] as String? ?? '',
+      backgroundImagePath: json['backgroundImagePath'] as String? ?? '',
     );
   }
 
@@ -48,6 +57,7 @@ class TmdbSettingsStore {
     final payload = {
       'tmdbAccessToken': settings.accessToken,
       'tmdbProxy': settings.proxy,
+      'backgroundImagePath': settings.backgroundImagePath,
     };
     await _storageFile.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),

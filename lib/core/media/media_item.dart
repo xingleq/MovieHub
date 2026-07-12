@@ -20,6 +20,11 @@ class MediaItem {
     required this.releaseDate,
     required this.voteAverage,
     required this.tmdbMediaType,
+    required this.genreIds,
+    required this.genres,
+    required this.directors,
+    required this.cast,
+    required this.runtimeMinutes,
     required this.playbackPositionMs,
     required this.playbackDurationMs,
     required this.lastPlayedAt,
@@ -43,6 +48,11 @@ class MediaItem {
   final String? releaseDate;
   final double? voteAverage;
   final String? tmdbMediaType;
+  final List<int>? genreIds;
+  final List<String>? genres;
+  final List<String>? directors;
+  final List<String>? cast;
+  final int? runtimeMinutes;
   final int playbackPositionMs;
   final int playbackDurationMs;
   final DateTime? lastPlayedAt;
@@ -97,6 +107,11 @@ class MediaItem {
       releaseDate: null,
       voteAverage: null,
       tmdbMediaType: null,
+      genreIds: null,
+      genres: null,
+      directors: null,
+      cast: null,
+      runtimeMinutes: null,
       playbackPositionMs: 0,
       playbackDurationMs: 0,
       lastPlayedAt: null,
@@ -123,6 +138,16 @@ class MediaItem {
       releaseDate: json['releaseDate'] as String?,
       voteAverage: (json['voteAverage'] as num?)?.toDouble(),
       tmdbMediaType: json['tmdbMediaType'] as String?,
+      genreIds: (json['genreIds'] as List<Object?>?)
+          ?.whereType<num>()
+          .map((value) => value.toInt())
+          .toList(),
+      genres: (json['genres'] as List<Object?>?)?.whereType<String>().toList(),
+      directors: (json['directors'] as List<Object?>?)
+          ?.whereType<String>()
+          .toList(),
+      cast: (json['cast'] as List<Object?>?)?.whereType<String>().toList(),
+      runtimeMinutes: json['runtimeMinutes'] as int?,
       playbackPositionMs: json['playbackPositionMs'] as int? ?? 0,
       playbackDurationMs: json['playbackDurationMs'] as int? ?? 0,
       lastPlayedAt: json['lastPlayedAt'] == null
@@ -151,6 +176,11 @@ class MediaItem {
       'releaseDate': releaseDate,
       'voteAverage': voteAverage,
       'tmdbMediaType': tmdbMediaType,
+      'genreIds': genreIds,
+      'genres': genres,
+      'directors': directors,
+      'cast': cast,
+      'runtimeMinutes': runtimeMinutes,
       'playbackPositionMs': playbackPositionMs,
       'playbackDurationMs': playbackDurationMs,
       'lastPlayedAt': lastPlayedAt?.toIso8601String(),
@@ -177,6 +207,11 @@ class MediaItem {
       releaseDate: previous?.releaseDate ?? releaseDate,
       voteAverage: previous?.voteAverage ?? voteAverage,
       tmdbMediaType: previous?.tmdbMediaType ?? tmdbMediaType,
+      genreIds: previous?.genreIds ?? genreIds,
+      genres: previous?.genres ?? genres,
+      directors: previous?.directors ?? directors,
+      cast: previous?.cast ?? cast,
+      runtimeMinutes: previous?.runtimeMinutes ?? runtimeMinutes,
       playbackPositionMs: previous?.playbackPositionMs ?? playbackPositionMs,
       playbackDurationMs: previous?.playbackDurationMs ?? playbackDurationMs,
       lastPlayedAt: previous?.lastPlayedAt ?? lastPlayedAt,
@@ -196,6 +231,11 @@ class MediaItem {
     String? releaseDate,
     double? voteAverage,
     String? tmdbMediaType,
+    List<int>? genreIds,
+    List<String>? genres,
+    List<String>? directors,
+    List<String>? cast,
+    int? runtimeMinutes,
     int? playbackPositionMs,
     int? playbackDurationMs,
     DateTime? lastPlayedAt,
@@ -219,6 +259,11 @@ class MediaItem {
       releaseDate: releaseDate ?? this.releaseDate,
       voteAverage: voteAverage ?? this.voteAverage,
       tmdbMediaType: tmdbMediaType ?? this.tmdbMediaType,
+      genreIds: genreIds ?? this.genreIds,
+      genres: genres ?? this.genres,
+      directors: directors ?? this.directors,
+      cast: cast ?? this.cast,
+      runtimeMinutes: runtimeMinutes ?? this.runtimeMinutes,
       playbackPositionMs: playbackPositionMs ?? this.playbackPositionMs,
       playbackDurationMs: playbackDurationMs ?? this.playbackDurationMs,
       lastPlayedAt: lastPlayedAt ?? this.lastPlayedAt,

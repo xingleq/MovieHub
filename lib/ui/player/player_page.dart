@@ -1,0 +1,417 @@
+import 'dart:async';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
+
+import '../../core/media/media_item.dart';
+import '../../theme/app_tokens.dart';
+
+class PlayerPage extends StatefulWidget {
+  const PlayerPage({
+    super.key,
+    required this.item,
+    required this.onProgressChanged,
+    this.startAt,
+    this.nextEpisodeOf,
+  });
+
+  final MediaItem item;
+
+  /// Position to start playback from; null plays from the beginning. Passed
+  /// to [Media.start] so libmpv opens directly at the offset — seeking right
+  /// after [Player.open] races media loading and gets silently dropped.
+  final Duration? startAt;
+
+  /// Looks up the following episode of a series item; enables the next
+  /// button and auto-play-next on completion (todo §15).
+  final MediaItem? Function(MediaItem item)? nextEpisodeOf;
+
+  final Future<void> Function(
+    MediaItem item,
+    Duration position,
+    Duration duration,
+  )
+  onProgressChanged;
+
+  @override
+  State<PlayerPage> createState() => _PlayerPageState();
+}
+
+class _PlayerPageState extends State<PlayerPage> {
+  late final Player _player;
+  late final VideoController _controller;
+  late final StreamSubscription<Duration> _positionSubscription;
+  late final StreamSubscription<Duration> _durationSubscription;
+  late final StreamSubscription<Tracks> _tracksSubscription;
+  late final StreamSubscription<bool> _completedSubscription;
+
+  late MediaItem _currentItem;
+  var _lastPosition = Duration.zero;
+  var _lastDuration = Duration.zero;
+  String? _autoTracksAppliedFor;
+  var _switchingEpisode = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentItem = widget.item;
+    _player = Player();
+    _controller = VideoController(_player);
+    _positionSubscription = _player.stream.position.listen((position) {
+      _lastPosition = position;
+    });
+    _durationSubscription = _player.stream.duration.listen((duration) {
+      _lastDuration = duration;
+    });
+    _tracksSubscription = _player.stream.tracks.listen(_applyPreferredTracks);
+    _completedSubscription = _player.stream.completed.listen((completed) {
+      if (completed) {
+        unawaited(_autoPlayNext());
+      }
+    });
+    unawaited(_player.open(Media(_currentItem.path, start: widget.startAt)));
+  }
+
+  @override
+  void dispose() {
+    unawaited(_positionSubscription.cancel());
+    unawaited(_durationSubscription.cancel());
+    unawaited(_tracksSubscription.cancel());
+    unawaited(_completedSubscription.cancel());
+    unawaited(
+      widget.onProgressChanged(_currentItem, _lastPosition, _lastDuration),
+    );
+    _player.dispose();
+    super.dispose();
+  }
+
+  /// Auto-selects Chinese-first subtitle (简→繁→中→英, todo §12) and audio
+  /// (中→日→英, todo §13) once per opened media.
+  void _applyPreferredTracks(Tracks tracks) {
+    if (_autoTracksAppliedFor == _currentItem.path) {
+      return;
+    }
+
+    final subtitles = tracks.subtitle
+        .where((track) => track.id != 'auto' && track.id != 'no')
+        .toList();
+    final audios = tracks.audio
+        .where((track) => track.id != 'auto' && track.id != 'no')
+        .toList();
+    if (subtitles.isEmpty && audios.isEmpty) {
+      return;
+    }
+    _autoTracksAppliedFor = _currentItem.path;
+
+    final subtitle = _pickByPreference(
+      subtitles,
+      (track) => (track.language, track.title),
+      const [
+        ({'zh-hans', 'chs'}, ['简体', '简中', 'simplified']),
+        ({'zh-hant', 'cht'}, ['繁体', '繁中', 'traditional']),
+        ({'zh', 'chi', 'zho'}, ['中文', 'chinese', '中字']),
+        ({'en', 'eng'}, ['english', '英文', '英语']),
+      ],
+    );
+    if (subtitle != null) {
+      unawaited(_player.setSubtitleTrack(subtitle));
+    }
+
+    final audio = _pickByPreference(
+      audios,
+      (track) => (track.language, track.title),
+      const [
+        (
+          {'zh', 'chi', 'zho', 'zh-hans', 'zh-hant', 'chs', 'cht'},
+          ['中文', '国语', '普通话', 'mandarin', 'chinese'],
+        ),
+        ({'ja', 'jpn', 'jp'}, ['日语', 'japanese', '日本語']),
+        ({'en', 'eng'}, ['english', '英语']),
+      ],
+    );
+    if (audio != null) {
+      unawaited(_player.setAudioTrack(audio));
+    }
+  }
+
+  /// Returns the first track matching the ordered preference tiers (language
+  /// code exact/prefix match, or title keyword). Falls back to the first
+  /// track — todo §12/§13 "其它/第一条".
+  static T? _pickByPreference<T>(
+    List<T> tracks,
+    (String?, String?) Function(T track) accessor,
+    List<(Set<String>, List<String>)> tiers,
+  ) {
+    for (final (codes, titleKeys) in tiers) {
+      for (final track in tracks) {
+        final (language, title) = accessor(track);
+        final lang = (language ?? '').toLowerCase();
+        final name = (title ?? '').toLowerCase();
+        if (codes.contains(lang) ||
+            codes.any((code) => lang.startsWith('$code-')) ||
+            titleKeys.any(name.contains)) {
+          return track;
+        }
+      }
+    }
+    return tracks.isEmpty ? null : tracks.first;
+  }
+
+  MediaItem? get _nextEpisode {
+    return widget.nextEpisodeOf?.call(_currentItem);
+  }
+
+  /// On natural completion: mark the finished episode watched, then continue
+  /// with the next one.
+  Future<void> _autoPlayNext() async {
+    if (_switchingEpisode) {
+      return;
+    }
+    final next = _nextEpisode;
+    if (next == null) {
+      return;
+    }
+    final finished = _lastDuration;
+    if (finished.inMilliseconds > 0) {
+      unawaited(widget.onProgressChanged(_currentItem, finished, finished));
+    }
+    await _switchTo(next);
+  }
+
+  /// Manual skip: save the current position as-is, then switch.
+  Future<void> _playNextManually() async {
+    if (_switchingEpisode) {
+      return;
+    }
+    final next = _nextEpisode;
+    if (next == null) {
+      return;
+    }
+    unawaited(
+      widget.onProgressChanged(_currentItem, _lastPosition, _lastDuration),
+    );
+    await _switchTo(next);
+  }
+
+  Future<void> _switchTo(MediaItem next) async {
+    _switchingEpisode = true;
+    try {
+      setState(() {
+        _currentItem = next;
+      });
+      _autoTracksAppliedFor = null;
+      _lastPosition = Duration.zero;
+      _lastDuration = Duration.zero;
+
+      final resume =
+          next.playbackPositionMs > 5000 && next.playbackProgress < 0.95
+          ? Duration(milliseconds: next.playbackPositionMs)
+          : null;
+      await _player.open(Media(next.path, start: resume));
+    } finally {
+      _switchingEpisode = false;
+    }
+  }
+
+  Future<void> _takeScreenshot() async {
+    final bytes = await _player.screenshot(format: 'image/png');
+    if (!mounted) {
+      return;
+    }
+    final messenger = ScaffoldMessenger.of(context);
+    if (bytes == null) {
+      messenger.showSnackBar(const SnackBar(content: Text('截图失败')));
+      return;
+    }
+
+    try {
+      final home = Platform.environment['USERPROFILE'] ?? '';
+      final separator = Platform.pathSeparator;
+      final directory = Directory(
+        '$home${separator}Pictures${separator}MovieHub',
+      );
+      await directory.create(recursive: true);
+
+      final safeTitle = (_currentItem.tmdbTitle ?? _currentItem.title)
+          .replaceAll(RegExp(r'[\\/:*?"<>|]'), '_');
+      final now = DateTime.now();
+      final stamp =
+          '${now.hour.toString().padLeft(2, '0')}'
+          '${now.minute.toString().padLeft(2, '0')}'
+          '${now.second.toString().padLeft(2, '0')}';
+      final file = File('${directory.path}$separator${safeTitle}_$stamp.png');
+      await file.writeAsBytes(bytes);
+      messenger.showSnackBar(SnackBar(content: Text('截图已保存：${file.path}')));
+    } catch (error) {
+      messenger.showSnackBar(SnackBar(content: Text('截图保存失败：$error')));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+
+    final controlsTheme = MaterialDesktopVideoControlsThemeData(
+      seekBarPositionColor: tokens.accent,
+      seekBarThumbColor: tokens.accent,
+      bottomButtonBar: [
+        const MaterialDesktopPlayOrPauseButton(),
+        const MaterialDesktopVolumeButton(),
+        const MaterialDesktopPositionIndicator(),
+        const Spacer(),
+        _RateButton(player: _player),
+        _TrackMenuButton(
+          tooltip: '字幕',
+          icon: Icons.subtitles_outlined,
+          loadTracks: () => [
+            (SubtitleTrack.no(), '关闭字幕'),
+            for (final (index, track)
+                in _player.state.tracks.subtitle
+                    .where((track) => track.id != 'auto' && track.id != 'no')
+                    .indexed)
+              (track, _trackLabel(track.title, track.language, index)),
+          ],
+          isSelected: (track) =>
+              _player.state.track.subtitle.id == (track as SubtitleTrack).id,
+          onSelected: (track) =>
+              unawaited(_player.setSubtitleTrack(track as SubtitleTrack)),
+        ),
+        _TrackMenuButton(
+          tooltip: '音轨',
+          icon: Icons.graphic_eq,
+          loadTracks: () => [
+            for (final (index, track)
+                in _player.state.tracks.audio
+                    .where((track) => track.id != 'auto' && track.id != 'no')
+                    .indexed)
+              (track, _trackLabel(track.title, track.language, index)),
+          ],
+          isSelected: (track) =>
+              _player.state.track.audio.id == (track as AudioTrack).id,
+          onSelected: (track) =>
+              unawaited(_player.setAudioTrack(track as AudioTrack)),
+        ),
+        MaterialDesktopCustomButton(
+          onPressed: () => unawaited(_takeScreenshot()),
+          icon: const Icon(Icons.photo_camera_outlined),
+        ),
+        if (_nextEpisode != null)
+          MaterialDesktopCustomButton(
+            onPressed: () => unawaited(_playNextManually()),
+            icon: const Icon(Icons.skip_next),
+          ),
+        const MaterialDesktopFullscreenButton(),
+      ],
+    );
+
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+        title: Text(
+          _currentItem.tmdbTitle ?? _currentItem.title,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ),
+      body: MaterialDesktopVideoControlsTheme(
+        normal: controlsTheme,
+        fullscreen: controlsTheme,
+        child: Video(
+          controller: _controller,
+          controls: MaterialDesktopVideoControls,
+        ),
+      ),
+    );
+  }
+
+  static String _trackLabel(String? title, String? language, int index) {
+    final parts = [
+      if (title != null && title.trim().isNotEmpty) title.trim(),
+      if (language != null && language.trim().isNotEmpty) language.trim(),
+    ];
+    if (parts.isEmpty) {
+      return '轨道 ${index + 1}';
+    }
+    return parts.join(' · ');
+  }
+}
+
+class _RateButton extends StatelessWidget {
+  const _RateButton({required this.player});
+
+  final Player player;
+
+  static const _rates = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0];
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<double>(
+      tooltip: '倍速',
+      initialValue: player.state.rate,
+      onSelected: (rate) => player.setRate(rate),
+      color: const Color(0xE6202124),
+      itemBuilder: (context) => [
+        for (final rate in _rates)
+          PopupMenuItem(
+            value: rate,
+            child: Text(
+              rate == 1.0 ? '正常速度' : '${rate}x',
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+      ],
+      icon: const Icon(Icons.speed, color: Colors.white),
+    );
+  }
+}
+
+/// Popup menu listing tracks read lazily at open time, so no stream wiring
+/// is needed.
+class _TrackMenuButton extends StatelessWidget {
+  const _TrackMenuButton({
+    required this.tooltip,
+    required this.icon,
+    required this.loadTracks,
+    required this.isSelected,
+    required this.onSelected,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final List<(Object, String)> Function() loadTracks;
+  final bool Function(Object track) isSelected;
+  final ValueChanged<Object> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<Object>(
+      tooltip: tooltip,
+      onSelected: onSelected,
+      color: const Color(0xE6202124),
+      itemBuilder: (context) {
+        final entries = loadTracks();
+        if (entries.isEmpty) {
+          return const [
+            PopupMenuItem<Object>(
+              enabled: false,
+              child: Text('无可用轨道', style: TextStyle(color: Colors.white70)),
+            ),
+          ];
+        }
+        return [
+          for (final (track, label) in entries)
+            CheckedPopupMenuItem<Object>(
+              value: track,
+              checked: isSelected(track),
+              child: Text(label, style: const TextStyle(color: Colors.white)),
+            ),
+        ];
+      },
+      icon: Icon(icon, color: Colors.white),
+    );
+  }
+}

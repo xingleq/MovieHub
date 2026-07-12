@@ -118,6 +118,21 @@ class _HomePageState extends State<HomePage> {
     return _items.where((item) => item.favorite).length;
   }
 
+  List<MediaItem> get _continueWatchingItems {
+    final items =
+        _items.where((item) {
+          return item.playbackProgress > 0.01 && item.playbackProgress < 0.95;
+        }).toList()..sort((a, b) {
+          final aDate =
+              a.lastPlayedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          final bDate =
+              b.lastPlayedAt ?? DateTime.fromMillisecondsSinceEpoch(0);
+          return bDate.compareTo(aDate);
+        });
+
+    return items.take(12).toList(growable: false);
+  }
+
   Future<void> _loadAppState() async {
     try {
       final snapshot = await _store.load();
@@ -595,6 +610,7 @@ class _HomePageState extends State<HomePage> {
                   items: _filteredItems,
                   totalItems: _items.length,
                   favoriteCount: _favoriteCount,
+                  continueWatchingItems: _continueWatchingItems,
                   searchController: _searchController,
                   favoritesOnly: _favoritesOnly,
                   metadataLoadingPath: _metadataLoadingPath,
@@ -772,6 +788,7 @@ class _MediaShelf extends StatelessWidget {
     required this.items,
     required this.totalItems,
     required this.favoriteCount,
+    required this.continueWatchingItems,
     required this.searchController,
     required this.favoritesOnly,
     required this.metadataLoadingPath,
@@ -790,6 +807,7 @@ class _MediaShelf extends StatelessWidget {
   final List<MediaItem> items;
   final int totalItems;
   final int favoriteCount;
+  final List<MediaItem> continueWatchingItems;
   final TextEditingController searchController;
   final bool favoritesOnly;
   final String? metadataLoadingPath;
@@ -821,6 +839,14 @@ class _MediaShelf extends StatelessWidget {
             message: '有 ${skippedPaths.length} 个路径无法读取或不存在。',
           ),
           const SizedBox(height: 12),
+        ],
+        if (continueWatchingItems.isNotEmpty) ...[
+          _ContinueWatchingSection(
+            items: continueWatchingItems,
+            onOpenDetail: onOpenDetail,
+            onPlay: onPlay,
+          ),
+          const SizedBox(height: 20),
         ],
         Row(
           children: [
@@ -981,6 +1007,129 @@ class _StatsBar extends StatelessWidget {
     }
     final gb = mb / 1024;
     return '${gb.toStringAsFixed(1)} GB';
+  }
+}
+
+class _ContinueWatchingSection extends StatelessWidget {
+  const _ContinueWatchingSection({
+    required this.items,
+    required this.onOpenDetail,
+    required this.onPlay,
+  });
+
+  final List<MediaItem> items;
+  final ValueChanged<MediaItem> onOpenDetail;
+  final ValueChanged<MediaItem> onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text('继续观看', style: Theme.of(context).textTheme.headlineSmall),
+        const SizedBox(height: 12),
+        SizedBox(
+          height: 132,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            itemCount: items.length,
+            separatorBuilder: (context, index) => const SizedBox(width: 12),
+            itemBuilder: (context, index) {
+              final item = items[index];
+              return _ContinueWatchingCard(
+                item: item,
+                onOpenDetail: () => onOpenDetail(item),
+                onPlay: () => onPlay(item),
+              );
+            },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ContinueWatchingCard extends StatelessWidget {
+  const _ContinueWatchingCard({
+    required this.item,
+    required this.onOpenDetail,
+    required this.onPlay,
+  });
+
+  final MediaItem item;
+  final VoidCallback onOpenDetail;
+  final VoidCallback onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final remaining = Duration(
+      milliseconds: (item.playbackDurationMs - item.playbackPositionMs)
+          .clamp(0, item.playbackDurationMs)
+          .toInt(),
+    );
+
+    return SizedBox(
+      width: 320,
+      child: Card(
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onOpenDetail,
+          onDoubleTap: onPlay,
+          child: Row(
+            children: [
+              SizedBox(
+                width: 92,
+                height: double.infinity,
+                child: item.posterPath != null && item.posterPath!.isNotEmpty
+                    ? Image.network(
+                        TmdbClient.posterUrl(item.posterPath!),
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return _CardPosterPlaceholder(
+                            colorScheme: Theme.of(context).colorScheme,
+                          );
+                        },
+                      )
+                    : _CardPosterPlaceholder(
+                        colorScheme: Theme.of(context).colorScheme,
+                      ),
+              ),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        item.tmdbTitle ?? item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                      const Spacer(),
+                      Text(
+                        '剩余 ${_formatDuration(remaining)}',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.outline,
+                          fontSize: 12,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(value: item.playbackProgress),
+                    ],
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: '播放',
+                onPressed: onPlay,
+                icon: const Icon(Icons.play_arrow),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

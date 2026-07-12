@@ -76,6 +76,7 @@ class _HomePageState extends State<HomePage> {
   var _metadataBatchRunning = false;
   var _metadataBatchDone = 0;
   var _metadataBatchTotal = 0;
+  String? _activeDetailPath;
   MediaItem? _selectedItem;
   String? _error;
 
@@ -486,68 +487,110 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
+  Future<void> _openSettings() async {
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          child: SizedBox(
+            width: 520,
+            height: 720,
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: _LibraryPanel(
+                roots: _roots,
+                scanning: _scanning,
+                tmdbTokenController: _tmdbTokenController,
+                tmdbProxyController: _tmdbProxyController,
+                hasTmdbToken: _tmdbAccessToken.isNotEmpty,
+                onSelectRoot: _selectRoot,
+                onRemoveRoot: _removeRoot,
+                onScan: _scan,
+                onSaveTmdbSettings: _saveTmdbSettings,
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openDetail(MediaItem item) {
+    setState(() {
+      _selectedItem = item;
+      _activeDetailPath = item.path;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
+    final detailItem = _findItemByPath(_items, _activeDetailPath);
+
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('MovieHub'),
+        actions: [
+          IconButton(
+            tooltip: '帮助',
+            onPressed: () {
+              showAboutDialog(
+                context: context,
+                applicationName: 'MovieHub',
+                applicationVersion: '0.1.0',
+              );
+            },
+            icon: const Icon(Icons.help_outline),
+          ),
+          IconButton(
+            tooltip: '设置',
+            onPressed: _openSettings,
+            icon: const Icon(Icons.settings_outlined),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              SizedBox(
-                width: 360,
-                child: _LibraryPanel(
-                  roots: _roots,
-                  scanning: _scanning,
-                  tmdbTokenController: _tmdbTokenController,
-                  tmdbProxyController: _tmdbProxyController,
-                  hasTmdbToken: _tmdbAccessToken.isNotEmpty,
-                  onSelectRoot: _selectRoot,
-                  onRemoveRoot: _removeRoot,
-                  onScan: _scan,
-                  onSaveTmdbSettings: _saveTmdbSettings,
-                ),
-              ),
-              const SizedBox(width: 24),
-              Expanded(
-                child: _MediaShelf(
+          child: _activeDetailPath == null || detailItem == null
+              ? _MediaShelf(
                   items: _filteredItems,
                   totalItems: _items.length,
                   favoriteCount: _favoriteCount,
                   searchController: _searchController,
                   favoritesOnly: _favoritesOnly,
-                  selectedItem: _selectedItem,
                   metadataLoadingPath: _metadataLoadingPath,
                   metadataBatchRunning: _metadataBatchRunning,
                   metadataBatchDone: _metadataBatchDone,
                   metadataBatchTotal: _metadataBatchTotal,
                   skippedPaths: _skippedPaths,
                   error: _error,
-                  onSelectItem: (item) {
-                    setState(() {
-                      _selectedItem = item;
-                    });
-                  },
+                  onOpenDetail: _openDetail,
                   onClearSearch: _searchController.clear,
                   onFavoritesOnlyChanged: (value) {
                     setState(() {
                       _favoritesOnly = value;
                     });
                   },
+                  onMatchAllTmdb: _matchAllTmdb,
+                  onPlay: _openPlayer,
+                )
+              : _MediaDetailScreen(
+                  item: detailItem,
+                  loadingMetadata: detailItem.path == _metadataLoadingPath,
+                  onBack: () {
+                    setState(() {
+                      _activeDetailPath = null;
+                    });
+                  },
                   onToggleFavorite: _toggleFavorite,
                   onMatchTmdb: _matchTmdb,
-                  onMatchAllTmdb: _matchAllTmdb,
                   onPlay: _openPlayer,
                   onOpenLocation: _openItemLocation,
                 ),
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -583,12 +626,12 @@ class _LibraryPanel extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         const Text(
-          'MovieHub',
+          '设置',
           style: TextStyle(fontSize: 32, fontWeight: FontWeight.w700),
         ),
         const SizedBox(height: 6),
         Text(
-          '本地影视库',
+          '媒体库与 TMDB',
           style: TextStyle(color: Theme.of(context).colorScheme.outline),
         ),
         const SizedBox(height: 28),
@@ -615,6 +658,8 @@ class _LibraryPanel extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 10),
+        Text('TMDB', style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 12),
         TextField(
           controller: tmdbProxyController,
           decoration: const InputDecoration(
@@ -624,8 +669,6 @@ class _LibraryPanel extends StatelessWidget {
             prefixIcon: Icon(Icons.lan_outlined),
           ),
         ),
-        const SizedBox(height: 24),
-        Text('TMDB', style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 12),
         Row(
           children: [
@@ -696,21 +739,17 @@ class _MediaShelf extends StatelessWidget {
     required this.favoriteCount,
     required this.searchController,
     required this.favoritesOnly,
-    required this.selectedItem,
     required this.metadataLoadingPath,
     required this.metadataBatchRunning,
     required this.metadataBatchDone,
     required this.metadataBatchTotal,
     required this.skippedPaths,
     required this.error,
-    required this.onSelectItem,
+    required this.onOpenDetail,
     required this.onClearSearch,
     required this.onFavoritesOnlyChanged,
-    required this.onToggleFavorite,
-    required this.onMatchTmdb,
     required this.onMatchAllTmdb,
     required this.onPlay,
-    required this.onOpenLocation,
   });
 
   final List<MediaItem> items;
@@ -718,21 +757,17 @@ class _MediaShelf extends StatelessWidget {
   final int favoriteCount;
   final TextEditingController searchController;
   final bool favoritesOnly;
-  final MediaItem? selectedItem;
   final String? metadataLoadingPath;
   final bool metadataBatchRunning;
   final int metadataBatchDone;
   final int metadataBatchTotal;
   final List<String> skippedPaths;
   final String? error;
-  final ValueChanged<MediaItem> onSelectItem;
+  final ValueChanged<MediaItem> onOpenDetail;
   final VoidCallback onClearSearch;
   final ValueChanged<bool> onFavoritesOnlyChanged;
-  final ValueChanged<MediaItem> onToggleFavorite;
-  final ValueChanged<MediaItem> onMatchTmdb;
   final VoidCallback onMatchAllTmdb;
   final ValueChanged<MediaItem> onPlay;
-  final ValueChanged<MediaItem> onOpenLocation;
 
   @override
   Widget build(BuildContext context) {
@@ -841,53 +876,31 @@ class _MediaShelf extends StatelessWidget {
                   title: '还没有影片',
                   message: '添加目录并扫描后，或调整搜索条件后重试。',
                 )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final columns = (constraints.maxWidth / 220)
-                              .floor()
-                              .clamp(2, 5)
-                              .toInt();
-                          return GridView.builder(
-                            itemCount: items.length,
-                            gridDelegate:
-                                SliverGridDelegateWithFixedCrossAxisCount(
-                                  crossAxisCount: columns,
-                                  crossAxisSpacing: 14,
-                                  mainAxisSpacing: 14,
-                                  childAspectRatio: 0.72,
-                                ),
-                            itemBuilder: (context, index) {
-                              final item = items[index];
-                              return _MediaCard(
-                                item: item,
-                                selected: item.path == selectedItem?.path,
-                                onTap: () => onSelectItem(item),
-                                onPlay: () => onPlay(item),
-                                onToggleFavorite: () => onToggleFavorite(item),
-                              );
-                            },
-                          );
-                        },
+              : LayoutBuilder(
+                  builder: (context, constraints) {
+                    final columns = (constraints.maxWidth / 220)
+                        .floor()
+                        .clamp(2, 7)
+                        .toInt();
+                    return GridView.builder(
+                      itemCount: items.length,
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columns,
+                        crossAxisSpacing: 14,
+                        mainAxisSpacing: 14,
+                        childAspectRatio: 0.72,
                       ),
-                    ),
-                    const SizedBox(width: 16),
-                    SizedBox(
-                      width: 320,
-                      child: _MediaDetailPanel(
-                        item: selectedItem,
-                        loadingMetadata:
-                            selectedItem?.path == metadataLoadingPath,
-                        onToggleFavorite: onToggleFavorite,
-                        onMatchTmdb: onMatchTmdb,
-                        onPlay: onPlay,
-                        onOpenLocation: onOpenLocation,
-                      ),
-                    ),
-                  ],
+                      itemBuilder: (context, index) {
+                        final item = items[index];
+                        return _MediaCard(
+                          item: item,
+                          selected: item.path == metadataLoadingPath,
+                          onTap: () => onOpenDetail(item),
+                          onPlay: () => onPlay(item),
+                        );
+                      },
+                    );
+                  },
                 ),
         ),
       ],
@@ -971,14 +984,12 @@ class _MediaCard extends StatelessWidget {
     required this.selected,
     required this.onTap,
     required this.onPlay,
-    required this.onToggleFavorite,
   });
 
   final MediaItem item;
   final bool selected;
   final VoidCallback onTap;
   final VoidCallback onPlay;
-  final VoidCallback onToggleFavorite;
 
   @override
   Widget build(BuildContext context) {
@@ -1042,13 +1053,9 @@ class _MediaCard extends StatelessWidget {
                   Positioned(
                     top: 8,
                     right: 8,
-                    child: IconButton.filledTonal(
-                      tooltip: item.favorite ? '取消收藏' : '收藏',
-                      onPressed: onToggleFavorite,
-                      icon: Icon(
-                        item.favorite ? Icons.favorite : Icons.favorite_border,
-                      ),
-                    ),
+                    child: item.favorite
+                        ? const Icon(Icons.favorite, color: Color(0xFFFFB3AA))
+                        : const SizedBox.shrink(),
                   ),
                 ],
               ),
@@ -1287,6 +1294,64 @@ class _MediaDetailPanel extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _MediaDetailScreen extends StatelessWidget {
+  const _MediaDetailScreen({
+    required this.item,
+    required this.loadingMetadata,
+    required this.onBack,
+    required this.onToggleFavorite,
+    required this.onMatchTmdb,
+    required this.onPlay,
+    required this.onOpenLocation,
+  });
+
+  final MediaItem item;
+  final bool loadingMetadata;
+  final VoidCallback onBack;
+  final ValueChanged<MediaItem> onToggleFavorite;
+  final ValueChanged<MediaItem> onMatchTmdb;
+  final ValueChanged<MediaItem> onPlay;
+  final ValueChanged<MediaItem> onOpenLocation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            IconButton.filledTonal(
+              tooltip: '返回列表',
+              onPressed: onBack,
+              icon: const Icon(Icons.arrow_back),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                item.tmdbTitle ?? item.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Expanded(
+          child: _MediaDetailPanel(
+            item: item,
+            loadingMetadata: loadingMetadata,
+            onToggleFavorite: onToggleFavorite,
+            onMatchTmdb: onMatchTmdb,
+            onPlay: onPlay,
+            onOpenLocation: onOpenLocation,
+          ),
+        ),
+      ],
     );
   }
 }

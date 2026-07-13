@@ -110,30 +110,38 @@ class PosterCard extends StatelessWidget {
                             ),
                           ),
                         ),
-                        if (group.anyFavorite)
-                          const Positioned(
+                        if (rep.voteAverage != null && rep.voteAverage! > 0)
+                          Positioned(
                             top: AppSpacing.sm,
                             right: AppSpacing.sm,
-                            child: _CornerBadge(
-                              child: Icon(
-                                Icons.favorite,
-                                size: 14,
-                                color: Color(0xFFFF6B81),
-                              ),
-                            ),
+                            child: _RatingChip(score: rep.voteAverage!),
                           ),
-                        if (watched)
-                          const Positioned(
-                            top: AppSpacing.sm,
-                            left: AppSpacing.sm,
-                            child: _CornerBadge(
-                              child: Icon(
-                                Icons.check,
-                                size: 14,
-                                color: Color(0xFF7CE38B),
-                              ),
-                            ),
+                        Positioned(
+                          top: AppSpacing.sm,
+                          left: AppSpacing.sm,
+                          child: Column(
+                            children: [
+                              if (watched)
+                                const _CornerBadge(
+                                  child: Icon(
+                                    Icons.check,
+                                    size: 14,
+                                    color: Color(0xFF7CE38B),
+                                  ),
+                                ),
+                              if (group.anyFavorite) ...[
+                                if (watched) const SizedBox(height: 4),
+                                const _CornerBadge(
+                                  child: Icon(
+                                    Icons.favorite,
+                                    size: 14,
+                                    color: Color(0xFFFF6B81),
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
+                        ),
                         if (group.isSeries)
                           Positioned(
                             right: AppSpacing.sm,
@@ -185,14 +193,38 @@ class PosterCard extends StatelessWidget {
     final rep = group.representative;
     final parts = [
       ?releaseYear(rep),
-      if (rep.voteAverage != null && rep.voteAverage! > 0)
-        '★ ${rep.voteAverage!.toStringAsFixed(1)}',
-      if (group.isSeries) '共 ${group.episodes.length} 集' else ?rep.episodeLabel,
+      if (group.isSeries) '全 ${group.episodes.length} 话' else ?rep.episodeLabel,
     ];
     if (parts.isEmpty) {
       return rep.extension.toUpperCase();
     }
     return parts.join(' · ');
+  }
+}
+
+/// Pink score badge in the poster's top-right corner, per the design spec.
+class _RatingChip extends StatelessWidget {
+  const _RatingChip({required this.score});
+
+  final double score;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(colors: AppTokens.candyGradient),
+        borderRadius: BorderRadius.all(Radius.circular(AppRadius.pill)),
+      ),
+      child: Text(
+        score.toStringAsFixed(1),
+        style: const TextStyle(
+          fontSize: 11,
+          color: Colors.white,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
   }
 }
 

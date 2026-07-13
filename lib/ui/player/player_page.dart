@@ -6,6 +6,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../core/media/media_item.dart';
+import '../../core/system/session_events.dart';
 import '../../theme/app_tokens.dart';
 
 class PlayerPage extends StatefulWidget {
@@ -54,6 +55,7 @@ class _PlayerPageState extends State<PlayerPage> {
   late final StreamSubscription<Duration> _durationSubscription;
   late final StreamSubscription<Tracks> _tracksSubscription;
   late final StreamSubscription<bool> _completedSubscription;
+  late final StreamSubscription<String> _sessionSubscription;
 
   late MediaItem _currentItem;
   var _lastPosition = Duration.zero;
@@ -79,6 +81,12 @@ class _PlayerPageState extends State<PlayerPage> {
         unawaited(_autoPlayNext());
       }
     });
+    // Pause when the workstation locks; resuming stays a manual action.
+    _sessionSubscription = SessionEvents.stream.listen((event) {
+      if (event == 'lock' && _player.state.playing) {
+        unawaited(_player.pause());
+      }
+    });
     unawaited(_player.open(Media(_currentItem.path, start: widget.startAt)));
   }
 
@@ -88,6 +96,7 @@ class _PlayerPageState extends State<PlayerPage> {
     unawaited(_durationSubscription.cancel());
     unawaited(_tracksSubscription.cancel());
     unawaited(_completedSubscription.cancel());
+    unawaited(_sessionSubscription.cancel());
     unawaited(
       widget.onProgressChanged(_currentItem, _lastPosition, _lastDuration),
     );

@@ -2,24 +2,27 @@ import 'package:flutter/material.dart';
 
 import 'app_tokens.dart';
 
-/// Builds the dark theme. A light theme can later be added by defining
-/// `AppTokens.light`, a `buildLightTheme()`, and wiring `themeMode` — the
-/// widget layer reads colors via `AppTokens.of(context)` and needs no changes.
 ThemeData buildDarkTheme() {
-  const tokens = AppTokens.dark;
+  return _buildTheme(AppTokens.dark, Brightness.dark);
+}
 
+ThemeData buildLightTheme() {
+  return _buildTheme(AppTokens.light, Brightness.light);
+}
+
+ThemeData _buildTheme(AppTokens tokens, Brightness brightness) {
   final colorScheme = ColorScheme.fromSeed(
     seedColor: tokens.accent,
-    brightness: Brightness.dark,
+    brightness: brightness,
   ).copyWith(surface: tokens.surface);
 
-  final base = ThemeData(useMaterial3: true, brightness: Brightness.dark);
+  final base = ThemeData(useMaterial3: true, brightness: brightness);
 
   return base.copyWith(
     colorScheme: colorScheme,
     scaffoldBackgroundColor: tokens.background,
     canvasColor: tokens.background,
-    extensions: const [tokens],
+    extensions: [tokens],
     cardTheme: CardThemeData(
       color: tokens.surface,
       margin: EdgeInsets.zero,
@@ -56,6 +59,21 @@ ThemeData buildDarkTheme() {
     textTheme: base.textTheme.apply(
       bodyColor: tokens.textPrimary,
       displayColor: tokens.textPrimary,
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return tokens.accent;
+        }
+        return tokens.textSecondary;
+      }),
+      trackColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.selected)) {
+          return tokens.accent.withValues(alpha: 0.35);
+        }
+        return tokens.surfaceVariant;
+      }),
+      trackOutlineColor: WidgetStateProperty.all(Colors.transparent),
     ),
   );
 }

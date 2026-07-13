@@ -95,7 +95,14 @@ class ContinueWatchingCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 2),
                         Text(
-                          '剩余 ${formatDuration(remaining)}',
+                          [
+                            if (item.episodeNumber != null)
+                              '第 ${item.episodeNumber} 话'
+                            else
+                              ?item.episodeLabel,
+                            '观看至 ${(item.playbackProgress * 100).round()}%',
+                            '剩余 ${formatDuration(remaining)}',
+                          ].join(' · '),
                           style: TextStyle(
                             color: Colors.white.withValues(alpha: 0.8),
                             fontSize: 12,

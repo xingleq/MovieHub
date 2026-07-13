@@ -22,8 +22,10 @@ class PosterGrid extends StatelessWidget {
   final ValueChanged<MediaGroup> onPlay;
   final PosterSize posterSize;
 
-  /// Vertical space consumed by the two text lines under each poster.
-  static const _captionHeight = 46.0;
+  /// Vertical space consumed by the two text lines under each poster. Sized
+  /// with headroom — a tight value overflows the grid cell by ~1px once real
+  /// font metrics land.
+  static const _captionHeight = 54.0;
   static const _spacing = AppSpacing.lg;
 
   @override

@@ -10,7 +10,7 @@ import 'jelly_button.dart';
 import 'poster_placeholder.dart';
 
 /// Featured spotlight banner at the top of Home: full-bleed backdrop with
-/// scrims, title, metadata, overview, and play/detail actions.
+/// scrims, title, metadata, overview, and play / list actions.
 class HeroBanner extends StatelessWidget {
   const HeroBanner({
     super.key,
@@ -132,7 +132,7 @@ class HeroBanner extends StatelessWidget {
                     children: [
                       JellyButton(
                         icon: Icons.play_arrow,
-                        label: inProgress ? '继续播放' : '播放',
+                        label: inProgress ? '继续播放' : '立即播放',
                         onPressed: onPlay,
                       ),
                       const SizedBox(width: AppSpacing.md),
@@ -148,11 +148,36 @@ class HeroBanner extends StatelessWidget {
                           ),
                         ),
                         onPressed: onOpenDetail,
-                        icon: const Icon(Icons.info_outline),
-                        label: const Text('详情'),
+                        icon: const Icon(Icons.add),
+                        label: const Text('我的片单'),
                       ),
                     ],
                   ),
+                ],
+              ),
+            ),
+            // Decorative page indicators (design spec dots).
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: AppSpacing.md,
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  for (var i = 0; i < 3; i++)
+                    Container(
+                      width: i == 0 ? 24 : 8,
+                      height: 8,
+                      margin: const EdgeInsets.symmetric(horizontal: 4),
+                      decoration: BoxDecoration(
+                        color: i == 0
+                            ? Colors.white
+                            : Colors.white.withValues(alpha: 0.35),
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(AppRadius.pill),
+                        ),
+                      ),
+                    ),
                 ],
               ),
             ),

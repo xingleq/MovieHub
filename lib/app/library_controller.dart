@@ -9,6 +9,7 @@ import '../core/media/media_item.dart';
 import '../core/media/media_library_sqlite_store.dart';
 import '../core/media/media_library_store.dart';
 import '../core/media/media_scanner.dart';
+import '../core/system/startup_service.dart';
 import '../core/tmdb/tmdb_client.dart';
 import '../core/tmdb/tmdb_settings_store.dart';
 
@@ -41,6 +42,8 @@ class LibraryController extends ChangeNotifier {
   var _backgroundImagePath = '';
   var _subtitlePreference = 'zh-hans';
   var _audioPreference = 'zh';
+  var _themeMode = 'dark';
+  var _launchAtStartup = false;
   String? _metadataLoadingPath;
   var _metadataBatchRunning = false;
   var _metadataBatchDone = 0;
@@ -58,6 +61,8 @@ class LibraryController extends ChangeNotifier {
   String get backgroundImagePath => _backgroundImagePath;
   String get subtitlePreference => _subtitlePreference;
   String get audioPreference => _audioPreference;
+  String get themeMode => _themeMode;
+  bool get launchAtStartup => _launchAtStartup;
   bool get hasTmdbToken => _tmdbAccessToken.isNotEmpty;
   String? get metadataLoadingPath => _metadataLoadingPath;
   bool get metadataBatchRunning => _metadataBatchRunning;
@@ -151,6 +156,13 @@ class LibraryController extends ChangeNotifier {
       _backgroundImagePath = settings.backgroundImagePath;
       _subtitlePreference = settings.subtitlePreference;
       _audioPreference = settings.audioPreference;
+      _themeMode = settings.themeMode;
+      _launchAtStartup = settings.launchAtStartup;
+      try {
+        _launchAtStartup = await StartupService.isEnabled();
+      } catch (_) {
+        // Keep the persisted preference when registry probing is unavailable.
+      }
       ImageCacheStore.instance.proxy = settings.proxy;
       _loading = false;
       notifyListeners();
@@ -168,6 +180,8 @@ class LibraryController extends ChangeNotifier {
       backgroundImagePath: _backgroundImagePath,
       subtitlePreference: _subtitlePreference,
       audioPreference: _audioPreference,
+      themeMode: _themeMode,
+      launchAtStartup: _launchAtStartup,
     );
   }
 
@@ -194,6 +208,28 @@ class LibraryController extends ChangeNotifier {
     _audioPreference = audioPreference ?? _audioPreference;
     await _settingsStore.save(_currentSettings);
     notifyListeners();
+  }
+
+  Future<void> saveThemeMode(String themeMode) async {
+    if (!{'dark', 'light', 'system'}.contains(themeMode)) {
+      return;
+    }
+    _themeMode = themeMode;
+    await _settingsStore.save(_currentSettings);
+    notifyListeners();
+  }
+
+  Future<void> setLaunchAtStartup(bool enabled) async {
+    try {
+      await StartupService.setEnabled(enabled);
+      _launchAtStartup = enabled;
+      _error = null;
+      await _settingsStore.save(_currentSettings);
+      notifyListeners();
+    } catch (error) {
+      _error = '设置开机自启动失败：$error';
+      notifyListeners();
+    }
   }
 
   /// Lets the user pick a local wallpaper image shown behind the whole app.

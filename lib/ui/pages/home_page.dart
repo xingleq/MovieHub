@@ -33,7 +33,7 @@ class HomePage extends StatelessWidget {
   final VoidCallback onGoToSettings;
 
   static const _posterShelfCardWidth = 150.0;
-  static const _posterShelfHeight = _posterShelfCardWidth * 1.5 + 50;
+  static const _posterShelfHeight = _posterShelfCardWidth * 1.5 + 58;
 
   @override
   Widget build(BuildContext context) {
@@ -119,7 +119,7 @@ class HomePage extends StatelessWidget {
                 const SizedBox(height: AppSpacing.xl),
               ],
               if (animeGroups.isNotEmpty) ...[
-                _groupShelf('动画乐园 ✨', animeGroups),
+                _groupShelf('新番速递 ✨', animeGroups),
                 const SizedBox(height: AppSpacing.xl),
               ],
               _groupShelf('最近添加', recentlyAdded),

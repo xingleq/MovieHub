@@ -1,8 +1,13 @@
 #include "flutter_window.h"
 
+#include <flutter/standard_method_codec.h>
+#include <wtsapi32.h>
+
 #include <optional>
 
 #include "flutter/generated_plugin_registrant.h"
+
+#pragma comment(lib, "wtsapi32.lib")
 
 FlutterWindow::FlutterWindow(const flutter::DartProject& project)
     : project_(project) {}
@@ -27,6 +32,14 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
+  session_channel_ =
+      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
+          flutter_controller_->engine()->messenger(), "moviehub/session",
+          &flutter::StandardMethodCodec::GetInstance());
+
+  // Receive WM_WTSSESSION_CHANGE for this session (screen lock/unlock).
+  WTSRegisterSessionNotification(GetHandle(), NOTIFY_FOR_THIS_SESSION);
+
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
@@ -40,6 +53,9 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  WTSUnRegisterSessionNotification(GetHandle());
+  session_channel_ = nullptr;
+
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }
@@ -64,6 +80,15 @@ FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
   switch (message) {
     case WM_FONTCHANGE:
       flutter_controller_->engine()->ReloadSystemFonts();
+      break;
+    case WM_WTSSESSION_CHANGE:
+      if (session_channel_) {
+        if (wparam == WTS_SESSION_LOCK) {
+          session_channel_->InvokeMethod("lock", nullptr);
+        } else if (wparam == WTS_SESSION_UNLOCK) {
+          session_channel_->InvokeMethod("unlock", nullptr);
+        }
+      }
       break;
   }
 

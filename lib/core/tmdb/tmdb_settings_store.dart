@@ -8,6 +8,8 @@ class TmdbSettings {
     this.backgroundImagePath = '',
     this.subtitlePreference = 'zh-hans',
     this.audioPreference = 'zh',
+    this.themeMode = 'dark',
+    this.launchAtStartup = false,
   });
 
   final String accessToken;
@@ -22,6 +24,12 @@ class TmdbSettings {
 
   /// Preferred default audio: 'zh' | 'ja' | 'en'.
   final String audioPreference;
+
+  /// App theme mode: 'dark' | 'light' | 'system'.
+  final String themeMode;
+
+  /// Whether the app should be launched on Windows sign-in.
+  final bool launchAtStartup;
 
   static const empty = TmdbSettings(accessToken: '', proxy: '');
 }
@@ -56,6 +64,8 @@ class TmdbSettingsStore {
       backgroundImagePath: json['backgroundImagePath'] as String? ?? '',
       subtitlePreference: json['subtitlePreference'] as String? ?? 'zh-hans',
       audioPreference: json['audioPreference'] as String? ?? 'zh',
+      themeMode: json['themeMode'] as String? ?? 'dark',
+      launchAtStartup: json['launchAtStartup'] as bool? ?? false,
     );
   }
 
@@ -70,6 +80,8 @@ class TmdbSettingsStore {
       'backgroundImagePath': settings.backgroundImagePath,
       'subtitlePreference': settings.subtitlePreference,
       'audioPreference': settings.audioPreference,
+      'themeMode': settings.themeMode,
+      'launchAtStartup': settings.launchAtStartup,
     };
     await _storageFile.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),

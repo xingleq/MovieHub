@@ -17,62 +17,118 @@ class CapsuleNavItem {
   final int badgeCount;
 }
 
-/// Playful replacement for [NavigationRail]: rounded candy capsules that pop
-/// with a bounce when selected.
+/// Wide side navigation with a compact brand mark, icon+label entries, and an
+/// optional footer.
 class CapsuleNav extends StatelessWidget {
   const CapsuleNav({
     super.key,
     required this.items,
     required this.selectedIndex,
     required this.onSelected,
+    this.footer,
   });
 
   final List<CapsuleNavItem> items;
   final int selectedIndex;
   final ValueChanged<int> onSelected;
+  final Widget? footer;
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
 
     return SizedBox(
-      width: 92,
-      child: Column(
+      width: 176,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.lg,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _Header(tokens: tokens),
+            const SizedBox(height: AppSpacing.xl),
+            for (final (index, item) in items.indexed)
+              Padding(
+                padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+                child: _NavEntry(
+                  item: item,
+                  selected: index == selectedIndex,
+                  textSecondary: tokens.textSecondary,
+                  onTap: () => onSelected(index),
+                ),
+              ),
+            const Spacer(),
+            ?footer,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.tokens});
+
+  final AppTokens tokens;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: AppSpacing.sm),
+      child: Row(
         children: [
-          Padding(
-            padding: const EdgeInsets.only(
-              top: AppSpacing.lg,
-              bottom: AppSpacing.xl,
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: AppTokens.candyGradient),
+              borderRadius: const BorderRadius.all(
+                Radius.circular(AppRadius.md),
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: tokens.accent.withValues(alpha: 0.22),
+                  blurRadius: 12,
+                ),
+              ],
             ),
+            child: const SizedBox(
+              width: 40,
+              height: 40,
+              child: Icon(
+                Icons.play_circle_fill,
+                color: Colors.white,
+                size: 22,
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          Expanded(
             child: ShaderMask(
               shaderCallback: (bounds) => const LinearGradient(
                 colors: AppTokens.candyGradient,
               ).createShader(bounds),
-              child: const Icon(
-                Icons.play_circle_fill,
-                color: Colors.white,
-                size: 36,
+              child: const Text(
+                'MovieHub',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 16,
+                  letterSpacing: 0,
+                  color: Colors.white,
+                ),
               ),
             ),
           ),
-          for (final (index, item) in items.indexed)
-            Padding(
-              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-              child: _CapsulePill(
-                item: item,
-                selected: index == selectedIndex,
-                textSecondary: tokens.textSecondary,
-                onTap: () => onSelected(index),
-              ),
-            ),
         ],
       ),
     );
   }
 }
 
-class _CapsulePill extends StatelessWidget {
-  const _CapsulePill({
+class _NavEntry extends StatelessWidget {
+  const _NavEntry({
     required this.item,
     required this.selected,
     required this.textSecondary,
@@ -88,15 +144,13 @@ class _CapsulePill extends StatelessWidget {
   Widget build(BuildContext context) {
     final icon = Icon(
       selected ? item.selectedIcon : item.icon,
-      size: 24,
+      size: 20,
       color: selected ? Colors.white : textSecondary,
     );
 
-    // Re-keying on selection restarts the tween: the pill pops in with an
-    // easeOutBack bounce every time it becomes active.
     return TweenAnimationBuilder<double>(
       key: ValueKey(selected),
-      tween: Tween(begin: selected ? 0.8 : 1.0, end: 1.0),
+      tween: Tween(begin: selected ? 0.9 : 1.0, end: 1.0),
       duration: const Duration(milliseconds: 320),
       curve: Curves.easeOutBack,
       builder: (context, scale, child) {
@@ -104,53 +158,59 @@ class _CapsulePill extends StatelessWidget {
       },
       child: Hoverable(
         builder: (context, hovered) {
-          return AnimatedContainer(
-            duration: AppDurations.hover,
-            width: 76,
-            padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
-            decoration: BoxDecoration(
-              gradient: selected
-                  ? const LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: AppTokens.candyGradient,
-                    )
-                  : null,
-              color: selected
-                  ? null
-                  : hovered
-                  ? Colors.white.withValues(alpha: 0.07)
-                  : Colors.transparent,
-              borderRadius: const BorderRadius.all(
-                Radius.circular(AppRadius.lg),
+          return GestureDetector(
+            onTap: onTap,
+            behavior: HitTestBehavior.opaque,
+            child: AnimatedContainer(
+              duration: AppDurations.hover,
+              padding: const EdgeInsets.symmetric(
+                horizontal: AppSpacing.md,
+                vertical: AppSpacing.sm + 2,
               ),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: AppTokens.candyGradient.first.withValues(
-                          alpha: 0.35,
+              decoration: BoxDecoration(
+                gradient: selected
+                    ? const LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: AppTokens.candyGradient,
+                      )
+                    : null,
+                color: selected
+                    ? null
+                    : hovered
+                    ? Colors.white.withValues(alpha: 0.06)
+                    : Colors.transparent,
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.md),
+                ),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: AppTokens.candyGradient.first.withValues(
+                            alpha: 0.35,
+                          ),
+                          blurRadius: 14,
                         ),
-                        blurRadius: 14,
-                      ),
-                    ]
-                  : const [],
-            ),
-            child: GestureDetector(
-              onTap: onTap,
-              behavior: HitTestBehavior.opaque,
-              child: Column(
+                      ]
+                    : const [],
+              ),
+              child: Row(
                 children: [
                   if (item.badgeCount > 0)
                     Badge.count(count: item.badgeCount, child: icon)
                   else
                     icon,
-                  const SizedBox(height: 3),
-                  Text(
-                    item.label,
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                      color: selected ? Colors.white : textSecondary,
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: Text(
+                      item.label,
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: selected
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                        color: selected ? Colors.white : textSecondary,
+                      ),
                     ),
                   ),
                 ],

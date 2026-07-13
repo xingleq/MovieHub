@@ -2,12 +2,12 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../app/library_controller.dart';
 import '../../app/library_scope.dart';
 import '../../theme/app_tokens.dart';
+import '../format/formatters.dart';
 import '../widgets/message_banner.dart';
 
-/// Full settings page: library folders, scanning, TMDB credentials and batch
-/// matching, plus the about entry.
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
@@ -15,24 +15,34 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage> {
+class _SettingsPageState extends State<SettingsPage>
+    with TickerProviderStateMixin {
   final _tokenController = TextEditingController();
   final _proxyController = TextEditingController();
+  late final TabController _tabController;
   var _fieldsInitialized = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 5, vsync: this);
+  }
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    if (!_fieldsInitialized) {
-      final controller = LibraryScope.of(context);
-      _tokenController.text = controller.tmdbAccessToken;
-      _proxyController.text = controller.tmdbProxy;
-      _fieldsInitialized = true;
+    if (_fieldsInitialized) {
+      return;
     }
+    final controller = LibraryScope.of(context);
+    _tokenController.text = controller.tmdbAccessToken;
+    _proxyController.text = controller.tmdbProxy;
+    _fieldsInitialized = true;
   }
 
   @override
   void dispose() {
+    _tabController.dispose();
     _tokenController.dispose();
     _proxyController.dispose();
     super.dispose();
@@ -43,16 +53,84 @@ class _SettingsPageState extends State<SettingsPage> {
     final controller = LibraryScope.of(context);
     final tokens = AppTokens.of(context);
 
-    return ListView(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.xl,
-        vertical: AppSpacing.lg,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xl,
+        AppSpacing.lg,
+        AppSpacing.xl,
+        AppSpacing.lg,
       ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _Header(controller: controller),
+          const SizedBox(height: AppSpacing.lg),
+          if (controller.error != null) ...[
+            MessageBanner(
+              icon: Icons.error_outline,
+              message: controller.error!,
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          if (controller.skippedPaths.isNotEmpty) ...[
+            MessageBanner(
+              icon: Icons.warning_amber,
+              message: '有 ${controller.skippedPaths.length} 个路径无法读取或不存在。',
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
+          _SettingsTabBar(controller: _tabController),
+          const SizedBox(height: AppSpacing.lg),
+          Expanded(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: tokens.surface.withValues(alpha: 0.18),
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.lg),
+                ),
+                border: Border.all(color: tokens.cardBorder),
+              ),
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _LibraryTab(controller: controller),
+                  _ScraperTab(
+                    controller: controller,
+                    proxyController: _proxyController,
+                    tokenController: _tokenController,
+                  ),
+                  _PlaybackTab(controller: controller),
+                  _AppearanceTab(controller: controller),
+                  _AboutTab(controller: controller),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Header extends StatelessWidget {
+  const _Header({required this.controller});
+
+  final LibraryController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    final totalSize = controller.items.fold<int>(
+      0,
+      (sum, item) => sum + item.sizeBytes,
+    );
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
       children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 760),
+        Expanded(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 '设置',
@@ -61,303 +139,579 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ),
               const SizedBox(height: AppSpacing.xs),
-              Text('媒体库与 TMDB', style: TextStyle(color: tokens.textSecondary)),
-              const SizedBox(height: AppSpacing.xl),
-              if (controller.error != null) ...[
-                MessageBanner(
-                  icon: Icons.error_outline,
-                  message: controller.error!,
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              if (controller.skippedPaths.isNotEmpty) ...[
-                MessageBanner(
-                  icon: Icons.warning_amber,
-                  message: '有 ${controller.skippedPaths.length} 个路径无法读取或不存在。',
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              _SettingsCard(
-                title: '媒体库目录',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
+              Text(
+                '管理媒体目录、TMDB、播放偏好和本机外观。',
+                style: TextStyle(color: tokens.textSecondary),
+              ),
+            ],
+          ),
+        ),
+        _MetricPill(
+          icon: Icons.folder_outlined,
+          label: '${controller.roots.length} 个目录',
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        _MetricPill(
+          icon: Icons.movie_outlined,
+          label: '${controller.items.length} 个视频',
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        _MetricPill(
+          icon: Icons.storage_outlined,
+          label: formatBytes(totalSize),
+        ),
+      ],
+    );
+  }
+}
+
+class _MetricPill extends StatelessWidget {
+  const _MetricPill({required this.icon, required this.label});
+
+  final IconData icon;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: tokens.surface.withValues(alpha: 0.62),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+        border: Border.all(color: tokens.cardBorder),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: tokens.textSecondary),
+          const SizedBox(width: AppSpacing.xs),
+          Text(label, style: const TextStyle(fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsTabBar extends StatelessWidget {
+  const _SettingsTabBar({required this.controller});
+
+  final TabController controller;
+
+  static const _tabs = [
+    (Icons.folder_outlined, '媒体库'),
+    (Icons.cloud_sync_outlined, '刮削'),
+    (Icons.play_circle_outline, '播放'),
+    (Icons.palette_outlined, '外观'),
+    (Icons.info_outline, '关于'),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: tokens.surface.withValues(alpha: 0.52),
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+          border: Border.all(color: tokens.cardBorder),
+        ),
+        child: TabBar(
+          controller: controller,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          dividerColor: Colors.transparent,
+          indicatorSize: TabBarIndicatorSize.tab,
+          indicator: BoxDecoration(
+            gradient: const LinearGradient(colors: AppTokens.candyGradient),
+            borderRadius: BorderRadius.circular(AppRadius.pill),
+          ),
+          labelColor: Colors.white,
+          unselectedLabelColor: tokens.textSecondary,
+          labelStyle: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w700,
+          ),
+          tabs: [
+            for (final (icon, label) in _tabs)
+              Tab(
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    if (controller.roots.isEmpty)
-                      Padding(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: AppSpacing.md,
-                        ),
-                        child: Text(
-                          '尚未添加目录。选择一个或多个本地影视文件夹后开始扫描。',
-                          style: TextStyle(color: tokens.textSecondary),
-                        ),
-                      )
-                    else
-                      for (final root in controller.roots)
-                        ListTile(
-                          contentPadding: EdgeInsets.zero,
-                          leading: const Icon(Icons.folder_outlined),
-                          title: Text(
-                            root,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          trailing: IconButton(
-                            tooltip: '移除目录',
-                            onPressed: () => controller.removeRoot(root),
-                            icon: const Icon(Icons.close),
-                          ),
-                        ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton.tonalIcon(
-                            onPressed: controller.selectRoot,
-                            icon: const Icon(Icons.create_new_folder_outlined),
-                            label: const Text('添加目录'),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed:
-                                controller.roots.isEmpty || controller.scanning
-                                ? null
-                                : controller.scan,
-                            icon: controller.scanning
-                                ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.sync),
-                            label: Text(controller.scanning ? '扫描中…' : '重新扫描'),
-                          ),
-                        ),
-                      ],
-                    ),
+                    Icon(icon, size: 16),
+                    const SizedBox(width: AppSpacing.xs),
+                    Text(label),
                   ],
                 ),
               ),
-              const SizedBox(height: AppSpacing.lg),
-              _SettingsCard(
-                title: 'TMDB 刮削',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    TextField(
-                      controller: _proxyController,
-                      decoration: const InputDecoration(
-                        labelText: '代理（可选）',
-                        hintText: '127.0.0.1:7890',
-                        prefixIcon: Icon(Icons.lan_outlined),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    TextField(
-                      controller: _tokenController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'API 读取令牌',
-                        prefixIcon: const Icon(Icons.key),
-                        suffixIcon: controller.hasTmdbToken
-                            ? const Icon(Icons.check_circle_outline)
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton.icon(
-                            onPressed: () {
-                              controller.saveTmdbSettings(
-                                accessToken: _tokenController.text,
-                                proxy: _proxyController.text,
-                              );
-                            },
-                            icon: const Icon(Icons.save_outlined),
-                            label: const Text('保存 TMDB 设置'),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: FilledButton.tonalIcon(
-                            onPressed:
-                                controller.metadataBatchRunning ||
-                                    controller.items.isEmpty
-                                ? null
-                                : controller.matchAllTmdb,
-                            icon: controller.metadataBatchRunning
-                                ? const SizedBox.square(
-                                    dimension: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                    ),
-                                  )
-                                : const Icon(Icons.cloud_sync_outlined),
-                            label: const Text('匹配全部'),
-                          ),
-                        ),
-                      ],
-                    ),
-                    if (controller.metadataBatchRunning) ...[
-                      const SizedBox(height: AppSpacing.md),
-                      LinearProgressIndicator(
-                        value: controller.metadataBatchTotal == 0
-                            ? null
-                            : controller.metadataBatchDone /
-                                  controller.metadataBatchTotal,
-                      ),
-                      const SizedBox(height: AppSpacing.xs),
-                      Text(
-                        '正在匹配 ${controller.metadataBatchDone} / '
-                        '${controller.metadataBatchTotal}',
-                        style: TextStyle(
-                          color: tokens.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _SettingsCard(
-                title: '播放',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    DropdownButtonFormField<String>(
-                      initialValue: controller.subtitlePreference,
-                      decoration: const InputDecoration(
-                        labelText: '默认字幕',
-                        prefixIcon: Icon(Icons.subtitles_outlined),
-                      ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 'zh-hans',
-                          child: Text('简体中文优先'),
-                        ),
-                        DropdownMenuItem(
-                          value: 'zh-hant',
-                          child: Text('繁体中文优先'),
-                        ),
-                        DropdownMenuItem(value: 'en', child: Text('英文优先')),
-                        DropdownMenuItem(value: 'off', child: Text('默认关闭字幕')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          controller.savePlaybackPreferences(
-                            subtitlePreference: value,
-                          );
-                        }
-                      },
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    DropdownButtonFormField<String>(
-                      initialValue: controller.audioPreference,
-                      decoration: const InputDecoration(
-                        labelText: '默认音轨',
-                        prefixIcon: Icon(Icons.graphic_eq),
-                      ),
-                      items: const [
-                        DropdownMenuItem(value: 'zh', child: Text('中文优先')),
-                        DropdownMenuItem(value: 'ja', child: Text('日语优先')),
-                        DropdownMenuItem(value: 'en', child: Text('英语优先')),
-                      ],
-                      onChanged: (value) {
-                        if (value != null) {
-                          controller.savePlaybackPreferences(
-                            audioPreference: value,
-                          );
-                        }
-                      },
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _SettingsCard(
-                title: '外观',
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Text(
-                      '选一张自己喜欢的动漫壁纸铺在整个应用底下（仅本机使用）。',
-                      style: TextStyle(color: tokens.textSecondary),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    if (controller.backgroundImagePath.isNotEmpty) ...[
-                      ClipRRect(
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(AppRadius.md),
-                        ),
-                        child: Image.file(
-                          File(controller.backgroundImagePath),
-                          height: 120,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              height: 64,
-                              alignment: Alignment.center,
-                              color: tokens.surfaceVariant,
-                              child: const Text('背景图片无法读取'),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.md),
-                    ],
-                    Row(
-                      children: [
-                        Expanded(
-                          child: FilledButton.tonalIcon(
-                            onPressed: controller.pickBackgroundImage,
-                            icon: const Icon(Icons.wallpaper),
-                            label: const Text('选择背景图片'),
-                          ),
-                        ),
-                        const SizedBox(width: AppSpacing.md),
-                        Expanded(
-                          child: FilledButton.tonalIcon(
-                            onPressed: controller.backgroundImagePath.isEmpty
-                                ? null
-                                : controller.clearBackgroundImage,
-                            icon: const Icon(Icons.format_color_reset),
-                            label: const Text('恢复纯色背景'),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: AppSpacing.lg),
-              _SettingsCard(
-                title: '关于',
-                child: ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  leading: const Icon(Icons.play_circle_fill),
-                  title: const Text('MovieHub'),
-                  subtitle: Text(
-                    '0.1.0 · 私人电影院',
-                    style: TextStyle(color: tokens.textSecondary),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LibraryTab extends StatelessWidget {
+  const _LibraryTab({required this.controller});
+
+  final LibraryController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+
+    return _SettingsScrollView(
+      children: [
+        _SettingsCard(
+          title: '影视目录',
+          subtitle: '这些目录会参与本地扫描，可添加多个磁盘路径。',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (controller.roots.isEmpty)
+                _EmptySettingsState(
+                  icon: Icons.folder_open_outlined,
+                  message: '还没有添加影视目录。',
+                )
+              else
+                for (final root in controller.roots)
+                  _PathRow(
+                    path: root,
+                    onRemove: () => controller.removeRoot(root),
                   ),
-                  trailing: TextButton(
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  FilledButton.icon(
+                    onPressed: controller.selectRoot,
+                    icon: const Icon(Icons.create_new_folder_outlined),
+                    label: const Text('添加目录'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: controller.roots.isEmpty || controller.scanning
+                        ? null
+                        : controller.scan,
+                    icon: controller.scanning
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.sync),
+                    label: Text(controller.scanning ? '扫描中' : '重新扫描'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        _SettingsCard(
+          title: '扫描状态',
+          subtitle: '扫描会保留已刮削信息、收藏和播放进度。',
+          child: Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: [
+              _StatusTile(
+                icon: Icons.video_library_outlined,
+                label: '视频文件',
+                value: '${controller.items.length}',
+              ),
+              _StatusTile(
+                icon: Icons.favorite_outline,
+                label: '收藏',
+                value: '${controller.favoriteCount}',
+              ),
+              _StatusTile(
+                icon: Icons.warning_amber_outlined,
+                label: '跳过路径',
+                value: '${controller.skippedPaths.length}',
+              ),
+            ],
+          ),
+        ),
+        _SettingsCard(
+          title: '系统集成',
+          subtitle: '控制 MovieHub 是否在当前 Windows 用户登录后自动启动。',
+          child: _SwitchRow(
+            icon: Icons.rocket_launch_outlined,
+            title: '开机时自动启动 MovieHub',
+            subtitle: '开启后写入当前用户启动项，关闭后自动移除。',
+            value: controller.launchAtStartup,
+            onChanged: controller.setLaunchAtStartup,
+          ),
+        ),
+        _SettingsCard(
+          title: '数据位置',
+          subtitle: '媒体库使用 SQLite 保存到本机用户目录，令牌和壁纸路径单独保存。',
+          child: Text(
+            Platform.isWindows ? r'%APPDATA%\MovieHub' : '~/.moviehub',
+            style: TextStyle(color: tokens.textSecondary),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScraperTab extends StatelessWidget {
+  const _ScraperTab({
+    required this.controller,
+    required this.proxyController,
+    required this.tokenController,
+  });
+
+  final LibraryController controller;
+  final TextEditingController proxyController;
+  final TextEditingController tokenController;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+
+    return _SettingsScrollView(
+      children: [
+        _SettingsCard(
+          title: 'TMDB 连接',
+          subtitle: '令牌只保存在本机设置文件，不写入项目源码。',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: tokenController,
+                obscureText: true,
+                decoration: InputDecoration(
+                  labelText: 'API 读取令牌',
+                  prefixIcon: const Icon(Icons.key_outlined),
+                  suffixIcon: controller.hasTmdbToken
+                      ? Icon(Icons.check_circle, color: tokens.accent)
+                      : null,
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: proxyController,
+                decoration: const InputDecoration(
+                  labelText: '代理地址（可选）',
+                  hintText: '127.0.0.1:7890',
+                  prefixIcon: Icon(Icons.lan_outlined),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  FilledButton.icon(
                     onPressed: () {
-                      showAboutDialog(
-                        context: context,
-                        applicationName: 'MovieHub',
-                        applicationVersion: '0.1.0',
+                      controller.saveTmdbSettings(
+                        accessToken: tokenController.text,
+                        proxy: proxyController.text,
                       );
                     },
-                    child: const Text('详情'),
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('保存连接设置'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed:
+                        controller.metadataBatchRunning ||
+                            controller.items.isEmpty
+                        ? null
+                        : controller.matchAllTmdb,
+                    icon: controller.metadataBatchRunning
+                        ? const SizedBox.square(
+                            dimension: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.cloud_sync_outlined),
+                    label: const Text('匹配未刮削条目'),
+                  ),
+                ],
+              ),
+              if (controller.metadataBatchRunning) ...[
+                const SizedBox(height: AppSpacing.lg),
+                LinearProgressIndicator(
+                  value: controller.metadataBatchTotal == 0
+                      ? null
+                      : controller.metadataBatchDone /
+                            controller.metadataBatchTotal,
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  '正在匹配 ${controller.metadataBatchDone} / '
+                  '${controller.metadataBatchTotal}',
+                  style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+                ),
+              ],
+            ],
+          ),
+        ),
+        _SettingsCard(
+          title: '刮削内容',
+          subtitle: '当前会读取片名、海报、背景图、简介、评分、类型、导演、演员和时长。',
+          child: Wrap(
+            spacing: AppSpacing.sm,
+            runSpacing: AppSpacing.sm,
+            children: const [
+              _CapabilityChip(label: '电影 / 剧集'),
+              _CapabilityChip(label: '海报缓存'),
+              _CapabilityChip(label: '手动匹配'),
+              _CapabilityChip(label: '批量匹配'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _PlaybackTab extends StatelessWidget {
+  const _PlaybackTab({required this.controller});
+
+  final LibraryController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsScrollView(
+      children: [
+        _SettingsCard(
+          title: '默认轨道',
+          subtitle: '播放器打开视频时会按这里的偏好自动选择字幕和音轨。',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              DropdownButtonFormField<String>(
+                initialValue: controller.subtitlePreference,
+                decoration: const InputDecoration(
+                  labelText: '默认字幕',
+                  prefixIcon: Icon(Icons.subtitles_outlined),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'zh-hans', child: Text('简体中文优先')),
+                  DropdownMenuItem(value: 'zh-hant', child: Text('繁体中文优先')),
+                  DropdownMenuItem(value: 'en', child: Text('英文优先')),
+                  DropdownMenuItem(value: 'off', child: Text('默认关闭字幕')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    controller.savePlaybackPreferences(
+                      subtitlePreference: value,
+                    );
+                  }
+                },
+              ),
+              const SizedBox(height: AppSpacing.md),
+              DropdownButtonFormField<String>(
+                initialValue: controller.audioPreference,
+                decoration: const InputDecoration(
+                  labelText: '默认音轨',
+                  prefixIcon: Icon(Icons.graphic_eq),
+                ),
+                items: const [
+                  DropdownMenuItem(value: 'zh', child: Text('中文优先')),
+                  DropdownMenuItem(value: 'ja', child: Text('日语优先')),
+                  DropdownMenuItem(value: 'en', child: Text('英语优先')),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    controller.savePlaybackPreferences(audioPreference: value);
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        _SettingsCard(
+          title: '播放记录',
+          subtitle: '退出播放器时自动保存进度；未看完的视频会出现在继续观看。',
+          child: Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            children: [
+              _StatusTile(
+                icon: Icons.playlist_play,
+                label: '继续观看',
+                value: '${controller.continueWatchingItems.length}',
+              ),
+              _StatusTile(icon: Icons.skip_next, label: '自动下一集', value: '已开启'),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AppearanceTab extends StatelessWidget {
+  const _AppearanceTab({required this.controller});
+
+  final LibraryController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+
+    return _SettingsScrollView(
+      children: [
+        _SettingsCard(
+          title: '主题',
+          subtitle: '浅色主题适合白天使用；也可以跟随 Windows 系统设置。',
+          child: DropdownButtonFormField<String>(
+            initialValue: controller.themeMode,
+            decoration: const InputDecoration(
+              labelText: '外观模式',
+              prefixIcon: Icon(Icons.brightness_6_outlined),
+            ),
+            items: const [
+              DropdownMenuItem(value: 'dark', child: Text('深色')),
+              DropdownMenuItem(value: 'light', child: Text('浅色')),
+              DropdownMenuItem(value: 'system', child: Text('跟随系统')),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                controller.saveThemeMode(value);
+              }
+            },
+          ),
+        ),
+        _SettingsCard(
+          title: '背景',
+          subtitle: '可选本地壁纸会被模糊和压暗，避免影响海报墙阅读。',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (controller.backgroundImagePath.isNotEmpty) ...[
+                ClipRRect(
+                  borderRadius: const BorderRadius.all(
+                    Radius.circular(AppRadius.md),
+                  ),
+                  child: Image.file(
+                    File(controller.backgroundImagePath),
+                    height: 140,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 72,
+                        alignment: Alignment.center,
+                        color: tokens.surfaceVariant,
+                        child: const Text('背景图片无法读取'),
+                      );
+                    },
                   ),
                 ),
+                const SizedBox(height: AppSpacing.md),
+                SelectableText(
+                  controller.backgroundImagePath,
+                  style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: AppSpacing.md),
+              ] else
+                _EmptySettingsState(
+                  icon: Icons.wallpaper_outlined,
+                  message: '当前使用默认深色动态背景。',
+                ),
+              Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.sm,
+                children: [
+                  FilledButton.tonalIcon(
+                    onPressed: controller.pickBackgroundImage,
+                    icon: const Icon(Icons.wallpaper),
+                    label: const Text('选择本地壁纸'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: controller.backgroundImagePath.isEmpty
+                        ? null
+                        : controller.clearBackgroundImage,
+                    icon: const Icon(Icons.format_color_reset),
+                    label: const Text('恢复默认背景'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        _SettingsCard(
+          title: '视觉风格',
+          subtitle: '当前主题使用深色背景、粉紫重点色和紧凑桌面布局。',
+          child: Row(
+            children: [
+              for (final color in [
+                tokens.accent,
+                AppTokens.candyGradient.last,
+                AppTokens.cyanAccent,
+                tokens.surface,
+              ])
+                Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.sm),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: const BorderRadius.all(
+                        Radius.circular(AppRadius.sm),
+                      ),
+                      border: Border.all(color: tokens.cardBorder),
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AboutTab extends StatelessWidget {
+  const _AboutTab({required this.controller});
+
+  final LibraryController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+
+    return _SettingsScrollView(
+      children: [
+        _SettingsCard(
+          title: 'MovieHub',
+          subtitle: '本地优先的 Windows 私人影视库。',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('当前版本：0.1.0', style: TextStyle(color: tokens.textSecondary)),
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: const [
+                  _CapabilityChip(label: 'Flutter Windows'),
+                  _CapabilityChip(label: 'SQLite'),
+                  _CapabilityChip(label: 'media_kit'),
+                  _CapabilityChip(label: 'TMDB'),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              TextButton.icon(
+                onPressed: () {
+                  showAboutDialog(
+                    context: context,
+                    applicationName: 'MovieHub',
+                    applicationVersion: '0.1.0',
+                  );
+                },
+                icon: const Icon(Icons.info_outline),
+                label: const Text('查看应用信息'),
               ),
             ],
           ),
@@ -367,15 +721,96 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 }
 
+class _SettingsScrollView extends StatelessWidget {
+  const _SettingsScrollView({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final twoColumns = constraints.maxWidth >= 980;
+        if (!twoColumns) {
+          return ListView(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            children: [
+              for (final child in children) ...[
+                child,
+                const SizedBox(height: AppSpacing.lg),
+              ],
+            ],
+          );
+        }
+
+        final left = <Widget>[];
+        final right = <Widget>[];
+        for (final (index, child) in children.indexed) {
+          (index.isEven ? left : right).add(child);
+        }
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(AppSpacing.xl),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: _SettingsColumn(children: left)),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(child: _SettingsColumn(children: right)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SettingsColumn extends StatelessWidget {
+  const _SettingsColumn({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final child in children) ...[
+          child,
+          const SizedBox(height: AppSpacing.lg),
+        ],
+      ],
+    );
+  }
+}
+
 class _SettingsCard extends StatelessWidget {
-  const _SettingsCard({required this.title, required this.child});
+  const _SettingsCard({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
 
   final String title;
+  final String subtitle;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final tokens = AppTokens.of(context);
+
+    return Container(
+      decoration: BoxDecoration(
+        color: tokens.surface.withValues(alpha: 0.58),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+        border: Border.all(color: tokens.cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
       child: Padding(
         padding: const EdgeInsets.all(AppSpacing.xl),
         child: Column(
@@ -385,12 +820,204 @@ class _SettingsCard extends StatelessWidget {
               title,
               style: Theme.of(
                 context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            Text(
+              subtitle,
+              style: TextStyle(color: tokens.textSecondary, fontSize: 12),
             ),
             const SizedBox(height: AppSpacing.lg),
             child,
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _PathRow extends StatelessWidget {
+  const _PathRow({required this.path, required this.onRemove});
+
+  final String path;
+  final VoidCallback onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.sm,
+        ),
+        decoration: BoxDecoration(
+          color: tokens.surfaceVariant.withValues(alpha: 0.72),
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
+          border: Border.all(color: tokens.cardBorder),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.folder_outlined, color: tokens.textSecondary),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Text(path, maxLines: 2, overflow: TextOverflow.ellipsis),
+            ),
+            IconButton(
+              tooltip: '移除目录',
+              onPressed: onRemove,
+              icon: const Icon(Icons.close),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StatusTile extends StatelessWidget {
+  const _StatusTile({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return Container(
+      width: 150,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: tokens.surfaceVariant.withValues(alpha: 0.64),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
+        border: Border.all(color: tokens.cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 18, color: tokens.textSecondary),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            value,
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          ),
+          Text(
+            label,
+            style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CapabilityChip extends StatelessWidget {
+  const _CapabilityChip({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.md,
+        vertical: AppSpacing.sm,
+      ),
+      decoration: BoxDecoration(
+        color: tokens.surfaceVariant.withValues(alpha: 0.7),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+        border: Border.all(color: tokens.cardBorder),
+      ),
+      child: Text(label, style: const TextStyle(fontSize: 12)),
+    );
+  }
+}
+
+class _SwitchRow extends StatelessWidget {
+  const _SwitchRow({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+
+    return Row(
+      children: [
+        Container(
+          width: 40,
+          height: 40,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: tokens.surfaceVariant.withValues(alpha: 0.72),
+            borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
+            border: Border.all(color: tokens.cardBorder),
+          ),
+          child: Icon(icon, size: 20, color: tokens.textSecondary),
+        ),
+        const SizedBox(width: AppSpacing.md),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: const TextStyle(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+              ),
+            ],
+          ),
+        ),
+        Switch(value: value, onChanged: onChanged),
+      ],
+    );
+  }
+}
+
+class _EmptySettingsState extends StatelessWidget {
+  const _EmptySettingsState({required this.icon, required this.message});
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: tokens.surfaceVariant.withValues(alpha: 0.46),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
+        border: Border.all(color: tokens.cardBorder),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, color: tokens.textSecondary),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Text(message, style: TextStyle(color: tokens.textSecondary)),
+          ),
+        ],
       ),
     );
   }

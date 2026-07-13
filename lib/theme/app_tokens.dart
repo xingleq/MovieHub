@@ -11,13 +11,12 @@ abstract final class AppSpacing {
   static const double xxl = 32;
 }
 
-/// Invariant corner-radius scale. Generous curves for the cute, anime-styled
-/// look.
+/// Invariant corner-radius scale, per the design spec (12 小 / 16 中 / 24 大).
 abstract final class AppRadius {
-  static const double sm = 10;
-  static const double md = 14;
-  static const double lg = 20;
-  static const double xl = 26;
+  static const double sm = 8;
+  static const double md = 12;
+  static const double lg = 16;
+  static const double xl = 24;
   static const double pill = 999;
 }
 
@@ -52,26 +51,39 @@ class AppTokens extends ThemeExtension<AppTokens> {
   final Color scrim;
   final Color cardBorder;
 
-  /// Candy palette on a deep violet night sky — dark-first but soft and
-  /// playful for a kids' anime wall.
+  /// Palette from the approved design spec: 主色 #FF8BD1 / 辅助 #7861FF /
+  /// 强调 #00D4FF on 背景 #0F0D1A, 卡片 #171429, 描边 #241A3A.
   static const AppTokens dark = AppTokens(
-    background: Color(0xFF141220),
-    surface: Color(0xFF1E1B30),
-    surfaceVariant: Color(0xFF2B2744),
-    accent: Color(0xFFFF6B9D),
+    background: Color(0xFF0F0D1A),
+    surface: Color(0xFF171429),
+    surfaceVariant: Color(0xFF201B38),
+    accent: Color(0xFFFF8BD1),
     textPrimary: Color(0xFFF7F5FF),
     textSecondary: Color(0xFFA8A3C7),
     scrim: Color(0xCC0A0912),
-    cardBorder: Color(0x1AFFFFFF),
+    cardBorder: Color(0xFF241A3A),
   );
 
-  /// Signature candy gradient for jelly buttons and the capsule nav
-  /// (粉 → 紫 → 蓝).
+  static const AppTokens light = AppTokens(
+    background: Color(0xFFFFF7FC),
+    surface: Color(0xFFFFFFFF),
+    surfaceVariant: Color(0xFFFFEDF8),
+    accent: Color(0xFFE75CAA),
+    textPrimary: Color(0xFF261B33),
+    textSecondary: Color(0xFF6F6380),
+    scrim: Color(0xCCFFF7FC),
+    cardBorder: Color(0xFFEAD7EC),
+  );
+
+  /// Signature candy gradient for jelly buttons and the nav highlight
+  /// (主色粉 → 辅助紫).
   static const List<Color> candyGradient = [
-    Color(0xFFFF6B9D),
-    Color(0xFF9D6BFF),
-    Color(0xFF5BC8FF),
+    Color(0xFFFF8BD1),
+    Color(0xFF7861FF),
   ];
+
+  /// Cyan highlight for ratings and small accents (强调色).
+  static const Color cyanAccent = Color(0xFF00D4FF);
 
   /// Reads the tokens from [context], falling back to [dark] so a missing
   /// extension can never null-crash.

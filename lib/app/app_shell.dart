@@ -27,7 +27,9 @@ import 'library_scope.dart';
 /// section (or a movie/series detail overlay) on the right. Owns the
 /// [LibraryController] lifecycle and the ephemeral navigation state.
 class AppShell extends StatefulWidget {
-  const AppShell({super.key});
+  const AppShell({super.key, required this.controller});
+
+  final LibraryController controller;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -42,13 +44,12 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _controller = LibraryController();
+    _controller = widget.controller;
     unawaited(_controller.loadAppState());
   }
 
   @override
   void dispose() {
-    _controller.dispose();
     super.dispose();
   }
 
@@ -98,28 +99,16 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _openPlayer(MediaItem item) async {
-    Duration? startAt;
+    // Auto-resume without asking: partially watched items pick up where they
+    // left off; finished or barely-started ones play from the beginning.
     final canResume =
         item.playbackPositionMs > 5000 &&
         item.playbackProgress > 0.01 &&
         item.playbackProgress < 0.95;
+    final startAt = canResume
+        ? Duration(milliseconds: item.playbackPositionMs)
+        : null;
 
-    if (canResume) {
-      final resume = await showDialog<bool>(
-        context: context,
-        builder: (context) => _ResumeDialog(item: item),
-      );
-      if (resume == null) {
-        return;
-      }
-      if (resume) {
-        startAt = Duration(milliseconds: item.playbackPositionMs);
-      }
-    }
-
-    if (!mounted) {
-      return;
-    }
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
         builder: (context) => PlayerPage(
@@ -174,6 +163,7 @@ class _AppShellState extends State<AppShell> {
                       onSelected: (index) {
                         _goToSection(AppSection.values[index]);
                       },
+                      footer: _NavFooter(controller: _controller),
                       items: [
                         const CapsuleNavItem(
                           icon: Icons.home_outlined,
@@ -437,6 +427,80 @@ class _AnimatedSectionState extends State<_AnimatedSection>
   }
 }
 
+/// Library size summary shown at the bottom of the side navigation.
+class _NavFooter extends StatelessWidget {
+  const _NavFooter({required this.controller});
+
+  final LibraryController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    final totalSize = controller.items.fold<int>(
+      0,
+      (sum, item) => sum + item.sizeBytes,
+    );
+    if (controller.items.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    // Visual progress against a 2TB reference so the bar looks like the design.
+    const twoTb = 2.0 * 1024 * 1024 * 1024 * 1024;
+    final progress = (totalSize / twoTb).clamp(0.02, 1.0);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: tokens.surface.withValues(alpha: 0.6),
+            borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
+            border: Border.all(color: tokens.cardBorder),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(
+                    Icons.storage_outlined,
+                    size: 14,
+                    color: tokens.textSecondary,
+                  ),
+                  const SizedBox(width: AppSpacing.xs),
+                  Text(
+                    '存储空间',
+                    style: TextStyle(color: tokens.textSecondary, fontSize: 11),
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              ClipRRect(
+                borderRadius: const BorderRadius.all(Radius.circular(2)),
+                child: SizedBox(
+                  height: 4,
+                  child: LinearProgressIndicator(
+                    value: progress,
+                    backgroundColor: tokens.surfaceVariant,
+                    color: tokens.accent,
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.xs),
+              Text(
+                '${formatBytes(totalSize)} / 2.00 TB',
+                style: TextStyle(color: tokens.textSecondary, fontSize: 11),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 /// Full-window wallpaper picked by the user, dimmed and slightly blurred so
 /// content stays readable on top.
 class _WallpaperLayer extends StatelessWidget {
@@ -461,50 +525,6 @@ class _WallpaperLayer extends StatelessWidget {
           ),
         ),
         ColoredBox(color: tokens.background.withValues(alpha: 0.72)),
-      ],
-    );
-  }
-}
-
-/// todo §14: on reopening a partially watched item, ask whether to resume or
-/// restart. Pops true to resume, false to restart, null when dismissed.
-class _ResumeDialog extends StatelessWidget {
-  const _ResumeDialog({required this.item});
-
-  final MediaItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-    final position = Duration(milliseconds: item.playbackPositionMs);
-    final remaining = Duration(
-      milliseconds: (item.playbackDurationMs - item.playbackPositionMs)
-          .clamp(0, item.playbackDurationMs)
-          .toInt(),
-    );
-
-    return AlertDialog(
-      title: const Text('继续观看？'),
-      content: Text(
-        '《${item.tmdbTitle ?? item.title}》上次看到 '
-        '${formatDuration(position)}，剩余 ${formatDuration(remaining)}。',
-        style: TextStyle(color: tokens.textSecondary),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('从头播放'),
-        ),
-        FilledButton.icon(
-          autofocus: true,
-          style: FilledButton.styleFrom(
-            backgroundColor: tokens.accent,
-            foregroundColor: Colors.white,
-          ),
-          onPressed: () => Navigator.of(context).pop(true),
-          icon: const Icon(Icons.play_arrow),
-          label: const Text('继续播放'),
-        ),
       ],
     );
   }

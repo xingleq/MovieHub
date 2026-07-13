@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/library_scope.dart';
 import '../../core/media/media_group.dart';
 import '../../core/media/media_item.dart';
 import '../../core/tmdb/tmdb_client.dart';
@@ -9,10 +10,15 @@ import '../format/formatters.dart';
 import '../widgets/cached_tmdb_image.dart';
 import '../widgets/jelly_button.dart';
 import '../widgets/poster_placeholder.dart';
+import 'media_detail_view.dart'
+    show
+        DetailActionButton,
+        DetailMetadataChip,
+        DetailScoreBlock,
+        RelatedDetailShelf;
 
-/// Cinematic series detail: backdrop header shared with the movie detail,
-/// then a season-grouped episode list with watched marks (todo §15) —
-/// tapping an episode plays it.
+/// Cinematic series detail: backdrop header, season-grouped episode list,
+/// and related recommendations.
 class SeriesDetailView extends StatelessWidget {
   const SeriesDetailView({
     super.key,
@@ -40,6 +46,7 @@ class SeriesDetailView extends StatelessWidget {
     final tokens = AppTokens.of(context);
     final rep = group.representative;
     final next = group.nextUnwatched;
+    final related = _relatedItems(context);
 
     final seasons = <int, List<MediaItem>>{};
     for (final episode in group.episodes) {
@@ -96,12 +103,17 @@ class SeriesDetailView extends StatelessWidget {
                                     ),
                               ),
                               const SizedBox(height: AppSpacing.md),
+                              if (rep.voteAverage != null &&
+                                  rep.voteAverage! > 0) ...[
+                                DetailScoreBlock(score: rep.voteAverage!),
+                                const SizedBox(height: AppSpacing.md),
+                              ],
                               Wrap(
                                 spacing: AppSpacing.sm,
                                 runSpacing: AppSpacing.sm,
                                 children: [
                                   for (final chip in _chips())
-                                    _MetadataChip(label: chip),
+                                    DetailMetadataChip(label: chip),
                                 ],
                               ),
                               const SizedBox(height: AppSpacing.lg),
@@ -120,34 +132,39 @@ class SeriesDetailView extends StatelessWidget {
                                     onPressed: () =>
                                         onPlayEpisode(group.playTarget),
                                   ),
-                                  FilledButton.tonalIcon(
+                                  DetailActionButton(
+                                    icon: group.anyFavorite
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    label: group.anyFavorite ? '已收藏' : '收藏',
+                                    onPressed: null,
+                                  ),
+                                  DetailActionButton(
+                                    icon: Icons.add,
+                                    label: '追番',
+                                    onPressed: null,
+                                  ),
+                                  DetailActionButton(
+                                    icon: loadingMetadata
+                                        ? Icons.hourglass_empty
+                                        : Icons.cloud_sync_outlined,
+                                    label: rep.tmdbId == null ? '匹配剧集' : '重新匹配',
                                     onPressed: loadingMetadata
                                         ? null
                                         : () => onMatch(group),
-                                    icon: loadingMetadata
-                                        ? const SizedBox.square(
-                                            dimension: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.cloud_sync_outlined),
-                                    label: Text(
-                                      rep.tmdbId == null ? '匹配剧集' : '重新匹配',
-                                    ),
                                   ),
-                                  FilledButton.tonalIcon(
+                                  DetailActionButton(
+                                    icon: Icons.search,
+                                    label: '手动匹配',
                                     onPressed: loadingMetadata
                                         ? null
                                         : () => onManualMatch(group),
-                                    icon: const Icon(Icons.search),
-                                    label: const Text('手动匹配'),
                                   ),
-                                  FilledButton.tonalIcon(
+                                  DetailActionButton(
+                                    icon: Icons.folder_open,
+                                    label: '打开位置',
                                     onPressed: () =>
                                         onOpenLocation(group.episodes.first),
-                                    icon: const Icon(Icons.folder_open),
-                                    label: const Text('打开位置'),
                                   ),
                                 ],
                               ),
@@ -176,19 +193,40 @@ class SeriesDetailView extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: AppSpacing.xl),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '剧集列表',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                        _EpisodePagination(total: group.episodes.length),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.sm),
                     for (final season in seasons.keys.toList()..sort()) ...[
-                      Text(
-                        season == 0 ? '剧集' : '第 $season 季',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
+                      if (season != 0)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+                          child: Text(
+                            '第 $season 季',
+                            style: TextStyle(color: tokens.textSecondary),
+                          ),
+                        ),
                       for (final episode in seasons[season]!)
                         _EpisodeRow(
                           episode: episode,
                           onPlay: () => onPlayEpisode(episode),
                         ),
                       const SizedBox(height: AppSpacing.lg),
+                    ],
+                    if (related.isNotEmpty) ...[
+                      RelatedDetailShelf(
+                        title: '相关推荐',
+                        items: related,
+                        onTap: (_) {},
+                      ),
                     ],
                   ],
                 ),
@@ -213,18 +251,93 @@ class SeriesDetailView extends StatelessWidget {
     );
   }
 
+  List<MediaItem> _relatedItems(BuildContext context) {
+    final controller = LibraryScope.of(context);
+    final rep = group.representative;
+    final all = controller.items
+        .where((i) => !group.paths.contains(i.path))
+        .toList();
+    final genres = rep.genres?.toSet() ?? {};
+
+    all.sort((a, b) {
+      final aScore = _genreScore(a, genres) + _recencyScore(a);
+      final bScore = _genreScore(b, genres) + _recencyScore(b);
+      return bScore.compareTo(aScore);
+    });
+    return all.take(10).toList();
+  }
+
+  int _genreScore(MediaItem other, Set<String> genres) {
+    if (genres.isEmpty || other.genres == null) return 0;
+    return other.genres!.where(genres.contains).length * 100;
+  }
+
+  int _recencyScore(MediaItem other) {
+    return other.addedAt.difference(DateTime(2000)).inDays;
+  }
+
   List<String> _chips() {
     final rep = group.representative;
     return [
       ?releaseYear(rep),
-      if (rep.voteAverage != null && rep.voteAverage! > 0)
-        '★ ${rep.voteAverage!.toStringAsFixed(1)}',
       '剧集',
       ...?rep.genres,
-      '共 ${group.episodes.length} 集',
-      if (group.watchedCount > 0) '已看 ${group.watchedCount} 集',
+      '全 ${group.episodes.length} 话',
+      if (group.watchedCount > 0) '已看 ${group.watchedCount} 话',
       if (rep.runtimeMinutes != null) '单集 ${rep.runtimeMinutes} 分钟',
     ];
+  }
+}
+
+class _EpisodePagination extends StatelessWidget {
+  const _EpisodePagination({required this.total});
+
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+
+    // Visual pagination matching the design: first few pages + ellipsis + last.
+    final pages = <int>{
+      for (var i = 1; i <= total.clamp(1, 7); i++) i,
+      if (total > 7) total,
+    }.toList()..sort();
+
+    return Wrap(
+      spacing: AppSpacing.xs,
+      children: [
+        for (var i = 0; i < pages.length; i++) ...[
+          Container(
+            width: 28,
+            height: 28,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: pages[i] == 1
+                  ? tokens.accent
+                  : tokens.surface.withValues(alpha: 0.6),
+              borderRadius: const BorderRadius.all(
+                Radius.circular(AppRadius.sm),
+              ),
+              border: Border.all(color: tokens.cardBorder),
+            ),
+            child: Text(
+              '${pages[i]}',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: pages[i] == 1 ? FontWeight.w700 : FontWeight.w500,
+                color: pages[i] == 1 ? Colors.white : tokens.textSecondary,
+              ),
+            ),
+          ),
+          if (i == pages.length - 2 && pages.last > pages[i] + 1)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+              child: Text('...', style: TextStyle(color: tokens.textSecondary)),
+            ),
+        ],
+      ],
+    );
   }
 }
 
@@ -403,28 +516,6 @@ class _Backdrop extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _MetadataChip extends StatelessWidget {
-  const _MetadataChip({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm + 2,
-        vertical: AppSpacing.xs,
-      ),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
-      ),
-      child: Text(label, style: const TextStyle(fontSize: 12)),
     );
   }
 }

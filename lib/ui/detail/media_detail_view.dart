@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../app/library_scope.dart';
 import '../../core/media/media_item.dart';
 import '../../core/tmdb/tmdb_client.dart';
 import '../../theme/app_tokens.dart';
@@ -9,9 +10,10 @@ import '../format/formatters.dart';
 import '../widgets/cached_tmdb_image.dart';
 import '../widgets/jelly_button.dart';
 import '../widgets/poster_placeholder.dart';
+import '../widgets/shelf_row.dart';
 
 /// Cinematic detail view: full-width backdrop with gradient scrims, poster,
-/// metadata chips, actions, overview and file information.
+/// metadata chips, actions, overview, file information, and related picks.
 class MediaDetailView extends StatelessWidget {
   const MediaDetailView({
     super.key,
@@ -41,6 +43,7 @@ class MediaDetailView extends StatelessWidget {
     final tokens = AppTokens.of(context);
     final inProgress =
         item.playbackProgress > 0.01 && item.playbackProgress < 0.95;
+    final related = _relatedItems(context);
 
     return Stack(
       children: [
@@ -102,12 +105,17 @@ class MediaDetailView extends StatelessWidget {
                                 ),
                               ],
                               const SizedBox(height: AppSpacing.md),
+                              if (item.voteAverage != null &&
+                                  item.voteAverage! > 0) ...[
+                                DetailScoreBlock(score: item.voteAverage!),
+                                const SizedBox(height: AppSpacing.md),
+                              ],
                               Wrap(
                                 spacing: AppSpacing.sm,
                                 runSpacing: AppSpacing.sm,
                                 children: [
                                   for (final chip in _chips())
-                                    _MetadataChip(label: chip),
+                                    DetailMetadataChip(label: chip),
                                 ],
                               ),
                               const SizedBox(height: AppSpacing.lg),
@@ -121,42 +129,35 @@ class MediaDetailView extends StatelessWidget {
                                     label: inProgress ? '继续播放' : '播放',
                                     onPressed: () => onPlay(item),
                                   ),
-                                  FilledButton.tonalIcon(
+                                  DetailActionButton(
+                                    icon: item.favorite
+                                        ? Icons.favorite
+                                        : Icons.favorite_border,
+                                    label: item.favorite ? '已收藏' : '收藏',
                                     onPressed: () => onToggleFavorite(item),
-                                    icon: Icon(
-                                      item.favorite
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                    ),
-                                    label: Text(item.favorite ? '已收藏' : '收藏'),
                                   ),
-                                  FilledButton.tonalIcon(
+                                  DetailActionButton(
+                                    icon: Icons.folder_open,
+                                    label: '打开位置',
+                                    onPressed: () => onOpenLocation(item),
+                                  ),
+                                  DetailActionButton(
+                                    icon: loadingMetadata
+                                        ? Icons.hourglass_empty
+                                        : Icons.cloud_sync_outlined,
+                                    label: item.tmdbId == null
+                                        ? '匹配 TMDB'
+                                        : '重新匹配',
                                     onPressed: loadingMetadata
                                         ? null
                                         : () => onMatchTmdb(item),
-                                    icon: loadingMetadata
-                                        ? const SizedBox.square(
-                                            dimension: 18,
-                                            child: CircularProgressIndicator(
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Icon(Icons.cloud_sync_outlined),
-                                    label: Text(
-                                      item.tmdbId == null ? '匹配 TMDB' : '重新匹配',
-                                    ),
                                   ),
-                                  FilledButton.tonalIcon(
+                                  DetailActionButton(
+                                    icon: Icons.search,
+                                    label: '手动匹配',
                                     onPressed: loadingMetadata
                                         ? null
                                         : () => onManualMatch(item),
-                                    icon: const Icon(Icons.search),
-                                    label: const Text('手动匹配'),
-                                  ),
-                                  FilledButton.tonalIcon(
-                                    onPressed: () => onOpenLocation(item),
-                                    icon: const Icon(Icons.folder_open),
-                                    label: const Text('打开位置'),
                                   ),
                                 ],
                               ),
@@ -204,6 +205,14 @@ class MediaDetailView extends StatelessWidget {
                       item.path,
                       style: const TextStyle(fontSize: 12),
                     ),
+                    if (related.isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xl),
+                      RelatedDetailShelf(
+                        title: '相关推荐',
+                        items: related,
+                        onTap: (_) {},
+                      ),
+                    ],
                   ],
                 ),
               ),
@@ -225,6 +234,29 @@ class MediaDetailView extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  List<MediaItem> _relatedItems(BuildContext context) {
+    final controller = LibraryScope.of(context);
+    final all = controller.items.where((i) => i.path != item.path).toList();
+    final genres = item.genres?.toSet() ?? {};
+
+    // Prefer items sharing a genre, then fall back to recently added.
+    all.sort((a, b) {
+      final aScore = _genreScore(a, genres) + _recencyScore(a);
+      final bScore = _genreScore(b, genres) + _recencyScore(b);
+      return bScore.compareTo(aScore);
+    });
+    return all.take(10).toList();
+  }
+
+  int _genreScore(MediaItem other, Set<String> genres) {
+    if (genres.isEmpty || other.genres == null) return 0;
+    return other.genres!.where(genres.contains).length * 100;
+  }
+
+  int _recencyScore(MediaItem other) {
+    return other.addedAt.difference(DateTime(2000)).inDays;
   }
 
   List<String> _chips() {
@@ -282,6 +314,34 @@ class MediaDetailView extends StatelessWidget {
           ),
         ),
     ];
+  }
+}
+
+class DetailActionButton extends StatelessWidget {
+  const DetailActionButton({
+    super.key,
+    required this.icon,
+    required this.label,
+    this.onPressed,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+
+    return FilledButton.tonalIcon(
+      onPressed: onPressed,
+      icon: Icon(icon),
+      label: Text(label),
+      style: FilledButton.styleFrom(
+        backgroundColor: tokens.surface.withValues(alpha: 0.7),
+        foregroundColor: tokens.textPrimary,
+      ),
+    );
   }
 }
 
@@ -370,8 +430,8 @@ class _DetailBackdrop extends StatelessWidget {
   }
 }
 
-class _MetadataChip extends StatelessWidget {
-  const _MetadataChip({required this.label});
+class DetailMetadataChip extends StatelessWidget {
+  const DetailMetadataChip({super.key, required this.label});
 
   final String label;
 
@@ -429,6 +489,125 @@ class _ProgressSummary extends StatelessWidget {
             style: TextStyle(color: tokens.textSecondary, fontSize: 12),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class DetailScoreBlock extends StatelessWidget {
+  const DetailScoreBlock({super.key, required this.score});
+
+  final double score;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        ShaderMask(
+          shaderCallback: (bounds) => const LinearGradient(
+            colors: AppTokens.candyGradient,
+          ).createShader(bounds),
+          child: Text(
+            score.toStringAsFixed(1),
+            style: const TextStyle(
+              fontSize: 40,
+              height: 1,
+              fontWeight: FontWeight.w900,
+              color: Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(width: AppSpacing.sm),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Text(
+            'TMDB 评分',
+            style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class RelatedDetailShelf extends StatelessWidget {
+  const RelatedDetailShelf({
+    super.key,
+    required this.title,
+    required this.items,
+    required this.onTap,
+  });
+
+  final String title;
+  final List<MediaItem> items;
+  final ValueChanged<MediaItem> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return ShelfRow(
+      title: title,
+      height: 220,
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        return RelatedDetailCard(item: item, onTap: () => onTap(item));
+      },
+    );
+  }
+}
+
+class RelatedDetailCard extends StatelessWidget {
+  const RelatedDetailCard({super.key, required this.item, required this.onTap});
+
+  final MediaItem item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+
+    return GestureDetector(
+      onTap: onTap,
+      child: SizedBox(
+        width: 120,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: ClipRRect(
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.md),
+                ),
+                child: item.posterPath != null && item.posterPath!.isNotEmpty
+                    ? CachedTmdbImage(
+                        url: TmdbClient.posterUrl(item.posterPath!),
+                        cacheWidth: 300,
+                      )
+                    : const PosterPlaceholder(),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.sm),
+            Text(
+              item.tmdbTitle ?? item.title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              [
+                ?releaseYear(item),
+                if (item.voteAverage != null && item.voteAverage! > 0)
+                  '★ ${item.voteAverage!.toStringAsFixed(1)}',
+              ].join(' · '),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: tokens.textSecondary, fontSize: 11),
+            ),
+          ],
+        ),
       ),
     );
   }

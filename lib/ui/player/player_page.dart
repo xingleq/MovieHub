@@ -15,6 +15,8 @@ class PlayerPage extends StatefulWidget {
     required this.onProgressChanged,
     this.startAt,
     this.nextEpisodeOf,
+    this.subtitlePreference = 'zh-hans',
+    this.audioPreference = 'zh',
   });
 
   final MediaItem item;
@@ -27,6 +29,12 @@ class PlayerPage extends StatefulWidget {
   /// Looks up the following episode of a series item; enables the next
   /// button and auto-play-next on completion (todo §15).
   final MediaItem? Function(MediaItem item)? nextEpisodeOf;
+
+  /// Default subtitle preference: 'zh-hans' | 'zh-hant' | 'en' | 'off'.
+  final String subtitlePreference;
+
+  /// Default audio preference: 'zh' | 'ja' | 'en'.
+  final String audioPreference;
 
   final Future<void> Function(
     MediaItem item,
@@ -87,8 +95,37 @@ class _PlayerPageState extends State<PlayerPage> {
     super.dispose();
   }
 
-  /// Auto-selects Chinese-first subtitle (简→繁→中→英, todo §12) and audio
-  /// (中→日→英, todo §13) once per opened media.
+  /// Named preference tiers; the user's configured preference is moved to
+  /// the front, the rest keep the todo §12/§13 default order.
+  static const _subtitleTiers = <String, (Set<String>, List<String>)>{
+    'zh-hans': ({'zh-hans', 'chs'}, ['简体', '简中', 'simplified']),
+    'zh-hant': ({'zh-hant', 'cht'}, ['繁体', '繁中', 'traditional']),
+    'zh': ({'zh', 'chi', 'zho'}, ['中文', 'chinese', '中字']),
+    'en': ({'en', 'eng'}, ['english', '英文', '英语']),
+  };
+
+  static const _audioTiers = <String, (Set<String>, List<String>)>{
+    'zh': (
+      {'zh', 'chi', 'zho', 'zh-hans', 'zh-hant', 'chs', 'cht'},
+      ['中文', '国语', '普通话', 'mandarin', 'chinese'],
+    ),
+    'ja': ({'ja', 'jpn', 'jp'}, ['日语', 'japanese', '日本語']),
+    'en': ({'en', 'eng'}, ['english', '英语']),
+  };
+
+  static List<(Set<String>, List<String>)> _orderedTiers(
+    Map<String, (Set<String>, List<String>)> tiers,
+    String preference,
+  ) {
+    return [
+      if (tiers.containsKey(preference)) tiers[preference]!,
+      for (final entry in tiers.entries)
+        if (entry.key != preference) entry.value,
+    ];
+  }
+
+  /// Auto-selects the default subtitle and audio tracks per the configured
+  /// preferences (todo §12/§13) once per opened media.
   void _applyPreferredTracks(Tracks tracks) {
     if (_autoTracksAppliedFor == _currentItem.path) {
       return;
@@ -105,31 +142,23 @@ class _PlayerPageState extends State<PlayerPage> {
     }
     _autoTracksAppliedFor = _currentItem.path;
 
-    final subtitle = _pickByPreference(
-      subtitles,
-      (track) => (track.language, track.title),
-      const [
-        ({'zh-hans', 'chs'}, ['简体', '简中', 'simplified']),
-        ({'zh-hant', 'cht'}, ['繁体', '繁中', 'traditional']),
-        ({'zh', 'chi', 'zho'}, ['中文', 'chinese', '中字']),
-        ({'en', 'eng'}, ['english', '英文', '英语']),
-      ],
-    );
-    if (subtitle != null) {
-      unawaited(_player.setSubtitleTrack(subtitle));
+    if (widget.subtitlePreference == 'off') {
+      unawaited(_player.setSubtitleTrack(SubtitleTrack.no()));
+    } else {
+      final subtitle = _pickByPreference(
+        subtitles,
+        (track) => (track.language, track.title),
+        _orderedTiers(_subtitleTiers, widget.subtitlePreference),
+      );
+      if (subtitle != null) {
+        unawaited(_player.setSubtitleTrack(subtitle));
+      }
     }
 
     final audio = _pickByPreference(
       audios,
       (track) => (track.language, track.title),
-      const [
-        (
-          {'zh', 'chi', 'zho', 'zh-hans', 'zh-hant', 'chs', 'cht'},
-          ['中文', '国语', '普通话', 'mandarin', 'chinese'],
-        ),
-        ({'ja', 'jpn', 'jp'}, ['日语', 'japanese', '日本語']),
-        ({'en', 'eng'}, ['english', '英语']),
-      ],
+      _orderedTiers(_audioTiers, widget.audioPreference),
     );
     if (audio != null) {
       unawaited(_player.setAudioTrack(audio));

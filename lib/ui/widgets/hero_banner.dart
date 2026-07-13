@@ -6,6 +6,7 @@ import '../../theme/app_tokens.dart';
 import '../catalog/catalog_options.dart';
 import '../catalog/media_category.dart';
 import 'cached_tmdb_image.dart';
+import 'jelly_button.dart';
 import 'poster_placeholder.dart';
 
 /// Featured spotlight banner at the top of Home: full-bleed backdrop with
@@ -99,6 +100,14 @@ class HeroBanner extends StatelessWidget {
                     overflow: TextOverflow.ellipsis,
                     style: theme.textTheme.displaySmall?.copyWith(
                       fontWeight: FontWeight.w800,
+                      shadows: const [
+                        Shadow(blurRadius: 4, color: Colors.black),
+                        Shadow(
+                          blurRadius: 16,
+                          color: Colors.black87,
+                          offset: Offset(0, 2),
+                        ),
+                      ],
                     ),
                   ),
                   const SizedBox(height: AppSpacing.sm),
@@ -121,18 +130,10 @@ class HeroBanner extends StatelessWidget {
                   const SizedBox(height: AppSpacing.lg),
                   Row(
                     children: [
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(
-                          backgroundColor: tokens.accent,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: AppSpacing.xl,
-                            vertical: AppSpacing.lg,
-                          ),
-                        ),
+                      JellyButton(
+                        icon: Icons.play_arrow,
+                        label: inProgress ? '继续播放' : '播放',
                         onPressed: onPlay,
-                        icon: const Icon(Icons.play_arrow),
-                        label: Text(inProgress ? '继续播放' : '播放'),
                       ),
                       const SizedBox(width: AppSpacing.md),
                       OutlinedButton.icon(

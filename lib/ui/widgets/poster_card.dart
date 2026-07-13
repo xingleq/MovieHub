@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 
-import '../../core/media/media_item.dart';
+import '../../core/media/media_group.dart';
 import '../../core/tmdb/tmdb_client.dart';
 import '../../theme/app_tokens.dart';
 import '../catalog/catalog_options.dart';
@@ -8,19 +8,19 @@ import 'cached_tmdb_image.dart';
 import 'hoverable.dart';
 import 'poster_placeholder.dart';
 
-/// Portrait poster card: hover-grow, play-on-hover, favorite heart, watched
-/// badge, and a progress bar for partially watched items. Tap opens detail,
-/// double-tap (or the play button) starts playback. Never shows file paths.
+/// Portrait poster card for a wall entry (movie or aggregated series):
+/// hover-grow with candy glow, play-on-hover, favorite heart, watched badge,
+/// episode-count chip and progress stripes. Never shows file paths.
 class PosterCard extends StatelessWidget {
   const PosterCard({
     super.key,
-    required this.item,
+    required this.group,
     required this.onOpenDetail,
     required this.onPlay,
     this.width,
   });
 
-  final MediaItem item;
+  final MediaGroup group;
   final VoidCallback onOpenDetail;
   final VoidCallback onPlay;
   final double? width;
@@ -28,6 +28,20 @@ class PosterCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
+    final rep = group.representative;
+
+    final watched = group.isSeries
+        ? group.allWatched
+        : rep.playbackProgress >= 0.95;
+
+    double? stripeValue;
+    if (group.isSeries) {
+      if (group.watchedCount > 0 && !group.allWatched) {
+        stripeValue = group.watchedCount / group.episodes.length;
+      }
+    } else if (rep.playbackProgress > 0.01 && rep.playbackProgress < 0.95) {
+      stripeValue = rep.playbackProgress;
+    }
 
     final card = Hoverable(
       builder: (context, hovered) {
@@ -40,95 +54,117 @@ class PosterCard extends StatelessWidget {
             children: [
               AspectRatio(
                 aspectRatio: 2 / 3,
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.all(
-                    Radius.circular(AppRadius.md),
+                child: AnimatedContainer(
+                  duration: AppDurations.hover,
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.all(
+                      Radius.circular(AppRadius.md),
+                    ),
+                    boxShadow: hovered
+                        ? [
+                            BoxShadow(
+                              color: tokens.accent.withValues(alpha: 0.45),
+                              blurRadius: 18,
+                              spreadRadius: 1,
+                            ),
+                          ]
+                        : const [],
                   ),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      AnimatedScale(
-                        scale: hovered ? 1.06 : 1.0,
-                        duration: AppDurations.hover,
-                        curve: Curves.easeOutBack,
-                        child: _PosterImage(posterPath: item.posterPath),
-                      ),
-                      AnimatedOpacity(
-                        opacity: hovered ? 1 : 0,
-                        duration: AppDurations.hover,
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                Colors.black.withValues(alpha: 0.25),
-                                Colors.black.withValues(alpha: 0.6),
-                              ],
-                            ),
-                          ),
-                          child: Center(
-                            child: IconButton.filled(
-                              tooltip: '播放',
-                              style: IconButton.styleFrom(
-                                backgroundColor: tokens.accent,
-                                foregroundColor: Colors.white,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.all(
+                      Radius.circular(AppRadius.md),
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        AnimatedScale(
+                          scale: hovered ? 1.06 : 1.0,
+                          duration: AppDurations.hover,
+                          curve: Curves.easeOutBack,
+                          child: _PosterImage(posterPath: rep.posterPath),
+                        ),
+                        AnimatedOpacity(
+                          opacity: hovered ? 1 : 0,
+                          duration: AppDurations.hover,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                                colors: [
+                                  Colors.black.withValues(alpha: 0.25),
+                                  Colors.black.withValues(alpha: 0.6),
+                                ],
                               ),
-                              onPressed: onPlay,
-                              icon: const Icon(Icons.play_arrow, size: 30),
+                            ),
+                            child: Center(
+                              child: IconButton.filled(
+                                tooltip: '播放',
+                                style: IconButton.styleFrom(
+                                  backgroundColor: tokens.accent,
+                                  foregroundColor: Colors.white,
+                                ),
+                                onPressed: onPlay,
+                                icon: const Icon(Icons.play_arrow, size: 30),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      if (item.favorite)
-                        const Positioned(
-                          top: AppSpacing.sm,
-                          right: AppSpacing.sm,
-                          child: _CornerBadge(
-                            child: Icon(
-                              Icons.favorite,
-                              size: 14,
-                              color: Color(0xFFFF6B81),
+                        if (group.anyFavorite)
+                          const Positioned(
+                            top: AppSpacing.sm,
+                            right: AppSpacing.sm,
+                            child: _CornerBadge(
+                              child: Icon(
+                                Icons.favorite,
+                                size: 14,
+                                color: Color(0xFFFF6B81),
+                              ),
                             ),
                           ),
-                        ),
-                      if (item.playbackProgress >= 0.95)
-                        const Positioned(
-                          top: AppSpacing.sm,
-                          left: AppSpacing.sm,
-                          child: _CornerBadge(
-                            child: Icon(
-                              Icons.check,
-                              size: 14,
-                              color: Color(0xFF7CE38B),
+                        if (watched)
+                          const Positioned(
+                            top: AppSpacing.sm,
+                            left: AppSpacing.sm,
+                            child: _CornerBadge(
+                              child: Icon(
+                                Icons.check,
+                                size: 14,
+                                color: Color(0xFF7CE38B),
+                              ),
                             ),
                           ),
-                        ),
-                      if (item.playbackProgress > 0.01 &&
-                          item.playbackProgress < 0.95)
-                        Positioned(
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          child: _ProgressStripe(
-                            progress: item.playbackProgress,
-                            accent: tokens.accent,
+                        if (group.isSeries)
+                          Positioned(
+                            right: AppSpacing.sm,
+                            bottom: AppSpacing.sm + 6,
+                            child: _EpisodeCountChip(group: group),
                           ),
-                        ),
-                    ],
+                        if (stripeValue != null)
+                          Positioned(
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            child: _ProgressStripe(
+                              progress: stripeValue,
+                              accent: tokens.accent,
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: AppSpacing.sm),
               Text(
-                item.tmdbTitle ?? item.title,
+                group.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 2),
               Text(
-                _metadataLine(item),
+                _metadataLine(group),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(color: tokens.textSecondary, fontSize: 12),
@@ -145,17 +181,47 @@ class PosterCard extends StatelessWidget {
     return SizedBox(width: width, child: card);
   }
 
-  static String _metadataLine(MediaItem item) {
+  static String _metadataLine(MediaGroup group) {
+    final rep = group.representative;
     final parts = [
-      ?releaseYear(item),
-      if (item.voteAverage != null && item.voteAverage! > 0)
-        '★ ${item.voteAverage!.toStringAsFixed(1)}',
-      ?item.episodeLabel,
+      ?releaseYear(rep),
+      if (rep.voteAverage != null && rep.voteAverage! > 0)
+        '★ ${rep.voteAverage!.toStringAsFixed(1)}',
+      if (group.isSeries) '共 ${group.episodes.length} 集' else ?rep.episodeLabel,
     ];
     if (parts.isEmpty) {
-      return item.extension.toUpperCase();
+      return rep.extension.toUpperCase();
     }
     return parts.join(' · ');
+  }
+}
+
+class _EpisodeCountChip extends StatelessWidget {
+  const _EpisodeCountChip({required this.group});
+
+  final MediaGroup group;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = group.watchedCount > 0
+        ? '${group.watchedCount}/${group.episodes.length}'
+        : '${group.episodes.length} 集';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.6),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          fontSize: 10,
+          color: Colors.white,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
   }
 }
 

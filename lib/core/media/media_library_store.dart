@@ -12,18 +12,29 @@ class MediaLibrarySnapshot {
   static const empty = MediaLibrarySnapshot(roots: [], items: []);
 }
 
-class MediaLibraryStore {
+/// Persistence contract for the media library, implemented by the legacy
+/// JSON store and the SQLite store.
+abstract interface class MediaLibraryStorage {
+  Future<MediaLibrarySnapshot> load();
+  Future<void> save(MediaLibrarySnapshot snapshot);
+}
+
+class MediaLibraryStore implements MediaLibraryStorage {
   MediaLibraryStore({Directory? storageDirectory})
     : _storageDirectory = storageDirectory ?? _defaultStorageDirectory();
 
   final Directory _storageDirectory;
 
-  File get _storageFile {
+  /// Public so the SQLite store can migrate and archive the legacy file.
+  File get storageFile {
     return File(
       '${_storageDirectory.path}${Platform.pathSeparator}moviehub_library.json',
     );
   }
 
+  File get _storageFile => storageFile;
+
+  @override
   Future<MediaLibrarySnapshot> load() async {
     final file = _storageFile;
     if (!await file.exists()) {
@@ -47,6 +58,7 @@ class MediaLibraryStore {
     return MediaLibrarySnapshot(roots: roots, items: items);
   }
 
+  @override
   Future<void> save(MediaLibrarySnapshot snapshot) async {
     if (!await _storageDirectory.exists()) {
       await _storageDirectory.create(recursive: true);

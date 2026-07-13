@@ -1,29 +1,35 @@
 import 'package:flutter/material.dart';
 
 import '../../app/library_scope.dart';
+import '../../core/media/media_group.dart';
 import '../../core/media/media_item.dart';
 import '../../theme/app_tokens.dart';
 import '../catalog/media_category.dart';
-import '../format/formatters.dart';
 import '../widgets/continue_watching_card.dart';
 import '../widgets/empty_state.dart';
+import '../widgets/entrance.dart';
 import '../widgets/hero_banner.dart';
 import '../widgets/message_banner.dart';
 import '../widgets/poster_card.dart';
 import '../widgets/shelf_row.dart';
 
-/// Home: hero spotlight plus horizontal shelves (continue watching, recently
-/// added, favorites) in a single vertical scroll view.
+/// Home: hero spotlight plus horizontal shelves (continue watching, anime,
+/// recently added, favorites) in a single vertical scroll view. Wall shelves
+/// render grouped entries — a series is one card.
 class HomePage extends StatelessWidget {
   const HomePage({
     super.key,
-    required this.onOpenDetail,
-    required this.onPlay,
+    required this.onOpenEntry,
+    required this.onOpenItem,
+    required this.onPlayEntry,
+    required this.onPlayItem,
     required this.onGoToSettings,
   });
 
-  final ValueChanged<MediaItem> onOpenDetail;
-  final ValueChanged<MediaItem> onPlay;
+  final ValueChanged<MediaGroup> onOpenEntry;
+  final ValueChanged<MediaItem> onOpenItem;
+  final ValueChanged<MediaGroup> onPlayEntry;
+  final ValueChanged<MediaItem> onPlayItem;
   final VoidCallback onGoToSettings;
 
   static const _posterShelfCardWidth = 150.0;
@@ -32,7 +38,6 @@ class HomePage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final controller = LibraryScope.of(context);
-    final tokens = AppTokens.of(context);
 
     if (controller.items.isEmpty) {
       return EmptyState(
@@ -51,20 +56,13 @@ class HomePage extends StatelessWidget {
 
     final spotlight = controller.spotlightItem;
     final continueWatching = controller.continueWatchingItems;
-    final recentlyAdded = controller.recentlyAddedItems;
-    final favorites = controller.favoriteItems.take(16).toList(growable: false);
-    final animeItems = controller.items
-        .where(isAnime)
-        .take(16)
-        .toList(growable: false);
 
-    final animeCount = controller.items.where(isAnimeSection).length;
-    final movieCount = controller.items.where(isMovieSection).length;
-    final tvCount = controller.items.where(isTvSection).length;
-    final totalSize = controller.items.fold<int>(
-      0,
-      (sum, item) => sum + item.sizeBytes,
-    );
+    final groups = groupMediaItems(controller.items);
+    final animeGroups = groups.where(isAnimeGroup).take(16).toList();
+    final recentGroups = [...groups]
+      ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    final recentlyAdded = recentGroups.take(16).toList();
+    final favoriteGroups = groups.where(isFavoriteGroup).take(16).toList();
 
     return CustomScrollView(
       slivers: [
@@ -92,10 +90,12 @@ class HomePage extends StatelessWidget {
                 const SizedBox(height: AppSpacing.md),
               ],
               if (spotlight != null) ...[
-                HeroBanner(
-                  item: spotlight,
-                  onPlay: () => onPlay(spotlight),
-                  onOpenDetail: () => onOpenDetail(spotlight),
+                Entrance(
+                  child: HeroBanner(
+                    item: spotlight,
+                    onPlay: () => onPlayItem(spotlight),
+                    onOpenDetail: () => onOpenItem(spotlight),
+                  ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
               ],
@@ -106,73 +106,52 @@ class HomePage extends StatelessWidget {
                   itemCount: continueWatching.length,
                   itemBuilder: (context, index) {
                     final item = continueWatching[index];
-                    return ContinueWatchingCard(
-                      item: item,
-                      onOpenDetail: () => onOpenDetail(item),
-                      onPlay: () => onPlay(item),
+                    return Entrance(
+                      delayMs: index.clamp(0, 8) * 40,
+                      child: ContinueWatchingCard(
+                        item: item,
+                        onOpenDetail: () => onOpenItem(item),
+                        onPlay: () => onPlayItem(item),
+                      ),
                     );
                   },
                 ),
                 const SizedBox(height: AppSpacing.xl),
               ],
-              if (animeItems.isNotEmpty) ...[
-                ShelfRow(
-                  title: '动画乐园 ✨',
-                  height: _posterShelfHeight,
-                  itemCount: animeItems.length,
-                  itemBuilder: (context, index) {
-                    final item = animeItems[index];
-                    return PosterCard(
-                      item: item,
-                      width: _posterShelfCardWidth,
-                      onOpenDetail: () => onOpenDetail(item),
-                      onPlay: () => onPlay(item),
-                    );
-                  },
-                ),
+              if (animeGroups.isNotEmpty) ...[
+                _groupShelf('动画乐园 ✨', animeGroups),
                 const SizedBox(height: AppSpacing.xl),
               ],
-              ShelfRow(
-                title: '最近添加',
-                height: _posterShelfHeight,
-                itemCount: recentlyAdded.length,
-                itemBuilder: (context, index) {
-                  final item = recentlyAdded[index];
-                  return PosterCard(
-                    item: item,
-                    width: _posterShelfCardWidth,
-                    onOpenDetail: () => onOpenDetail(item),
-                    onPlay: () => onPlay(item),
-                  );
-                },
-              ),
-              if (favorites.isNotEmpty) ...[
+              _groupShelf('最近添加', recentlyAdded),
+              if (favoriteGroups.isNotEmpty) ...[
                 const SizedBox(height: AppSpacing.xl),
-                ShelfRow(
-                  title: '我的收藏',
-                  height: _posterShelfHeight,
-                  itemCount: favorites.length,
-                  itemBuilder: (context, index) {
-                    final item = favorites[index];
-                    return PosterCard(
-                      item: item,
-                      width: _posterShelfCardWidth,
-                      onOpenDetail: () => onOpenDetail(item),
-                      onPlay: () => onPlay(item),
-                    );
-                  },
-                ),
+                _groupShelf('我的收藏', favoriteGroups),
               ],
               const SizedBox(height: AppSpacing.xl),
-              Text(
-                '媒体库：$animeCount 部动画 · $movieCount 部电影 · $tvCount 集剧集 · '
-                '${controller.favoriteCount} 个收藏 · ${formatBytes(totalSize)}',
-                style: TextStyle(color: tokens.textSecondary, fontSize: 12),
-              ),
             ]),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _groupShelf(String title, List<MediaGroup> groups) {
+    return ShelfRow(
+      title: title,
+      height: _posterShelfHeight,
+      itemCount: groups.length,
+      itemBuilder: (context, index) {
+        final group = groups[index];
+        return Entrance(
+          delayMs: index.clamp(0, 8) * 40,
+          child: PosterCard(
+            group: group,
+            width: _posterShelfCardWidth,
+            onOpenDetail: () => onOpenEntry(group),
+            onPlay: () => onPlayEntry(group),
+          ),
+        );
+      },
     );
   }
 }

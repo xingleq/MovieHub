@@ -226,6 +226,61 @@ class _SettingsPageState extends State<SettingsPage> {
               ),
               const SizedBox(height: AppSpacing.lg),
               _SettingsCard(
+                title: '播放',
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    DropdownButtonFormField<String>(
+                      initialValue: controller.subtitlePreference,
+                      decoration: const InputDecoration(
+                        labelText: '默认字幕',
+                        prefixIcon: Icon(Icons.subtitles_outlined),
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: 'zh-hans',
+                          child: Text('简体中文优先'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'zh-hant',
+                          child: Text('繁体中文优先'),
+                        ),
+                        DropdownMenuItem(value: 'en', child: Text('英文优先')),
+                        DropdownMenuItem(value: 'off', child: Text('默认关闭字幕')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          controller.savePlaybackPreferences(
+                            subtitlePreference: value,
+                          );
+                        }
+                      },
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    DropdownButtonFormField<String>(
+                      initialValue: controller.audioPreference,
+                      decoration: const InputDecoration(
+                        labelText: '默认音轨',
+                        prefixIcon: Icon(Icons.graphic_eq),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'zh', child: Text('中文优先')),
+                        DropdownMenuItem(value: 'ja', child: Text('日语优先')),
+                        DropdownMenuItem(value: 'en', child: Text('英语优先')),
+                      ],
+                      onChanged: (value) {
+                        if (value != null) {
+                          controller.savePlaybackPreferences(
+                            audioPreference: value,
+                          );
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              _SettingsCard(
                 title: '外观',
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,

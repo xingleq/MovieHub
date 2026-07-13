@@ -1,37 +1,36 @@
 import 'package:flutter/material.dart';
 
+import '../../core/media/media_group.dart';
 import '../../core/media/media_item.dart';
 import '../../core/tmdb/tmdb_client.dart';
 import '../../theme/app_tokens.dart';
 import '../catalog/catalog_options.dart';
-import '../catalog/media_category.dart';
 import '../format/formatters.dart';
 import '../widgets/cached_tmdb_image.dart';
 import '../widgets/jelly_button.dart';
 import '../widgets/poster_placeholder.dart';
 
-/// Cinematic detail view: full-width backdrop with gradient scrims, poster,
-/// metadata chips, actions, overview and file information.
-class MediaDetailView extends StatelessWidget {
-  const MediaDetailView({
+/// Cinematic series detail: backdrop header shared with the movie detail,
+/// then a season-grouped episode list with watched marks (todo §15) —
+/// tapping an episode plays it.
+class SeriesDetailView extends StatelessWidget {
+  const SeriesDetailView({
     super.key,
-    required this.item,
+    required this.group,
     required this.loadingMetadata,
     required this.onBack,
-    required this.onToggleFavorite,
-    required this.onMatchTmdb,
+    required this.onPlayEpisode,
+    required this.onMatch,
     required this.onManualMatch,
-    required this.onPlay,
     required this.onOpenLocation,
   });
 
-  final MediaItem item;
+  final MediaGroup group;
   final bool loadingMetadata;
   final VoidCallback onBack;
-  final ValueChanged<MediaItem> onToggleFavorite;
-  final ValueChanged<MediaItem> onMatchTmdb;
-  final ValueChanged<MediaItem> onManualMatch;
-  final ValueChanged<MediaItem> onPlay;
+  final ValueChanged<MediaItem> onPlayEpisode;
+  final ValueChanged<MediaGroup> onMatch;
+  final ValueChanged<MediaGroup> onManualMatch;
   final ValueChanged<MediaItem> onOpenLocation;
 
   static const _backdropHeight = 340.0;
@@ -39,8 +38,13 @@ class MediaDetailView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
-    final inProgress =
-        item.playbackProgress > 0.01 && item.playbackProgress < 0.95;
+    final rep = group.representative;
+    final next = group.nextUnwatched;
+
+    final seasons = <int, List<MediaItem>>{};
+    for (final episode in group.episodes) {
+      seasons.putIfAbsent(episode.seasonNumber ?? 0, () => []).add(episode);
+    }
 
     return Stack(
       children: [
@@ -52,7 +56,7 @@ class MediaDetailView extends StatelessWidget {
                   SizedBox(
                     height: _backdropHeight,
                     width: double.infinity,
-                    child: _DetailBackdrop(item: item),
+                    child: _Backdrop(item: rep),
                   ),
                 ],
               ),
@@ -69,7 +73,7 @@ class MediaDetailView extends StatelessWidget {
                     Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        _DetailPoster(item: item),
+                        _Poster(item: rep),
                         const SizedBox(width: AppSpacing.xl),
                         Expanded(
                           child: Column(
@@ -77,7 +81,7 @@ class MediaDetailView extends StatelessWidget {
                             children: [
                               const SizedBox(height: AppSpacing.xl),
                               Text(
-                                item.tmdbTitle ?? item.title,
+                                group.title,
                                 maxLines: 2,
                                 overflow: TextOverflow.ellipsis,
                                 style: Theme.of(context).textTheme.headlineLarge
@@ -91,16 +95,6 @@ class MediaDetailView extends StatelessWidget {
                                       ],
                                     ),
                               ),
-                              if (item.tmdbTitle != null &&
-                                  item.tmdbTitle != item.title) ...[
-                                const SizedBox(height: AppSpacing.xs),
-                                Text(
-                                  item.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: tokens.textSecondary),
-                                ),
-                              ],
                               const SizedBox(height: AppSpacing.md),
                               Wrap(
                                 spacing: AppSpacing.sm,
@@ -118,22 +112,18 @@ class MediaDetailView extends StatelessWidget {
                                 children: [
                                   JellyButton(
                                     icon: Icons.play_arrow,
-                                    label: inProgress ? '继续播放' : '播放',
-                                    onPressed: () => onPlay(item),
-                                  ),
-                                  FilledButton.tonalIcon(
-                                    onPressed: () => onToggleFavorite(item),
-                                    icon: Icon(
-                                      item.favorite
-                                          ? Icons.favorite
-                                          : Icons.favorite_border,
-                                    ),
-                                    label: Text(item.favorite ? '已收藏' : '收藏'),
+                                    label: next == null
+                                        ? '再看一遍'
+                                        : group.watchedCount == 0
+                                        ? '开始观看'
+                                        : '继续看 ${next.episodeLabel ?? ''}',
+                                    onPressed: () =>
+                                        onPlayEpisode(group.playTarget),
                                   ),
                                   FilledButton.tonalIcon(
                                     onPressed: loadingMetadata
                                         ? null
-                                        : () => onMatchTmdb(item),
+                                        : () => onMatch(group),
                                     icon: loadingMetadata
                                         ? const SizedBox.square(
                                             dimension: 18,
@@ -143,34 +133,31 @@ class MediaDetailView extends StatelessWidget {
                                           )
                                         : const Icon(Icons.cloud_sync_outlined),
                                     label: Text(
-                                      item.tmdbId == null ? '匹配 TMDB' : '重新匹配',
+                                      rep.tmdbId == null ? '匹配剧集' : '重新匹配',
                                     ),
                                   ),
                                   FilledButton.tonalIcon(
                                     onPressed: loadingMetadata
                                         ? null
-                                        : () => onManualMatch(item),
+                                        : () => onManualMatch(group),
                                     icon: const Icon(Icons.search),
                                     label: const Text('手动匹配'),
                                   ),
                                   FilledButton.tonalIcon(
-                                    onPressed: () => onOpenLocation(item),
+                                    onPressed: () =>
+                                        onOpenLocation(group.episodes.first),
                                     icon: const Icon(Icons.folder_open),
                                     label: const Text('打开位置'),
                                   ),
                                 ],
                               ),
-                              if (inProgress) ...[
-                                const SizedBox(height: AppSpacing.lg),
-                                _ProgressSummary(item: item, tokens: tokens),
-                              ],
                             ],
                           ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: AppSpacing.xl),
-                    if ((item.overview ?? '').trim().isNotEmpty) ...[
+                    if ((rep.overview ?? '').trim().isNotEmpty) ...[
+                      const SizedBox(height: AppSpacing.xl),
                       Text(
                         '简介',
                         style: Theme.of(context).textTheme.titleMedium
@@ -180,30 +167,29 @@ class MediaDetailView extends StatelessWidget {
                       ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 760),
                         child: Text(
-                          item.overview!,
+                          rep.overview!,
                           style: TextStyle(
                             color: tokens.textSecondary,
                             height: 1.6,
                           ),
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.xl),
                     ],
-                    Text(
-                      '详细信息',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
+                    const SizedBox(height: AppSpacing.xl),
+                    for (final season in seasons.keys.toList()..sort()) ...[
+                      Text(
+                        season == 0 ? '剧集' : '第 $season 季',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w700),
                       ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    ..._infoRows(context),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text('文件路径', style: TextStyle(color: tokens.textSecondary)),
-                    const SizedBox(height: AppSpacing.xs),
-                    SelectableText(
-                      item.path,
-                      style: const TextStyle(fontSize: 12),
-                    ),
+                      const SizedBox(height: AppSpacing.sm),
+                      for (final episode in seasons[season]!)
+                        _EpisodeRow(
+                          episode: episode,
+                          onPlay: () => onPlayEpisode(episode),
+                        ),
+                      const SizedBox(height: AppSpacing.lg),
+                    ],
                   ],
                 ),
               ),
@@ -228,65 +214,116 @@ class MediaDetailView extends StatelessWidget {
   }
 
   List<String> _chips() {
+    final rep = group.representative;
     return [
-      ?releaseYear(item),
-      if (item.voteAverage != null && item.voteAverage! > 0)
-        '★ ${item.voteAverage!.toStringAsFixed(1)}',
-      if (item.tmdbId != null) (isTv(item) ? '剧集' : '电影'),
-      ...?item.genres,
-      ?item.episodeLabel,
-      if (item.runtimeMinutes != null) '${item.runtimeMinutes} 分钟',
-      item.extension.toUpperCase(),
-      formatBytes(item.sizeBytes),
-    ];
-  }
-
-  List<Widget> _infoRows(BuildContext context) {
-    final rows = <(String, String)>[
-      if (item.tmdbId != null) ('TMDB', '#${item.tmdbId}'),
-      if (item.releaseDate != null) ('上映', item.releaseDate!),
-      if (item.directors != null && item.directors!.isNotEmpty)
-        ('导演', item.directors!.join(' / ')),
-      if (item.cast != null && item.cast!.isNotEmpty)
-        ('主演', item.cast!.join(' / ')),
-      if (item.seriesTitle != null) ('剧名', item.seriesTitle!),
-      ('添加时间', formatDate(item.addedAt)),
-      ('修改时间', formatDate(item.modifiedAt)),
-      if (item.playbackDurationMs > 0)
-        (
-          '播放进度',
-          '${(item.playbackProgress * 100).round()}%  '
-              '${formatDuration(Duration(milliseconds: item.playbackPositionMs))}'
-              ' / '
-              '${formatDuration(Duration(milliseconds: item.playbackDurationMs))}',
-        ),
-    ];
-
-    final tokens = AppTokens.of(context);
-    return [
-      for (final (label, value) in rows)
-        Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SizedBox(
-                width: 72,
-                child: Text(
-                  label,
-                  style: TextStyle(color: tokens.textSecondary),
-                ),
-              ),
-              Expanded(child: Text(value)),
-            ],
-          ),
-        ),
+      ?releaseYear(rep),
+      if (rep.voteAverage != null && rep.voteAverage! > 0)
+        '★ ${rep.voteAverage!.toStringAsFixed(1)}',
+      '剧集',
+      ...?rep.genres,
+      '共 ${group.episodes.length} 集',
+      if (group.watchedCount > 0) '已看 ${group.watchedCount} 集',
+      if (rep.runtimeMinutes != null) '单集 ${rep.runtimeMinutes} 分钟',
     ];
   }
 }
 
-class _DetailPoster extends StatelessWidget {
-  const _DetailPoster({required this.item});
+class _EpisodeRow extends StatelessWidget {
+  const _EpisodeRow({required this.episode, required this.onPlay});
+
+  final MediaItem episode;
+  final VoidCallback onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    final progress = episode.playbackProgress;
+    final watched = progress >= 0.95;
+    final inProgress = progress > 0.01 && !watched;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.xs),
+      child: Material(
+        color: tokens.surface.withValues(alpha: 0.7),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
+        child: InkWell(
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
+          onTap: onPlay,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.md,
+              vertical: AppSpacing.sm,
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  watched ? Icons.check_circle : Icons.play_circle_outline,
+                  size: 20,
+                  color: watched ? const Color(0xFF7CE38B) : tokens.accent,
+                ),
+                const SizedBox(width: AppSpacing.md),
+                SizedBox(
+                  width: 72,
+                  child: Text(
+                    episode.episodeLabel ?? '—',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+                Expanded(
+                  child: inProgress
+                      ? Row(
+                          children: [
+                            Expanded(
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.all(
+                                  Radius.circular(2),
+                                ),
+                                child: SizedBox(
+                                  height: 4,
+                                  child: LinearProgressIndicator(
+                                    value: progress,
+                                    backgroundColor: Colors.white.withValues(
+                                      alpha: 0.15,
+                                    ),
+                                    color: tokens.accent,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Text(
+                              '${(progress * 100).round()}%',
+                              style: TextStyle(
+                                color: tokens.textSecondary,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        )
+                      : Text(
+                          watched ? '已看完' : '未观看',
+                          style: TextStyle(
+                            color: tokens.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Text(
+                  formatBytes(episode.sizeBytes),
+                  style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _Poster extends StatelessWidget {
+  const _Poster({required this.item});
 
   final MediaItem item;
 
@@ -321,8 +358,8 @@ class _DetailPoster extends StatelessWidget {
   }
 }
 
-class _DetailBackdrop extends StatelessWidget {
-  const _DetailBackdrop({required this.item});
+class _Backdrop extends StatelessWidget {
+  const _Backdrop({required this.item});
 
   final MediaItem item;
 
@@ -388,48 +425,6 @@ class _MetadataChip extends StatelessWidget {
         border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
       ),
       child: Text(label, style: const TextStyle(fontSize: 12)),
-    );
-  }
-}
-
-class _ProgressSummary extends StatelessWidget {
-  const _ProgressSummary({required this.item, required this.tokens});
-
-  final MediaItem item;
-  final AppTokens tokens;
-
-  @override
-  Widget build(BuildContext context) {
-    final remaining = Duration(
-      milliseconds: (item.playbackDurationMs - item.playbackPositionMs)
-          .clamp(0, item.playbackDurationMs)
-          .toInt(),
-    );
-
-    return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: 420),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          ClipRRect(
-            borderRadius: const BorderRadius.all(Radius.circular(2)),
-            child: SizedBox(
-              height: 4,
-              child: LinearProgressIndicator(
-                value: item.playbackProgress,
-                backgroundColor: Colors.white.withValues(alpha: 0.2),
-                color: tokens.accent,
-              ),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          Text(
-            '已观看 ${(item.playbackProgress * 100).round()}% · 剩余 '
-            '${formatDuration(remaining)}',
-            style: TextStyle(color: tokens.textSecondary, fontSize: 12),
-          ),
-        ],
-      ),
     );
   }
 }

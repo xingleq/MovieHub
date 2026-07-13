@@ -4,22 +4,28 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
+import '../core/media/media_group.dart';
 import '../core/media/media_item.dart';
+import '../core/tmdb/tmdb_client.dart';
 import '../theme/app_tokens.dart';
 import '../ui/catalog/media_category.dart';
 import '../ui/detail/media_detail_view.dart';
+import '../ui/detail/series_detail_view.dart';
 import '../ui/format/formatters.dart';
 import '../ui/pages/catalog_page.dart';
 import '../ui/pages/home_page.dart';
 import '../ui/pages/settings_page.dart';
 import '../ui/player/player_page.dart';
+import '../ui/widgets/candy_background.dart';
+import '../ui/widgets/capsule_nav.dart';
+import '../ui/widgets/manual_match_dialog.dart';
 import 'app_section.dart';
 import 'library_controller.dart';
 import 'library_scope.dart';
 
-/// Persistent shell: navigation rail on the left, the active section (or the
-/// detail overlay) on the right. Owns the [LibraryController] lifecycle and
-/// the ephemeral navigation state.
+/// Persistent shell: candy background + capsule nav on the left, the active
+/// section (or a movie/series detail overlay) on the right. Owns the
+/// [LibraryController] lifecycle and the ephemeral navigation state.
 class AppShell extends StatefulWidget {
   const AppShell({super.key});
 
@@ -31,6 +37,7 @@ class _AppShellState extends State<AppShell> {
   late final LibraryController _controller;
   var _section = AppSection.home;
   String? _detailPath;
+  String? _detailSeriesKey;
 
   @override
   void initState() {
@@ -49,19 +56,45 @@ class _AppShellState extends State<AppShell> {
     setState(() {
       _section = section;
       _detailPath = null;
+      _detailSeriesKey = null;
     });
   }
 
-  void _openDetail(MediaItem item) {
+  void _openEntry(MediaGroup group) {
     setState(() {
-      _detailPath = item.path;
+      if (group.isSeries) {
+        _detailSeriesKey = group.key;
+        _detailPath = null;
+      } else {
+        _detailPath = group.episodes.first.path;
+        _detailSeriesKey = null;
+      }
+    });
+  }
+
+  /// Opens detail for a single item; episodes route to their series view.
+  void _openItem(MediaItem item) {
+    final seriesTitle = item.seriesTitle;
+    setState(() {
+      if (item.isEpisode && seriesTitle != null && seriesTitle.isNotEmpty) {
+        _detailSeriesKey = MediaGroup.seriesKey(seriesTitle);
+        _detailPath = null;
+      } else {
+        _detailPath = item.path;
+        _detailSeriesKey = null;
+      }
     });
   }
 
   void _closeDetail() {
     setState(() {
       _detailPath = null;
+      _detailSeriesKey = null;
     });
+  }
+
+  void _playEntry(MediaGroup group) {
+    unawaited(_openPlayer(group.playTarget));
   }
 
   Future<void> _openPlayer(MediaItem item) async {
@@ -93,10 +126,29 @@ class _AppShellState extends State<AppShell> {
           item: item,
           startAt: startAt,
           nextEpisodeOf: _controller.nextEpisodeOf,
+          subtitlePreference: _controller.subtitlePreference,
+          audioPreference: _controller.audioPreference,
           onProgressChanged: _controller.savePlaybackProgress,
         ),
       ),
     );
+  }
+
+  Future<void> _openManualMatch({
+    required String initialQuery,
+    required List<String> paths,
+  }) async {
+    final match = await showDialog<TmdbMovieMatch>(
+      context: context,
+      builder: (context) => ManualMatchDialog(
+        initialQuery: initialQuery,
+        onSearch: _controller.searchTmdbCandidates,
+      ),
+    );
+    if (match == null || !mounted) {
+      return;
+    }
+    await _controller.applyManualMatch(paths, match);
   }
 
   @override
@@ -112,11 +164,50 @@ class _AppShellState extends State<AppShell> {
             return Stack(
               fit: StackFit.expand,
               children: [
+                const CandyBackground(),
                 if (_controller.backgroundImagePath.isNotEmpty)
                   _WallpaperLayer(path: _controller.backgroundImagePath),
                 Row(
                   children: [
-                    _buildRail(tokens),
+                    CapsuleNav(
+                      selectedIndex: _section.index,
+                      onSelected: (index) {
+                        _goToSection(AppSection.values[index]);
+                      },
+                      items: [
+                        const CapsuleNavItem(
+                          icon: Icons.home_outlined,
+                          selectedIcon: Icons.home_rounded,
+                          label: '首页',
+                        ),
+                        const CapsuleNavItem(
+                          icon: Icons.auto_awesome_outlined,
+                          selectedIcon: Icons.auto_awesome,
+                          label: '动画',
+                        ),
+                        const CapsuleNavItem(
+                          icon: Icons.movie_outlined,
+                          selectedIcon: Icons.movie_rounded,
+                          label: '电影',
+                        ),
+                        const CapsuleNavItem(
+                          icon: Icons.tv_outlined,
+                          selectedIcon: Icons.tv_rounded,
+                          label: '电视剧',
+                        ),
+                        CapsuleNavItem(
+                          icon: Icons.favorite_outline,
+                          selectedIcon: Icons.favorite_rounded,
+                          label: '收藏',
+                          badgeCount: _controller.favoriteCount,
+                        ),
+                        const CapsuleNavItem(
+                          icon: Icons.settings_outlined,
+                          selectedIcon: Icons.settings_rounded,
+                          label: '设置',
+                        ),
+                      ],
+                    ),
                     VerticalDivider(
                       width: 1,
                       thickness: 1,
@@ -133,71 +224,10 @@ class _AppShellState extends State<AppShell> {
     );
   }
 
-  Widget _buildRail(AppTokens tokens) {
-    return NavigationRail(
-      backgroundColor: _controller.backgroundImagePath.isEmpty
-          ? null
-          : Colors.transparent,
-      selectedIndex: _section.index,
-      onDestinationSelected: (index) {
-        _goToSection(AppSection.values[index]);
-      },
-      labelType: NavigationRailLabelType.all,
-      leading: Padding(
-        padding: const EdgeInsets.only(
-          top: AppSpacing.md,
-          bottom: AppSpacing.lg,
-        ),
-        child: Icon(Icons.play_circle_fill, color: tokens.accent, size: 34),
-      ),
-      destinations: [
-        const NavigationRailDestination(
-          icon: Icon(Icons.home_outlined),
-          selectedIcon: Icon(Icons.home_rounded),
-          label: Text('首页'),
-        ),
-        const NavigationRailDestination(
-          icon: Icon(Icons.auto_awesome_outlined),
-          selectedIcon: Icon(Icons.auto_awesome),
-          label: Text('动画'),
-        ),
-        const NavigationRailDestination(
-          icon: Icon(Icons.movie_outlined),
-          selectedIcon: Icon(Icons.movie_rounded),
-          label: Text('电影'),
-        ),
-        const NavigationRailDestination(
-          icon: Icon(Icons.tv_outlined),
-          selectedIcon: Icon(Icons.tv_rounded),
-          label: Text('电视剧'),
-        ),
-        NavigationRailDestination(
-          icon: Badge.count(
-            count: _controller.favoriteCount,
-            isLabelVisible: _controller.favoriteCount > 0,
-            child: const Icon(Icons.favorite_outline),
-          ),
-          selectedIcon: const Icon(Icons.favorite_rounded),
-          label: const Text('收藏'),
-        ),
-        const NavigationRailDestination(
-          icon: Icon(Icons.settings_outlined),
-          selectedIcon: Icon(Icons.settings_rounded),
-          label: Text('设置'),
-        ),
-      ],
-    );
-  }
-
   Widget _buildContent() {
     if (_controller.loading) {
       return const Center(child: CircularProgressIndicator());
     }
-
-    final detailPath = _detailPath;
-    final detailItem = detailPath == null
-        ? null
-        : _controller.itemByPath(detailPath);
 
     final busy = _controller.scanning || _controller.metadataBatchRunning;
 
@@ -215,67 +245,194 @@ class _AppShellState extends State<AppShell> {
         Expanded(
           child: AnimatedSwitcher(
             duration: AppDurations.fade,
-            child: detailItem != null
-                ? KeyedSubtree(
-                    key: ValueKey('detail:${detailItem.path}'),
-                    child: MediaDetailView(
-                      item: detailItem,
-                      loadingMetadata:
-                          detailItem.path == _controller.metadataLoadingPath,
-                      onBack: _closeDetail,
-                      onToggleFavorite: _controller.toggleFavorite,
-                      onMatchTmdb: _controller.matchTmdb,
-                      onPlay: _openPlayer,
-                      onOpenLocation: _controller.openItemLocation,
-                    ),
-                  )
-                : KeyedSubtree(
-                    key: const ValueKey('sections'),
-                    child: IndexedStack(
-                      index: _section.index,
-                      children: [
-                        HomePage(
-                          onOpenDetail: _openDetail,
-                          onPlay: _openPlayer,
-                          onGoToSettings: () {
-                            _goToSection(AppSection.settings);
-                          },
-                        ),
-                        CatalogPage(
-                          title: '动画乐园',
-                          predicate: isAnimeSection,
-                          emptyMessage: '匹配 TMDB 后，动画片会自动住进这里哦。',
-                          onOpenDetail: _openDetail,
-                          onPlay: _openPlayer,
-                        ),
-                        CatalogPage(
-                          title: '电影',
-                          predicate: isMovieSection,
-                          emptyMessage: '扫描并匹配 TMDB 后，电影会出现在这里。',
-                          onOpenDetail: _openDetail,
-                          onPlay: _openPlayer,
-                        ),
-                        CatalogPage(
-                          title: '电视剧',
-                          predicate: isTvSection,
-                          emptyMessage: '识别到季集信息或匹配为剧集的影片会出现在这里。',
-                          onOpenDetail: _openDetail,
-                          onPlay: _openPlayer,
-                        ),
-                        CatalogPage(
-                          title: '我的收藏',
-                          predicate: (item) => item.favorite,
-                          emptyMessage: '在详情页点击收藏，影片会出现在这里。',
-                          onOpenDetail: _openDetail,
-                          onPlay: _openPlayer,
-                        ),
-                        const SettingsPage(),
-                      ],
-                    ),
-                  ),
+            switchInCurve: Curves.easeOutCubic,
+            transitionBuilder: (child, animation) {
+              return FadeTransition(
+                opacity: animation,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.02),
+                    end: Offset.zero,
+                  ).animate(animation),
+                  child: child,
+                ),
+              );
+            },
+            child: _buildDetailOrSections(),
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildDetailOrSections() {
+    final seriesKey = _detailSeriesKey;
+    if (seriesKey != null) {
+      MediaGroup? group;
+      for (final candidate in groupMediaItems(_controller.items)) {
+        if (candidate.key == seriesKey) {
+          group = candidate;
+          break;
+        }
+      }
+      if (group != null) {
+        final loading =
+            _controller.metadataLoadingPath != null &&
+            group.paths.contains(_controller.metadataLoadingPath);
+        return KeyedSubtree(
+          key: ValueKey('series:$seriesKey'),
+          child: SeriesDetailView(
+            group: group,
+            loadingMetadata: loading,
+            onBack: _closeDetail,
+            onPlayEpisode: (episode) => unawaited(_openPlayer(episode)),
+            onMatch: _controller.matchGroup,
+            onManualMatch: (group) {
+              unawaited(
+                _openManualMatch(
+                  initialQuery: group.representative.seriesTitle ?? group.title,
+                  paths: group.paths,
+                ),
+              );
+            },
+            onOpenLocation: _controller.openItemLocation,
+          ),
+        );
+      }
+    }
+
+    final detailPath = _detailPath;
+    final detailItem = detailPath == null
+        ? null
+        : _controller.itemByPath(detailPath);
+    if (detailItem != null) {
+      return KeyedSubtree(
+        key: ValueKey('detail:${detailItem.path}'),
+        child: MediaDetailView(
+          item: detailItem,
+          loadingMetadata: detailItem.path == _controller.metadataLoadingPath,
+          onBack: _closeDetail,
+          onToggleFavorite: _controller.toggleFavorite,
+          onMatchTmdb: _controller.matchTmdb,
+          onManualMatch: (item) {
+            unawaited(
+              _openManualMatch(initialQuery: item.title, paths: [item.path]),
+            );
+          },
+          onPlay: (item) => unawaited(_openPlayer(item)),
+          onOpenLocation: _controller.openItemLocation,
+        ),
+      );
+    }
+
+    return KeyedSubtree(
+      key: const ValueKey('sections'),
+      child: IndexedStack(
+        index: _section.index,
+        children: [
+          for (final (index, page) in _sectionPages().indexed)
+            _AnimatedSection(active: _section.index == index, child: page),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _sectionPages() {
+    return [
+      HomePage(
+        onOpenEntry: _openEntry,
+        onOpenItem: _openItem,
+        onPlayEntry: _playEntry,
+        onPlayItem: (item) => unawaited(_openPlayer(item)),
+        onGoToSettings: () {
+          _goToSection(AppSection.settings);
+        },
+      ),
+      CatalogPage(
+        title: '动画乐园',
+        groupFilter: isAnimeGroup,
+        emptyMessage: '匹配 TMDB 后，动画片会自动住进这里哦。',
+        onOpenEntry: _openEntry,
+        onPlayEntry: _playEntry,
+      ),
+      CatalogPage(
+        title: '电影',
+        groupFilter: isMovieGroup,
+        emptyMessage: '扫描并匹配 TMDB 后，电影会出现在这里。',
+        onOpenEntry: _openEntry,
+        onPlayEntry: _playEntry,
+      ),
+      CatalogPage(
+        title: '电视剧',
+        groupFilter: isTvGroup,
+        emptyMessage: '识别到季集信息或匹配为剧集的影片会出现在这里。',
+        onOpenEntry: _openEntry,
+        onPlayEntry: _playEntry,
+      ),
+      CatalogPage(
+        title: '我的收藏',
+        groupFilter: isFavoriteGroup,
+        emptyMessage: '在详情页点击收藏，影片会出现在这里。',
+        onOpenEntry: _openEntry,
+        onPlayEntry: _playEntry,
+      ),
+      const SettingsPage(),
+    ];
+  }
+}
+
+/// Replays a quick fade/slide when its section becomes the active one, so
+/// switching rail sections feels animated while IndexedStack keeps each
+/// page's state (search, sort, scroll) alive.
+class _AnimatedSection extends StatefulWidget {
+  const _AnimatedSection({required this.active, required this.child});
+
+  final bool active;
+  final Widget child;
+
+  @override
+  State<_AnimatedSection> createState() => _AnimatedSectionState();
+}
+
+class _AnimatedSectionState extends State<_AnimatedSection>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 320),
+      value: widget.active ? 1 : 0,
+    );
+  }
+
+  @override
+  void didUpdateWidget(_AnimatedSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.active && !oldWidget.active) {
+      _controller.forward(from: 0);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: CurvedAnimation(parent: _controller, curve: Curves.easeOut),
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, 0.015), end: Offset.zero)
+            .animate(
+              CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+            ),
+        child: widget.child,
+      ),
     );
   }
 }

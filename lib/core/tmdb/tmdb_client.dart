@@ -67,6 +67,7 @@ class TmdbClient {
     required String accessToken,
     required String query,
     required String proxy,
+    bool preferTv = false,
   }) async {
     final candidates = _queryCandidates(query);
     if (accessToken.trim().isEmpty || candidates.isEmpty) {
@@ -78,16 +79,56 @@ class TmdbClient {
       ..findProxy = (uri) => _findProxy(uri, proxy);
     try {
       for (final candidate in candidates) {
-        final match = await _searchMulti(
+        final results = await _fetchResults(
           client: client,
           accessToken: accessToken,
           query: candidate,
         );
-        if (match != null) {
-          return match;
+        if (results.isEmpty) {
+          continue;
         }
+        if (preferTv) {
+          for (final result in results) {
+            if (result.mediaType == 'tv') {
+              return result;
+            }
+          }
+        }
+        return results.first;
       }
       return null;
+    } on TimeoutException {
+      throw const TmdbNetworkException(
+        '连接 TMDB 超时。请检查网络，或在 TMDB 设置里填写本机代理，例如 127.0.0.1:7890。',
+      );
+    } on SocketException catch (error) {
+      throw TmdbNetworkException('无法连接 TMDB：${error.message}。请检查网络，或配置本机代理。');
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  /// Top candidates for a raw user query — used by the manual match dialog.
+  Future<List<TmdbMovieMatch>> searchCandidates({
+    required String accessToken,
+    required String query,
+    required String proxy,
+    int limit = 8,
+  }) async {
+    if (accessToken.trim().isEmpty || query.trim().isEmpty) {
+      return const [];
+    }
+
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 10)
+      ..findProxy = (uri) => _findProxy(uri, proxy);
+    try {
+      final results = await _fetchResults(
+        client: client,
+        accessToken: accessToken,
+        query: query.trim(),
+      );
+      return results.take(limit).toList(growable: false);
     } on TimeoutException {
       throw const TmdbNetworkException(
         '连接 TMDB 超时。请检查网络，或在 TMDB 设置里填写本机代理，例如 127.0.0.1:7890。',
@@ -206,7 +247,7 @@ class TmdbClient {
     }
   }
 
-  Future<TmdbMovieMatch?> _searchMulti({
+  Future<List<TmdbMovieMatch>> _fetchResults({
     required HttpClient client,
     required String accessToken,
     required String query,
@@ -243,13 +284,11 @@ class TmdbClient {
 
     final payload = jsonDecode(body) as Map<String, Object?>;
     final results = payload['results'] as List<Object?>? ?? [];
-    for (final result in results.whereType<Map<String, Object?>>()) {
-      final mediaType = result['media_type'] as String?;
-      if (mediaType == 'movie' || mediaType == 'tv') {
-        return TmdbMovieMatch.fromJson(result);
-      }
-    }
-    return null;
+    return [
+      for (final result in results.whereType<Map<String, Object?>>())
+        if (result['media_type'] == 'movie' || result['media_type'] == 'tv')
+          TmdbMovieMatch.fromJson(result),
+    ];
   }
 
   static List<String> _queryCandidates(String rawQuery) {

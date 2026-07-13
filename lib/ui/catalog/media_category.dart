@@ -1,3 +1,4 @@
+import '../../core/media/media_group.dart';
 import '../../core/media/media_item.dart';
 
 /// TMDB genre id for Animation (both movie and TV).
@@ -30,3 +31,18 @@ bool isAnimeSection(MediaItem item) => isAnime(item);
 bool isMovieSection(MediaItem item) => isMovie(item) && !isAnime(item);
 
 bool isTvSection(MediaItem item) => isTv(item) && !isAnime(item);
+
+/// Group-level section predicates for the poster walls.
+bool isAnimeGroup(MediaGroup group) => isAnime(group.representative);
+
+bool isMovieGroup(MediaGroup group) {
+  return !isAnimeGroup(group) &&
+      !group.isSeries &&
+      isMovie(group.representative);
+}
+
+bool isTvGroup(MediaGroup group) {
+  return !isAnimeGroup(group) && (group.isSeries || isTv(group.representative));
+}
+
+bool isFavoriteGroup(MediaGroup group) => group.anyFavorite;

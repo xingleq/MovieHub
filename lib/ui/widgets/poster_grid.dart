@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
 
-import '../../core/media/media_item.dart';
+import '../../core/media/media_group.dart';
 import '../../theme/app_tokens.dart';
 import '../catalog/catalog_options.dart';
+import 'entrance.dart';
 import 'poster_card.dart';
 
-/// Responsive poster wall. Column count adapts to the available width and the
-/// selected poster density.
+/// Responsive poster wall over grouped entries. Column count adapts to the
+/// available width and the selected poster density; cards enter staggered.
 class PosterGrid extends StatelessWidget {
   const PosterGrid({
     super.key,
-    required this.items,
+    required this.groups,
     required this.onOpenDetail,
     required this.onPlay,
     this.posterSize = PosterSize.large,
   });
 
-  final List<MediaItem> items;
-  final ValueChanged<MediaItem> onOpenDetail;
-  final ValueChanged<MediaItem> onPlay;
+  final List<MediaGroup> groups;
+  final ValueChanged<MediaGroup> onOpenDetail;
+  final ValueChanged<MediaGroup> onPlay;
   final PosterSize posterSize;
 
   /// Vertical space consumed by the two text lines under each poster.
@@ -39,7 +40,7 @@ class PosterGrid extends StatelessWidget {
 
         return GridView.builder(
           padding: const EdgeInsets.only(bottom: AppSpacing.xl),
-          itemCount: items.length,
+          itemCount: groups.length,
           gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
             crossAxisCount: columns,
             crossAxisSpacing: _spacing,
@@ -47,11 +48,14 @@ class PosterGrid extends StatelessWidget {
             childAspectRatio: cellWidth / cellHeight,
           ),
           itemBuilder: (context, index) {
-            final item = items[index];
-            return PosterCard(
-              item: item,
-              onOpenDetail: () => onOpenDetail(item),
-              onPlay: () => onPlay(item),
+            final group = groups[index];
+            return Entrance(
+              delayMs: (index % (columns * 2)) * 35,
+              child: PosterCard(
+                group: group,
+                onOpenDetail: () => onOpenDetail(group),
+                onPlay: () => onPlay(group),
+              ),
             );
           },
         );

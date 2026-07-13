@@ -6,6 +6,8 @@ class TmdbSettings {
     required this.accessToken,
     required this.proxy,
     this.backgroundImagePath = '',
+    this.subtitlePreference = 'zh-hans',
+    this.audioPreference = 'zh',
   });
 
   final String accessToken;
@@ -14,6 +16,12 @@ class TmdbSettings {
   /// Optional local wallpaper shown behind the whole app (personal use — the
   /// user picks their own image file).
   final String backgroundImagePath;
+
+  /// Preferred default subtitle: 'zh-hans' | 'zh-hant' | 'en' | 'off'.
+  final String subtitlePreference;
+
+  /// Preferred default audio: 'zh' | 'ja' | 'en'.
+  final String audioPreference;
 
   static const empty = TmdbSettings(accessToken: '', proxy: '');
 }
@@ -46,6 +54,8 @@ class TmdbSettingsStore {
       accessToken: json['tmdbAccessToken'] as String? ?? '',
       proxy: json['tmdbProxy'] as String? ?? '',
       backgroundImagePath: json['backgroundImagePath'] as String? ?? '',
+      subtitlePreference: json['subtitlePreference'] as String? ?? 'zh-hans',
+      audioPreference: json['audioPreference'] as String? ?? 'zh',
     );
   }
 
@@ -58,6 +68,8 @@ class TmdbSettingsStore {
       'tmdbAccessToken': settings.accessToken,
       'tmdbProxy': settings.proxy,
       'backgroundImagePath': settings.backgroundImagePath,
+      'subtitlePreference': settings.subtitlePreference,
+      'audioPreference': settings.audioPreference,
     };
     await _storageFile.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),

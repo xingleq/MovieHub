@@ -65,6 +65,14 @@ class AppTokens extends ThemeExtension<AppTokens> {
     cardBorder: Color(0x1AFFFFFF),
   );
 
+  /// Signature candy gradient for jelly buttons and the capsule nav
+  /// (粉 → 紫 → 蓝).
+  static const List<Color> candyGradient = [
+    Color(0xFFFF6B9D),
+    Color(0xFF9D6BFF),
+    Color(0xFF5BC8FF),
+  ];
+
   /// Reads the tokens from [context], falling back to [dark] so a missing
   /// extension can never null-crash.
   static AppTokens of(BuildContext context) {

@@ -1,3 +1,4 @@
+import '../../core/media/media_group.dart';
 import '../../core/media/media_item.dart';
 
 /// Sort orders for the poster-wall catalog pages (todo §16).
@@ -42,6 +43,30 @@ List<MediaItem> sortItems(List<MediaItem> items, SortKey key) {
     case SortKey.rating:
       sorted.sort((a, b) {
         return (b.voteAverage ?? -1).compareTo(a.voteAverage ?? -1);
+      });
+  }
+  return sorted;
+}
+
+/// Returns a new list of wall entries sorted by [key].
+List<MediaGroup> sortGroups(List<MediaGroup> groups, SortKey key) {
+  final sorted = [...groups];
+  switch (key) {
+    case SortKey.addedAt:
+      sorted.sort((a, b) => b.addedAt.compareTo(a.addedAt));
+    case SortKey.title:
+      sorted.sort((a, b) {
+        return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+      });
+    case SortKey.year:
+      sorted.sort((a, b) {
+        return _year(b.representative).compareTo(_year(a.representative));
+      });
+    case SortKey.rating:
+      sorted.sort((a, b) {
+        return (b.representative.voteAverage ?? -1).compareTo(
+          a.representative.voteAverage ?? -1,
+        );
       });
   }
   return sorted;

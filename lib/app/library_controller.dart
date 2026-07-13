@@ -4,7 +4,9 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 
 import '../core/images/image_cache_store.dart';
+import '../core/media/media_group.dart';
 import '../core/media/media_item.dart';
+import '../core/media/media_library_sqlite_store.dart';
 import '../core/media/media_library_store.dart';
 import '../core/media/media_scanner.dart';
 import '../core/tmdb/tmdb_client.dart';
@@ -14,16 +16,17 @@ import '../core/tmdb/tmdb_settings_store.dart';
 /// never holds a BuildContext; navigation stays in the widget layer.
 class LibraryController extends ChangeNotifier {
   LibraryController({
-    MediaLibraryStore? store,
+    MediaLibraryStorage? store,
     MediaScanner? scanner,
     TmdbClient? tmdbClient,
     TmdbSettingsStore? settingsStore,
-  }) : _store = store ?? MediaLibraryStore(),
+  }) : _store =
+           store ?? MediaLibrarySqliteStore(legacyStore: MediaLibraryStore()),
        _scanner = scanner ?? MediaScanner(),
        _tmdbClient = tmdbClient ?? TmdbClient(),
        _settingsStore = settingsStore ?? TmdbSettingsStore();
 
-  final MediaLibraryStore _store;
+  final MediaLibraryStorage _store;
   final MediaScanner _scanner;
   final TmdbClient _tmdbClient;
   final TmdbSettingsStore _settingsStore;
@@ -36,6 +39,8 @@ class LibraryController extends ChangeNotifier {
   var _tmdbAccessToken = '';
   var _tmdbProxy = '';
   var _backgroundImagePath = '';
+  var _subtitlePreference = 'zh-hans';
+  var _audioPreference = 'zh';
   String? _metadataLoadingPath;
   var _metadataBatchRunning = false;
   var _metadataBatchDone = 0;
@@ -51,6 +56,8 @@ class LibraryController extends ChangeNotifier {
   String get tmdbAccessToken => _tmdbAccessToken;
   String get tmdbProxy => _tmdbProxy;
   String get backgroundImagePath => _backgroundImagePath;
+  String get subtitlePreference => _subtitlePreference;
+  String get audioPreference => _audioPreference;
   bool get hasTmdbToken => _tmdbAccessToken.isNotEmpty;
   String? get metadataLoadingPath => _metadataLoadingPath;
   bool get metadataBatchRunning => _metadataBatchRunning;
@@ -118,6 +125,10 @@ class LibraryController extends ChangeNotifier {
   @override
   void dispose() {
     _disposed = true;
+    final store = _store;
+    if (store is MediaLibrarySqliteStore) {
+      store.dispose();
+    }
     super.dispose();
   }
 
@@ -138,6 +149,8 @@ class LibraryController extends ChangeNotifier {
       _tmdbAccessToken = settings.accessToken;
       _tmdbProxy = settings.proxy;
       _backgroundImagePath = settings.backgroundImagePath;
+      _subtitlePreference = settings.subtitlePreference;
+      _audioPreference = settings.audioPreference;
       ImageCacheStore.instance.proxy = settings.proxy;
       _loading = false;
       notifyListeners();
@@ -148,24 +161,38 @@ class LibraryController extends ChangeNotifier {
     }
   }
 
+  TmdbSettings get _currentSettings {
+    return TmdbSettings(
+      accessToken: _tmdbAccessToken,
+      proxy: _tmdbProxy,
+      backgroundImagePath: _backgroundImagePath,
+      subtitlePreference: _subtitlePreference,
+      audioPreference: _audioPreference,
+    );
+  }
+
   Future<void> saveTmdbSettings({
     required String accessToken,
     required String proxy,
   }) async {
-    final token = accessToken.trim();
-    final normalizedProxy = proxy.trim();
-    await _settingsStore.save(
-      TmdbSettings(
-        accessToken: token,
-        proxy: normalizedProxy,
-        backgroundImagePath: _backgroundImagePath,
-      ),
-    );
+    _tmdbAccessToken = accessToken.trim();
+    _tmdbProxy = proxy.trim();
+    await _settingsStore.save(_currentSettings);
 
-    _tmdbAccessToken = token;
-    _tmdbProxy = normalizedProxy;
-    ImageCacheStore.instance.proxy = normalizedProxy;
+    ImageCacheStore.instance.proxy = _tmdbProxy;
     _error = null;
+    notifyListeners();
+  }
+
+  /// Persists the default subtitle/audio preferences used by the player
+  /// (todo §12/§13 默认中文，可配置).
+  Future<void> savePlaybackPreferences({
+    String? subtitlePreference,
+    String? audioPreference,
+  }) async {
+    _subtitlePreference = subtitlePreference ?? _subtitlePreference;
+    _audioPreference = audioPreference ?? _audioPreference;
+    await _settingsStore.save(_currentSettings);
     notifyListeners();
   }
 
@@ -188,14 +215,8 @@ class LibraryController extends ChangeNotifier {
   }
 
   Future<void> _saveBackgroundImage(String path) async {
-    await _settingsStore.save(
-      TmdbSettings(
-        accessToken: _tmdbAccessToken,
-        proxy: _tmdbProxy,
-        backgroundImagePath: path,
-      ),
-    );
     _backgroundImagePath = path;
+    await _settingsStore.save(_currentSettings);
     notifyListeners();
   }
 
@@ -315,7 +336,12 @@ class LibraryController extends ChangeNotifier {
         proxy: _tmdbProxy,
       );
 
-      final updatedItems = _applyMatch(_items, item.path, match, details);
+      final updatedItems = _applyMatchToPaths(
+        _items,
+        {item.path},
+        match,
+        details,
+      );
       await _store.save(
         MediaLibrarySnapshot(roots: _roots, items: updatedItems),
       );
@@ -330,6 +356,124 @@ class LibraryController extends ChangeNotifier {
     }
   }
 
+  /// Matches one wall entry: a whole series gets a single TMDB lookup whose
+  /// result is applied to every episode; a movie matches itself.
+  Future<void> matchGroup(MediaGroup group) async {
+    if (_tmdbAccessToken.isEmpty) {
+      _error = '请先在设置中填写 TMDB 令牌。';
+      notifyListeners();
+      return;
+    }
+
+    final rep = group.representative;
+    _metadataLoadingPath = rep.path;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final query = group.isSeries
+          ? (rep.seriesTitle ?? group.title)
+          : rep.title;
+      final match = await _tmdbClient.searchMovie(
+        accessToken: _tmdbAccessToken,
+        query: query,
+        proxy: _tmdbProxy,
+        preferTv: group.isSeries,
+      );
+
+      if (match == null) {
+        _metadataLoadingPath = null;
+        _error = 'TMDB 未找到匹配结果：$query';
+        notifyListeners();
+        return;
+      }
+
+      final details = await _tmdbClient.fetchDetails(
+        accessToken: _tmdbAccessToken,
+        id: match.id,
+        mediaType: match.mediaType,
+        proxy: _tmdbProxy,
+      );
+
+      final updatedItems = _applyMatchToPaths(
+        _items,
+        group.paths.toSet(),
+        match,
+        details,
+      );
+      await _store.save(
+        MediaLibrarySnapshot(roots: _roots, items: updatedItems),
+      );
+
+      _items = updatedItems;
+      _metadataLoadingPath = null;
+      notifyListeners();
+    } catch (error) {
+      _metadataLoadingPath = null;
+      _error = 'TMDB 匹配失败：$error';
+      notifyListeners();
+    }
+  }
+
+  /// Manual match chosen from the search dialog — applied to all [paths]
+  /// (one movie, or every episode of a series).
+  Future<void> applyManualMatch(
+    List<String> paths,
+    TmdbMovieMatch match,
+  ) async {
+    if (paths.isEmpty) {
+      return;
+    }
+    _metadataLoadingPath = paths.first;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final details = await _tmdbClient.fetchDetails(
+        accessToken: _tmdbAccessToken,
+        id: match.id,
+        mediaType: match.mediaType,
+        proxy: _tmdbProxy,
+      );
+
+      final updatedItems = _applyMatchToPaths(
+        _items,
+        paths.toSet(),
+        match,
+        details,
+      );
+      await _store.save(
+        MediaLibrarySnapshot(roots: _roots, items: updatedItems),
+      );
+      _items = updatedItems;
+    } catch (error) {
+      _error = 'TMDB 匹配失败：$error';
+    }
+    _metadataLoadingPath = null;
+    notifyListeners();
+  }
+
+  /// Candidate list for the manual match dialog. Network errors surface as
+  /// the shared error banner and return an empty list.
+  Future<List<TmdbMovieMatch>> searchTmdbCandidates(String query) async {
+    if (_tmdbAccessToken.isEmpty) {
+      _error = '请先在设置中填写 TMDB 令牌。';
+      notifyListeners();
+      return const [];
+    }
+    try {
+      return await _tmdbClient.searchCandidates(
+        accessToken: _tmdbAccessToken,
+        query: query,
+        proxy: _tmdbProxy,
+      );
+    } catch (error) {
+      _error = 'TMDB 搜索失败：$error';
+      notifyListeners();
+      return const [];
+    }
+  }
+
   Future<void> matchAllTmdb() async {
     if (_metadataBatchRunning) {
       return;
@@ -341,8 +485,10 @@ class LibraryController extends ChangeNotifier {
       return;
     }
 
-    final pendingItems = _items.where((item) => item.tmdbId == null).toList();
-    if (pendingItems.isEmpty) {
+    final pendingGroups = groupMediaItems(_items)
+        .where((group) => group.episodes.any((item) => item.tmdbId == null))
+        .toList();
+    if (pendingGroups.isEmpty) {
       _error = '没有需要匹配的影片。';
       notifyListeners();
       return;
@@ -350,7 +496,7 @@ class LibraryController extends ChangeNotifier {
 
     _metadataBatchRunning = true;
     _metadataBatchDone = 0;
-    _metadataBatchTotal = pendingItems.length;
+    _metadataBatchTotal = pendingGroups.length;
     _metadataLoadingPath = null;
     _error = null;
     notifyListeners();
@@ -358,19 +504,21 @@ class LibraryController extends ChangeNotifier {
     var updatedItems = List<MediaItem>.of(_items);
     var failedCount = 0;
 
-    for (final item in pendingItems) {
+    for (final group in pendingGroups) {
       if (_disposed) {
         return;
       }
 
-      _metadataLoadingPath = item.path;
+      final rep = group.representative;
+      _metadataLoadingPath = rep.path;
       notifyListeners();
 
       try {
         final match = await _tmdbClient.searchMovie(
           accessToken: _tmdbAccessToken,
-          query: item.title,
+          query: group.isSeries ? (rep.seriesTitle ?? group.title) : rep.title,
           proxy: _tmdbProxy,
+          preferTv: group.isSeries,
         );
 
         if (match == null) {
@@ -382,7 +530,12 @@ class LibraryController extends ChangeNotifier {
             mediaType: match.mediaType,
             proxy: _tmdbProxy,
           );
-          updatedItems = _applyMatch(updatedItems, item.path, match, details);
+          updatedItems = _applyMatchToPaths(
+            updatedItems,
+            group.paths.toSet(),
+            match,
+            details,
+          );
           await _store.save(
             MediaLibrarySnapshot(roots: _roots, items: updatedItems),
           );
@@ -431,14 +584,14 @@ class LibraryController extends ChangeNotifier {
     notifyListeners();
   }
 
-  static List<MediaItem> _applyMatch(
+  static List<MediaItem> _applyMatchToPaths(
     List<MediaItem> items,
-    String path,
+    Set<String> paths,
     TmdbMovieMatch match,
     TmdbDetails? details,
   ) {
     return items.map((current) {
-      if (current.path != path) {
+      if (!paths.contains(current.path)) {
         return current;
       }
       return current.copyWith(

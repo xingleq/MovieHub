@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../app/library_scope.dart';
-import '../../core/media/media_item.dart';
+import '../../core/media/media_group.dart';
 import '../../theme/app_tokens.dart';
 import '../catalog/catalog_options.dart';
 import '../widgets/catalog_toolbar.dart';
@@ -9,23 +9,24 @@ import '../widgets/empty_state.dart';
 import '../widgets/poster_grid.dart';
 import '../widgets/section_header.dart';
 
-/// Shared poster-wall page for 电影 / 电视剧 / 收藏. Each instance owns its own
-/// search query, sort order and poster density.
+/// Shared poster-wall page for 动画 / 电影 / 电视剧 / 收藏, rendering grouped
+/// entries (a series = one card). Each instance owns its own search query,
+/// sort order and poster density.
 class CatalogPage extends StatefulWidget {
   const CatalogPage({
     super.key,
     required this.title,
-    required this.predicate,
+    required this.groupFilter,
     required this.emptyMessage,
-    required this.onOpenDetail,
-    required this.onPlay,
+    required this.onOpenEntry,
+    required this.onPlayEntry,
   });
 
   final String title;
-  final bool Function(MediaItem item) predicate;
+  final bool Function(MediaGroup group) groupFilter;
   final String emptyMessage;
-  final ValueChanged<MediaItem> onOpenDetail;
-  final ValueChanged<MediaItem> onPlay;
+  final ValueChanged<MediaGroup> onOpenEntry;
+  final ValueChanged<MediaGroup> onPlayEntry;
 
   @override
   State<CatalogPage> createState() => _CatalogPageState();
@@ -50,14 +51,19 @@ class _CatalogPageState extends State<CatalogPage> {
     super.dispose();
   }
 
-  bool _matchesQuery(MediaItem item, String query) {
+  bool _matchesQuery(MediaGroup group, String query) {
     if (query.isEmpty) {
       return true;
     }
-    return item.title.toLowerCase().contains(query) ||
-        (item.tmdbTitle?.toLowerCase().contains(query) ?? false) ||
-        item.path.toLowerCase().contains(query) ||
-        item.extension.toLowerCase().contains(query);
+    if (group.title.toLowerCase().contains(query)) {
+      return true;
+    }
+    return group.episodes.any((item) {
+      return item.title.toLowerCase().contains(query) ||
+          (item.tmdbTitle?.toLowerCase().contains(query) ?? false) ||
+          item.path.toLowerCase().contains(query) ||
+          item.extension.toLowerCase().contains(query);
+    });
   }
 
   @override
@@ -66,11 +72,11 @@ class _CatalogPageState extends State<CatalogPage> {
     final tokens = AppTokens.of(context);
     final query = _searchController.text.trim().toLowerCase();
 
-    final sectionItems = controller.items
-        .where(widget.predicate)
-        .toList(growable: false);
-    final visibleItems = sortItems(
-      sectionItems.where((item) => _matchesQuery(item, query)).toList(),
+    final sectionGroups = groupMediaItems(
+      controller.items,
+    ).where(widget.groupFilter).toList(growable: false);
+    final visibleGroups = sortGroups(
+      sectionGroups.where((group) => _matchesQuery(group, query)).toList(),
       _sortKey,
     );
 
@@ -87,7 +93,7 @@ class _CatalogPageState extends State<CatalogPage> {
           SectionHeader(
             title: widget.title,
             trailing: Text(
-              '${visibleItems.length} / ${sectionItems.length}',
+              '${visibleGroups.length} / ${sectionGroups.length}',
               style: TextStyle(color: tokens.textSecondary),
             ),
           ),
@@ -102,17 +108,17 @@ class _CatalogPageState extends State<CatalogPage> {
           ),
           const SizedBox(height: AppSpacing.lg),
           Expanded(
-            child: visibleItems.isEmpty
+            child: visibleGroups.isEmpty
                 ? EmptyState(
                     icon: Icons.movie_filter_outlined,
                     title: '没有影片',
                     message: query.isEmpty ? widget.emptyMessage : '换个关键词试试。',
                   )
                 : PosterGrid(
-                    items: visibleItems,
+                    groups: visibleGroups,
                     posterSize: _posterSize,
-                    onOpenDetail: widget.onOpenDetail,
-                    onPlay: widget.onPlay,
+                    onOpenDetail: widget.onOpenEntry,
+                    onPlay: widget.onPlayEntry,
                   ),
           ),
         ],

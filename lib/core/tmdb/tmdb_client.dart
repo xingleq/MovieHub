@@ -69,7 +69,7 @@ class TmdbClient {
     required String proxy,
     bool preferTv = false,
   }) async {
-    final candidates = _queryCandidates(query);
+    final candidates = queryCandidates(query);
     if (accessToken.trim().isEmpty || candidates.isEmpty) {
       return null;
     }
@@ -291,7 +291,10 @@ class TmdbClient {
     ];
   }
 
-  static List<String> _queryCandidates(String rawQuery) {
+  /// Search queries derived from a raw filename title, best first: the
+  /// longest English run, then the cleaned title, then the original. Public
+  /// because the cleanup rules are regex-heavy and unit-tested.
+  static List<String> queryCandidates(String rawQuery) {
     final clean = rawQuery
         .replaceAll(RegExp(r'[\[\]【】()（）{}]'), ' ')
         .replaceAll(RegExp(r'\bS\d{1,2}E\d{1,3}\b', caseSensitive: false), ' ')

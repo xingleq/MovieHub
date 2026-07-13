@@ -3,6 +3,7 @@ import 'package:media_kit/media_kit.dart';
 
 import 'app/app_shell.dart';
 import 'app/library_controller.dart';
+import 'app/settings_controller.dart';
 import 'theme/app_theme.dart';
 
 void main() {
@@ -19,32 +20,37 @@ class MovieHubApp extends StatefulWidget {
 }
 
 class _MovieHubAppState extends State<MovieHubApp> {
-  late final LibraryController _controller;
+  late final SettingsController _settings;
+  late final LibraryController _library;
 
   @override
   void initState() {
     super.initState();
-    _controller = LibraryController();
+    _settings = SettingsController();
+    _library = LibraryController(settings: _settings);
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _library.dispose();
+    _settings.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Only settings drive MaterialApp (theme mode); library churn — scans,
+    // matches, progress saves — must not rebuild from the root.
     return ListenableBuilder(
-      listenable: _controller,
+      listenable: _settings,
       builder: (context, _) {
         return MaterialApp(
           title: 'MovieHub',
           debugShowCheckedModeBanner: false,
           theme: buildLightTheme(),
           darkTheme: buildDarkTheme(),
-          themeMode: _themeModeOf(_controller.themeMode),
-          home: AppShell(controller: _controller),
+          themeMode: _themeModeOf(_settings.themeMode),
+          home: AppShell(library: _library, settings: _settings),
         );
       },
     );

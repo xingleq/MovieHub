@@ -1,8 +1,13 @@
 import 'dart:convert';
 import 'dart:io';
 
-class TmdbSettings {
-  const TmdbSettings({
+import '../system/app_paths.dart';
+
+/// App-wide user settings: TMDB connection plus playback, appearance and
+/// system-integration preferences. JSON keys keep their historical names
+/// (`tmdbAccessToken`, …) so existing settings files stay readable.
+class AppSettings {
+  const AppSettings({
     required this.accessToken,
     required this.proxy,
     this.backgroundImagePath = '',
@@ -31,12 +36,12 @@ class TmdbSettings {
   /// Whether the app should be launched on Windows sign-in.
   final bool launchAtStartup;
 
-  static const empty = TmdbSettings(accessToken: '', proxy: '');
+  static const empty = AppSettings(accessToken: '', proxy: '');
 }
 
-class TmdbSettingsStore {
-  TmdbSettingsStore({Directory? storageDirectory})
-    : _storageDirectory = storageDirectory ?? _defaultStorageDirectory();
+class AppSettingsStore {
+  AppSettingsStore({Directory? storageDirectory})
+    : _storageDirectory = storageDirectory ?? defaultAppDataDirectory();
 
   final Directory _storageDirectory;
 
@@ -46,19 +51,19 @@ class TmdbSettingsStore {
     );
   }
 
-  Future<TmdbSettings> load() async {
+  Future<AppSettings> load() async {
     final file = _storageFile;
     if (!await file.exists()) {
-      return TmdbSettings.empty;
+      return AppSettings.empty;
     }
 
     final content = await file.readAsString();
     if (content.trim().isEmpty) {
-      return TmdbSettings.empty;
+      return AppSettings.empty;
     }
 
     final json = jsonDecode(content) as Map<String, Object?>;
-    return TmdbSettings(
+    return AppSettings(
       accessToken: json['tmdbAccessToken'] as String? ?? '',
       proxy: json['tmdbProxy'] as String? ?? '',
       backgroundImagePath: json['backgroundImagePath'] as String? ?? '',
@@ -69,7 +74,7 @@ class TmdbSettingsStore {
     );
   }
 
-  Future<void> save(TmdbSettings settings) async {
+  Future<void> save(AppSettings settings) async {
     if (!await _storageDirectory.exists()) {
       await _storageDirectory.create(recursive: true);
     }
@@ -86,15 +91,5 @@ class TmdbSettingsStore {
     await _storageFile.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),
     );
-  }
-
-  static Directory _defaultStorageDirectory() {
-    final appData = Platform.environment['APPDATA'];
-    if (appData != null && appData.trim().isNotEmpty) {
-      return Directory('$appData${Platform.pathSeparator}MovieHub');
-    }
-
-    final home = Platform.environment['USERPROFILE'] ?? Directory.current.path;
-    return Directory('$home${Platform.pathSeparator}.moviehub');
   }
 }

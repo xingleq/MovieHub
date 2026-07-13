@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
+import '../system/app_paths.dart';
 import 'media_item.dart';
 
 class MediaLibrarySnapshot {
@@ -12,16 +13,30 @@ class MediaLibrarySnapshot {
   static const empty = MediaLibrarySnapshot(roots: [], items: []);
 }
 
-/// Persistence contract for the media library, implemented by the legacy
-/// JSON store and the SQLite store.
+/// Persistence contract for the media library.
+///
+/// [save] replaces the whole library (scan results, migration). Everyday
+/// single-item mutations — favorite, playback progress, metadata match —
+/// must go through [upsertItems] so implementations can write just the
+/// touched rows instead of rewriting the library.
 abstract interface class MediaLibraryStorage {
   Future<MediaLibrarySnapshot> load();
+
+  /// Full replace: persists exactly [snapshot], removing absent items.
   Future<void> save(MediaLibrarySnapshot snapshot);
+
+  /// Writes only [items] (keyed by path), leaving every other row untouched.
+  Future<void> upsertItems(Iterable<MediaItem> items);
+
+  /// Replaces the media root list without touching items.
+  Future<void> saveRoots(List<String> roots);
 }
 
-class MediaLibraryStore implements MediaLibraryStorage {
+/// Read-only view of the pre-SQLite JSON library file. Kept solely as the
+/// migration source for [MediaLibrarySqliteStore]; new writes never land here.
+class MediaLibraryStore {
   MediaLibraryStore({Directory? storageDirectory})
-    : _storageDirectory = storageDirectory ?? _defaultStorageDirectory();
+    : _storageDirectory = storageDirectory ?? defaultAppDataDirectory();
 
   final Directory _storageDirectory;
 
@@ -32,11 +47,8 @@ class MediaLibraryStore implements MediaLibraryStorage {
     );
   }
 
-  File get _storageFile => storageFile;
-
-  @override
   Future<MediaLibrarySnapshot> load() async {
-    final file = _storageFile;
+    final file = storageFile;
     if (!await file.exists()) {
       return MediaLibrarySnapshot.empty;
     }
@@ -56,31 +68,5 @@ class MediaLibraryStore implements MediaLibraryStorage {
         .toList(growable: false);
 
     return MediaLibrarySnapshot(roots: roots, items: items);
-  }
-
-  @override
-  Future<void> save(MediaLibrarySnapshot snapshot) async {
-    if (!await _storageDirectory.exists()) {
-      await _storageDirectory.create(recursive: true);
-    }
-
-    final payload = {
-      'roots': snapshot.roots,
-      'items': snapshot.items.map((item) => item.toJson()).toList(),
-    };
-
-    await _storageFile.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(payload),
-    );
-  }
-
-  static Directory _defaultStorageDirectory() {
-    final appData = Platform.environment['APPDATA'];
-    if (appData != null && appData.trim().isNotEmpty) {
-      return Directory('$appData${Platform.pathSeparator}MovieHub');
-    }
-
-    final home = Platform.environment['USERPROFILE'] ?? Directory.current.path;
-    return Directory('$home${Platform.pathSeparator}.moviehub');
   }
 }

@@ -67,34 +67,57 @@ class MediaGroup {
   List<String> get paths =>
       episodes.map((episode) => episode.path).toList(growable: false);
 
-  /// Stable group key for a series title, shared with detail navigation.
-  static String seriesKey(String seriesTitle) {
-    return 'series:${seriesTitle.toLowerCase()}';
+  /// Group key for an episode: episodes matched to the same TMDB series
+  /// merge even when their parsed filenames differ; unmatched ones fall
+  /// back to the parsed series title.
+  static String keyOf(MediaItem item) {
+    final tmdbId = item.tmdbId;
+    if (item.tmdbMediaType == 'tv' && tmdbId != null) {
+      return 'series:tmdb:$tmdbId';
+    }
+    return titleKeyOf(item);
+  }
+
+  /// Title-based key, ignoring any TMDB match. Used to re-resolve a stale
+  /// navigation key after a match changed a group's [keyOf].
+  static String titleKeyOf(MediaItem item) {
+    return 'series:${(item.seriesTitle ?? item.title).toLowerCase()}';
   }
 }
 
-/// Groups episodes of the same series (by parsed series title) into one
-/// [MediaGroup]; everything else becomes a single-item group.
+/// Groups episodes of the same series into one [MediaGroup]; everything
+/// else becomes a single-item group.
+///
+/// Two passes: episodes bucket by parsed title first, then buckets whose
+/// members carry a TMDB series id re-key to `series:tmdb:<id>`. That merges
+/// differently-named folders of the same series and keeps not-yet-matched
+/// episodes together with their matched siblings.
 List<MediaGroup> groupMediaItems(Iterable<MediaItem> items) {
-  final seriesBuckets = <String, List<MediaItem>>{};
+  final titleBuckets = <String, List<MediaItem>>{};
   final singles = <MediaGroup>[];
 
   for (final item in items) {
     final seriesTitle = item.seriesTitle;
     if (item.isEpisode && seriesTitle != null && seriesTitle.isNotEmpty) {
-      seriesBuckets.putIfAbsent(seriesTitle.toLowerCase(), () => []).add(item);
+      titleBuckets.putIfAbsent(MediaGroup.titleKeyOf(item), () => []).add(item);
     } else {
       singles.add(MediaGroup(key: item.path, episodes: [item]));
     }
   }
 
+  final merged = <String, List<MediaItem>>{};
+  for (final bucket in titleBuckets.values) {
+    final keyed = bucket.firstWhere(
+      (item) => item.tmdbMediaType == 'tv' && item.tmdbId != null,
+      orElse: () => bucket.first,
+    );
+    merged.putIfAbsent(MediaGroup.keyOf(keyed), () => []).addAll(bucket);
+  }
+
   return [
     ...singles,
-    for (final entry in seriesBuckets.entries)
-      MediaGroup(
-        key: 'series:${entry.key}',
-        episodes: entry.value..sort(compareEpisodes),
-      ),
+    for (final entry in merged.entries)
+      MediaGroup(key: entry.key, episodes: entry.value..sort(compareEpisodes)),
   ];
 }
 

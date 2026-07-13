@@ -1,20 +1,27 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:sqlite3/sqlite3.dart';
 
+import '../system/app_paths.dart';
 import 'media_item.dart';
 import 'media_library_store.dart';
 
-/// SQLite-backed media library (todo §10): per-row storage in
-/// `%APPDATA%/MovieHub/moviehub.db` with transactional writes — much cheaper
-/// than rewriting one big pretty-printed JSON file as the library grows.
+/// SQLite-backed media library in `%APPDATA%/MovieHub/moviehub.db`.
+///
+/// Write granularity matches [MediaLibraryStorage]: [upsertItems] touches
+/// only the given rows on the UI isolate (sub-millisecond for the everyday
+/// one-item case), while the full-replace [save] — thousands of rows after
+/// a scan — runs on a background isolate over its own connection so the UI
+/// never blocks. WAL journaling plus a busy timeout make the two
+/// connections safe together.
 ///
 /// Each item row stores the item's JSON document, so the schema never needs
 /// migrations when [MediaItem] gains fields.
 class MediaLibrarySqliteStore implements MediaLibraryStorage {
   MediaLibrarySqliteStore({Directory? storageDirectory, this.legacyStore})
-    : _storageDirectory = storageDirectory ?? _defaultStorageDirectory();
+    : _storageDirectory = storageDirectory ?? defaultAppDataDirectory();
 
   final Directory _storageDirectory;
 
@@ -24,18 +31,20 @@ class MediaLibrarySqliteStore implements MediaLibraryStorage {
 
   Database? _database;
 
-  Database get _db {
-    final existing = _database;
-    if (existing != null) {
-      return existing;
-    }
-    if (!_storageDirectory.existsSync()) {
-      _storageDirectory.createSync(recursive: true);
+  Database get _db => _database ??= _open(_storageDirectory.path);
+
+  /// Opens (and if needed creates) the database under [directoryPath].
+  /// Static so the background-isolate writer can open its own connection.
+  static Database _open(String directoryPath) {
+    final directory = Directory(directoryPath);
+    if (!directory.existsSync()) {
+      directory.createSync(recursive: true);
     }
     final database = sqlite3.open(
-      '${_storageDirectory.path}${Platform.pathSeparator}moviehub.db',
+      '$directoryPath${Platform.pathSeparator}moviehub.db',
     );
     database.execute('PRAGMA journal_mode = WAL;');
+    database.execute('PRAGMA busy_timeout = 5000;');
     database.execute('''
       CREATE TABLE IF NOT EXISTS roots (
         path TEXT PRIMARY KEY
@@ -47,7 +56,7 @@ class MediaLibrarySqliteStore implements MediaLibraryStorage {
         json TEXT NOT NULL
       );
     ''');
-    return _database = database;
+    return database;
   }
 
   @override
@@ -70,35 +79,83 @@ class MediaLibrarySqliteStore implements MediaLibraryStorage {
   }
 
   @override
+  Future<void> upsertItems(Iterable<MediaItem> items) async {
+    final rows = [
+      for (final item in items) (item.path, jsonEncode(item.toJson())),
+    ];
+    if (rows.isEmpty) {
+      return;
+    }
+    _inTransaction(_db, () {
+      _insertItemRows(_db, rows);
+    });
+  }
+
+  @override
+  Future<void> saveRoots(List<String> roots) async {
+    _inTransaction(_db, () {
+      _db.execute('DELETE FROM roots');
+      _insertRootRows(_db, roots);
+    });
+  }
+
+  @override
   Future<void> save(MediaLibrarySnapshot snapshot) async {
-    final database = _db;
+    final directoryPath = _storageDirectory.path;
+    final roots = List<String>.of(snapshot.roots);
+    final items = List<MediaItem>.of(snapshot.items);
+
+    await Isolate.run(() {
+      final database = _open(directoryPath);
+      try {
+        _inTransaction(database, () {
+          database.execute('DELETE FROM roots');
+          database.execute('DELETE FROM items');
+          _insertRootRows(database, roots);
+          _insertItemRows(database, [
+            for (final item in items) (item.path, jsonEncode(item.toJson())),
+          ]);
+        });
+      } finally {
+        database.dispose();
+      }
+    });
+  }
+
+  static void _inTransaction(Database database, void Function() body) {
     database.execute('BEGIN');
     try {
-      database.execute('DELETE FROM roots');
-      database.execute('DELETE FROM items');
-
-      final insertRoot = database.prepare(
-        'INSERT OR REPLACE INTO roots (path) VALUES (?)',
-      );
-      final insertItem = database.prepare(
-        'INSERT OR REPLACE INTO items (path, json) VALUES (?, ?)',
-      );
-      try {
-        for (final root in snapshot.roots) {
-          insertRoot.execute([root]);
-        }
-        for (final item in snapshot.items) {
-          insertItem.execute([item.path, jsonEncode(item.toJson())]);
-        }
-      } finally {
-        insertRoot.dispose();
-        insertItem.dispose();
-      }
-
+      body();
       database.execute('COMMIT');
     } catch (_) {
       database.execute('ROLLBACK');
       rethrow;
+    }
+  }
+
+  static void _insertRootRows(Database database, List<String> roots) {
+    final statement = database.prepare(
+      'INSERT OR REPLACE INTO roots (path) VALUES (?)',
+    );
+    try {
+      for (final root in roots) {
+        statement.execute([root]);
+      }
+    } finally {
+      statement.dispose();
+    }
+  }
+
+  static void _insertItemRows(Database database, List<(String, String)> rows) {
+    final statement = database.prepare(
+      'INSERT OR REPLACE INTO items (path, json) VALUES (?, ?)',
+    );
+    try {
+      for (final (path, json) in rows) {
+        statement.execute([path, json]);
+      }
+    } finally {
+      statement.dispose();
     }
   }
 
@@ -138,15 +195,5 @@ class MediaLibrarySqliteStore implements MediaLibraryStorage {
   void dispose() {
     _database?.dispose();
     _database = null;
-  }
-
-  static Directory _defaultStorageDirectory() {
-    final appData = Platform.environment['APPDATA'];
-    if (appData != null && appData.trim().isNotEmpty) {
-      return Directory('$appData${Platform.pathSeparator}MovieHub');
-    }
-
-    final home = Platform.environment['USERPROFILE'] ?? Directory.current.path;
-    return Directory('$home${Platform.pathSeparator}.moviehub');
   }
 }

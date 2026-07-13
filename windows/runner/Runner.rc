@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "moviehub" "\0"
+            VALUE "CompanyName", "MovieHub" "\0"
+            VALUE "FileDescription", "MovieHub" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "moviehub" "\0"
-            VALUE "LegalCopyright", "Copyright (C) 2026 com.example. All rights reserved." "\0"
+            VALUE "LegalCopyright", "Copyright (C) 2026 MovieHub. All rights reserved." "\0"
             VALUE "OriginalFilename", "moviehub.exe" "\0"
-            VALUE "ProductName", "moviehub" "\0"
+            VALUE "ProductName", "MovieHub" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

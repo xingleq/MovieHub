@@ -57,7 +57,7 @@ class HomePage extends StatelessWidget {
     final spotlight = controller.spotlightItem;
     final continueWatching = controller.continueWatchingItems;
 
-    final groups = groupMediaItems(controller.items);
+    final groups = controller.groups;
     final animeGroups = groups.where(isAnimeGroup).take(16).toList();
     final recentGroups = [...groups]
       ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
@@ -79,6 +79,7 @@ class HomePage extends StatelessWidget {
                 MessageBanner(
                   icon: Icons.error_outline,
                   message: controller.error!,
+                  onClose: controller.clearError,
                 ),
                 const SizedBox(height: AppSpacing.md),
               ],

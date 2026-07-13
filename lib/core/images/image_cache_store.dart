@@ -1,10 +1,16 @@
 import 'dart:io';
 
+import '../system/app_paths.dart';
 import '../tmdb/tmdb_client.dart';
 
 /// Disk cache for TMDB artwork (todo §20 海报本地缓存). Images are downloaded
 /// once into `%APPDATA%/MovieHub/images` and served from disk afterwards, so
 /// posters survive offline starts and never re-fetch on rebuilds.
+///
+/// Deliberately a singleton (unlike the constructor-injected stores):
+/// it is read from deep inside poster widgets where threading a dependency
+/// through every card would outweigh the benefit. [proxy] is kept in sync
+/// by [SettingsController].
 class ImageCacheStore {
   ImageCacheStore._();
 
@@ -109,11 +115,8 @@ class ImageCacheStore {
   }
 
   static Directory _defaultCacheDirectory() {
-    final appData = Platform.environment['APPDATA'];
-    final base = appData != null && appData.trim().isNotEmpty
-        ? '$appData${Platform.pathSeparator}MovieHub'
-        : '${Platform.environment['USERPROFILE'] ?? Directory.current.path}'
-              '${Platform.pathSeparator}.moviehub';
-    return Directory('$base${Platform.pathSeparator}images');
+    return Directory(
+      '${defaultAppDataDirectory().path}${Platform.pathSeparator}images',
+    );
   }
 }

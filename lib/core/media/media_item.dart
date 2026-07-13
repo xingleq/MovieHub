@@ -1,5 +1,6 @@
-import 'dart:io';
-
+/// One video file in the library. Plain data record: file identity, parsed
+/// title parts, TMDB metadata and playback state. Filename parsing lives in
+/// `media_filename_parser.dart`; scanning in `media_scanner.dart`.
 class MediaItem {
   const MediaItem({
     required this.path,
@@ -75,47 +76,6 @@ class MediaItem {
       return 0;
     }
     return (playbackPositionMs / playbackDurationMs).clamp(0, 1).toDouble();
-  }
-
-  factory MediaItem.fromFile(File file, {DateTime? addedAt}) {
-    final stat = file.statSync();
-    final fileName = file.uri.pathSegments.last;
-    final dotIndex = fileName.lastIndexOf('.');
-    final rawTitle = dotIndex > 0 ? fileName.substring(0, dotIndex) : fileName;
-    final extension = dotIndex > 0 ? fileName.substring(dotIndex + 1) : '';
-
-    final episodeInfo = _parseEpisodeInfo(rawTitle);
-
-    return MediaItem(
-      path: file.path,
-      title: episodeInfo == null
-          ? _cleanTitle(rawTitle)
-          : '${episodeInfo.seriesTitle} S${_twoDigits(episodeInfo.seasonNumber)}E${_twoDigits(episodeInfo.episodeNumber)}',
-      extension: extension.toLowerCase(),
-      sizeBytes: stat.size,
-      modifiedAt: stat.modified,
-      addedAt: addedAt ?? DateTime.now(),
-      favorite: false,
-      seriesTitle: episodeInfo?.seriesTitle,
-      seasonNumber: episodeInfo?.seasonNumber,
-      episodeNumber: episodeInfo?.episodeNumber,
-      tmdbId: null,
-      tmdbTitle: null,
-      overview: null,
-      posterPath: null,
-      backdropPath: null,
-      releaseDate: null,
-      voteAverage: null,
-      tmdbMediaType: null,
-      genreIds: null,
-      genres: null,
-      directors: null,
-      cast: null,
-      runtimeMinutes: null,
-      playbackPositionMs: 0,
-      playbackDurationMs: 0,
-      lastPlayedAt: null,
-    );
   }
 
   factory MediaItem.fromJson(Map<String, Object?> json) {
@@ -270,62 +230,7 @@ class MediaItem {
     );
   }
 
-  static String _cleanTitle(String rawTitle) {
-    final cleaned = rawTitle
-        .replaceAll(RegExp(r'[._]+'), ' ')
-        .replaceAll(RegExp(r'\s+'), ' ')
-        .trim();
-    return cleaned.isEmpty ? rawTitle : cleaned;
-  }
-
-  static _EpisodeInfo? _parseEpisodeInfo(String rawTitle) {
-    final normalized = rawTitle.replaceAll(RegExp(r'[._]+'), ' ');
-    final patterns = [
-      RegExp(r'\bS(\d{1,2})E(\d{1,3})\b', caseSensitive: false),
-      RegExp(r'\b(\d{1,2})x(\d{1,3})\b', caseSensitive: false),
-    ];
-
-    for (final pattern in patterns) {
-      final match = pattern.firstMatch(normalized);
-      if (match == null) {
-        continue;
-      }
-
-      final season = int.tryParse(match.group(1)!);
-      final episode = int.tryParse(match.group(2)!);
-      if (season == null || episode == null) {
-        continue;
-      }
-
-      final titlePart = normalized.substring(0, match.start);
-      final seriesTitle = _cleanTitle(titlePart);
-      if (seriesTitle.isEmpty) {
-        continue;
-      }
-
-      return _EpisodeInfo(
-        seriesTitle: seriesTitle,
-        seasonNumber: season,
-        episodeNumber: episode,
-      );
-    }
-
-    return null;
-  }
-
   static String _twoDigits(int value) {
     return value.toString().padLeft(2, '0');
   }
-}
-
-class _EpisodeInfo {
-  const _EpisodeInfo({
-    required this.seriesTitle,
-    required this.seasonNumber,
-    required this.episodeNumber,
-  });
-
-  final String seriesTitle;
-  final int seasonNumber;
-  final int episodeNumber;
 }

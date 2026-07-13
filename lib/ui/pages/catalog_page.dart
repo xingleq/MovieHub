@@ -36,9 +36,6 @@ class _CatalogPageState extends State<CatalogPage> {
   final _searchController = TextEditingController();
   var _sortKey = SortKey.addedAt;
   var _posterSize = PosterSize.large;
-  var _selectedFilterIndex = 0;
-
-  static const _filterLabels = ['全部', 'TV动画', '剧场版', 'OVA/OAD', '特别篇'];
 
   @override
   void initState() {
@@ -74,9 +71,9 @@ class _CatalogPageState extends State<CatalogPage> {
     final controller = LibraryScope.of(context);
     final query = _searchController.text.trim().toLowerCase();
 
-    final sectionGroups = groupMediaItems(
-      controller.items,
-    ).where(widget.groupFilter).toList(growable: false);
+    final sectionGroups = controller.groups
+        .where(widget.groupFilter)
+        .toList(growable: false);
     final visibleGroups = sortGroups(
       sectionGroups.where((group) => _matchesQuery(group, query)).toList(),
       _sortKey,
@@ -98,12 +95,6 @@ class _CatalogPageState extends State<CatalogPage> {
               '${visibleGroups.length} / ${sectionGroups.length}',
               style: TextStyle(color: AppTokens.of(context).textSecondary),
             ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
-          _FilterChipBar(
-            labels: _filterLabels,
-            selectedIndex: _selectedFilterIndex,
-            onSelected: (index) => setState(() => _selectedFilterIndex = index),
           ),
           const SizedBox(height: AppSpacing.lg),
           CatalogToolbar(
@@ -130,80 +121,6 @@ class _CatalogPageState extends State<CatalogPage> {
                   ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _FilterChipBar extends StatelessWidget {
-  const _FilterChipBar({
-    required this.labels,
-    required this.selectedIndex,
-    required this.onSelected,
-  });
-
-  final List<String> labels;
-  final int selectedIndex;
-  final ValueChanged<int> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-
-    return SizedBox(
-      height: 36,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        clipBehavior: Clip.none,
-        itemCount: labels.length,
-        separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.sm),
-        itemBuilder: (context, index) {
-          final selected = index == selectedIndex;
-          return GestureDetector(
-            onTap: () => onSelected(index),
-            child: AnimatedContainer(
-              duration: AppDurations.hover,
-              height: 34,
-              alignment: Alignment.center,
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
-              decoration: BoxDecoration(
-                gradient: selected
-                    ? const LinearGradient(colors: AppTokens.candyGradient)
-                    : null,
-                color: selected ? null : tokens.surface.withValues(alpha: 0.5),
-                borderRadius: const BorderRadius.all(
-                  Radius.circular(AppRadius.pill),
-                ),
-                border: Border.all(
-                  color: selected ? tokens.accent : tokens.cardBorder,
-                ),
-                boxShadow: selected
-                    ? [
-                        BoxShadow(
-                          color: tokens.accent.withValues(alpha: 0.35),
-                          blurRadius: 12,
-                        ),
-                      ]
-                    : const [],
-              ),
-              child: Center(
-                child: Text(
-                  labels[index],
-                  strutStyle: const StrutStyle(
-                    forceStrutHeight: true,
-                    height: 1.15,
-                  ),
-                  style: TextStyle(
-                    fontSize: 12,
-                    height: 1,
-                    fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-                    color: selected ? Colors.white : tokens.textSecondary,
-                  ),
-                ),
-              ),
-            ),
-          );
-        },
       ),
     );
   }

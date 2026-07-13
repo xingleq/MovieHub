@@ -56,12 +56,17 @@ class _PlayerPageState extends State<PlayerPage> {
   late final StreamSubscription<Tracks> _tracksSubscription;
   late final StreamSubscription<bool> _completedSubscription;
   late final StreamSubscription<String> _sessionSubscription;
+  late final Timer _progressSaveTimer;
 
   late MediaItem _currentItem;
   var _lastPosition = Duration.zero;
   var _lastDuration = Duration.zero;
   String? _autoTracksAppliedFor;
   var _switchingEpisode = false;
+
+  /// Progress is also checkpointed while playing (a crash or force-close
+  /// otherwise loses the whole session); each save writes a single row.
+  static const _progressSaveInterval = Duration(seconds: 30);
 
   @override
   void initState() {
@@ -87,11 +92,19 @@ class _PlayerPageState extends State<PlayerPage> {
         unawaited(_player.pause());
       }
     });
+    _progressSaveTimer = Timer.periodic(_progressSaveInterval, (_) {
+      if (_player.state.playing && _lastDuration.inMilliseconds > 0) {
+        unawaited(
+          widget.onProgressChanged(_currentItem, _lastPosition, _lastDuration),
+        );
+      }
+    });
     unawaited(_player.open(Media(_currentItem.path, start: widget.startAt)));
   }
 
   @override
   void dispose() {
+    _progressSaveTimer.cancel();
     unawaited(_positionSubscription.cancel());
     unawaited(_durationSubscription.cancel());
     unawaited(_tracksSubscription.cancel());

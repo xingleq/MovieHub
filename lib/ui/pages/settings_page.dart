@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 
 import '../../app/library_controller.dart';
 import '../../app/library_scope.dart';
+import '../../app/settings_controller.dart';
+import '../../app/settings_scope.dart';
 import '../../theme/app_tokens.dart';
 import '../format/formatters.dart';
 import '../widgets/message_banner.dart';
@@ -34,9 +36,9 @@ class _SettingsPageState extends State<SettingsPage>
     if (_fieldsInitialized) {
       return;
     }
-    final controller = LibraryScope.of(context);
-    _tokenController.text = controller.tmdbAccessToken;
-    _proxyController.text = controller.tmdbProxy;
+    final settings = SettingsScope.of(context);
+    _tokenController.text = settings.tmdbAccessToken;
+    _proxyController.text = settings.tmdbProxy;
     _fieldsInitialized = true;
   }
 
@@ -51,6 +53,7 @@ class _SettingsPageState extends State<SettingsPage>
   @override
   Widget build(BuildContext context) {
     final controller = LibraryScope.of(context);
+    final settings = SettingsScope.of(context);
     final tokens = AppTokens.of(context);
 
     return Padding(
@@ -65,10 +68,19 @@ class _SettingsPageState extends State<SettingsPage>
         children: [
           _Header(controller: controller),
           const SizedBox(height: AppSpacing.lg),
+          if (settings.error != null) ...[
+            MessageBanner(
+              icon: Icons.error_outline,
+              message: settings.error!,
+              onClose: settings.clearError,
+            ),
+            const SizedBox(height: AppSpacing.md),
+          ],
           if (controller.error != null) ...[
             MessageBanner(
               icon: Icons.error_outline,
               message: controller.error!,
+              onClose: controller.clearError,
             ),
             const SizedBox(height: AppSpacing.md),
           ],
@@ -93,15 +105,16 @@ class _SettingsPageState extends State<SettingsPage>
               child: TabBarView(
                 controller: _tabController,
                 children: [
-                  _LibraryTab(controller: controller),
+                  _LibraryTab(controller: controller, settings: settings),
                   _ScraperTab(
                     controller: controller,
+                    settings: settings,
                     proxyController: _proxyController,
                     tokenController: _tokenController,
                   ),
-                  _PlaybackTab(controller: controller),
-                  _AppearanceTab(controller: controller),
-                  _AboutTab(controller: controller),
+                  _PlaybackTab(controller: controller, settings: settings),
+                  _AppearanceTab(settings: settings),
+                  const _AboutTab(),
                 ],
               ),
             ),
@@ -258,9 +271,10 @@ class _SettingsTabBar extends StatelessWidget {
 }
 
 class _LibraryTab extends StatelessWidget {
-  const _LibraryTab({required this.controller});
+  const _LibraryTab({required this.controller, required this.settings});
 
   final LibraryController controller;
+  final SettingsController settings;
 
   @override
   Widget build(BuildContext context) {
@@ -344,8 +358,8 @@ class _LibraryTab extends StatelessWidget {
             icon: Icons.rocket_launch_outlined,
             title: '开机时自动启动 MovieHub',
             subtitle: '开启后写入当前用户启动项，关闭后自动移除。',
-            value: controller.launchAtStartup,
-            onChanged: controller.setLaunchAtStartup,
+            value: settings.launchAtStartup,
+            onChanged: settings.setLaunchAtStartup,
           ),
         ),
         _SettingsCard(
@@ -364,11 +378,13 @@ class _LibraryTab extends StatelessWidget {
 class _ScraperTab extends StatelessWidget {
   const _ScraperTab({
     required this.controller,
+    required this.settings,
     required this.proxyController,
     required this.tokenController,
   });
 
   final LibraryController controller;
+  final SettingsController settings;
   final TextEditingController proxyController;
   final TextEditingController tokenController;
 
@@ -390,7 +406,7 @@ class _ScraperTab extends StatelessWidget {
                 decoration: InputDecoration(
                   labelText: 'API 读取令牌',
                   prefixIcon: const Icon(Icons.key_outlined),
-                  suffixIcon: controller.hasTmdbToken
+                  suffixIcon: settings.hasTmdbToken
                       ? Icon(Icons.check_circle, color: tokens.accent)
                       : null,
                 ),
@@ -411,7 +427,7 @@ class _ScraperTab extends StatelessWidget {
                 children: [
                   FilledButton.icon(
                     onPressed: () {
-                      controller.saveTmdbSettings(
+                      settings.saveTmdbConnection(
                         accessToken: tokenController.text,
                         proxy: proxyController.text,
                       );
@@ -473,9 +489,10 @@ class _ScraperTab extends StatelessWidget {
 }
 
 class _PlaybackTab extends StatelessWidget {
-  const _PlaybackTab({required this.controller});
+  const _PlaybackTab({required this.controller, required this.settings});
 
   final LibraryController controller;
+  final SettingsController settings;
 
   @override
   Widget build(BuildContext context) {
@@ -488,7 +505,7 @@ class _PlaybackTab extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               DropdownButtonFormField<String>(
-                initialValue: controller.subtitlePreference,
+                initialValue: settings.subtitlePreference,
                 decoration: const InputDecoration(
                   labelText: '默认字幕',
                   prefixIcon: Icon(Icons.subtitles_outlined),
@@ -501,15 +518,13 @@ class _PlaybackTab extends StatelessWidget {
                 ],
                 onChanged: (value) {
                   if (value != null) {
-                    controller.savePlaybackPreferences(
-                      subtitlePreference: value,
-                    );
+                    settings.savePlaybackPreferences(subtitlePreference: value);
                   }
                 },
               ),
               const SizedBox(height: AppSpacing.md),
               DropdownButtonFormField<String>(
-                initialValue: controller.audioPreference,
+                initialValue: settings.audioPreference,
                 decoration: const InputDecoration(
                   labelText: '默认音轨',
                   prefixIcon: Icon(Icons.graphic_eq),
@@ -521,7 +536,7 @@ class _PlaybackTab extends StatelessWidget {
                 ],
                 onChanged: (value) {
                   if (value != null) {
-                    controller.savePlaybackPreferences(audioPreference: value);
+                    settings.savePlaybackPreferences(audioPreference: value);
                   }
                 },
               ),
@@ -550,9 +565,9 @@ class _PlaybackTab extends StatelessWidget {
 }
 
 class _AppearanceTab extends StatelessWidget {
-  const _AppearanceTab({required this.controller});
+  const _AppearanceTab({required this.settings});
 
-  final LibraryController controller;
+  final SettingsController settings;
 
   @override
   Widget build(BuildContext context) {
@@ -564,7 +579,7 @@ class _AppearanceTab extends StatelessWidget {
           title: '主题',
           subtitle: '浅色主题适合白天使用；也可以跟随 Windows 系统设置。',
           child: DropdownButtonFormField<String>(
-            initialValue: controller.themeMode,
+            initialValue: settings.themeMode,
             decoration: const InputDecoration(
               labelText: '外观模式',
               prefixIcon: Icon(Icons.brightness_6_outlined),
@@ -576,7 +591,7 @@ class _AppearanceTab extends StatelessWidget {
             ],
             onChanged: (value) {
               if (value != null) {
-                controller.saveThemeMode(value);
+                settings.saveThemeMode(value);
               }
             },
           ),
@@ -587,13 +602,13 @@ class _AppearanceTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              if (controller.backgroundImagePath.isNotEmpty) ...[
+              if (settings.backgroundImagePath.isNotEmpty) ...[
                 ClipRRect(
                   borderRadius: const BorderRadius.all(
                     Radius.circular(AppRadius.md),
                   ),
                   child: Image.file(
-                    File(controller.backgroundImagePath),
+                    File(settings.backgroundImagePath),
                     height: 140,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -609,7 +624,7 @@ class _AppearanceTab extends StatelessWidget {
                 ),
                 const SizedBox(height: AppSpacing.md),
                 SelectableText(
-                  controller.backgroundImagePath,
+                  settings.backgroundImagePath,
                   style: TextStyle(color: tokens.textSecondary, fontSize: 12),
                 ),
                 const SizedBox(height: AppSpacing.md),
@@ -623,14 +638,14 @@ class _AppearanceTab extends StatelessWidget {
                 runSpacing: AppSpacing.sm,
                 children: [
                   FilledButton.tonalIcon(
-                    onPressed: controller.pickBackgroundImage,
+                    onPressed: settings.pickBackgroundImage,
                     icon: const Icon(Icons.wallpaper),
                     label: const Text('选择本地壁纸'),
                   ),
                   FilledButton.tonalIcon(
-                    onPressed: controller.backgroundImagePath.isEmpty
+                    onPressed: settings.backgroundImagePath.isEmpty
                         ? null
-                        : controller.clearBackgroundImage,
+                        : settings.clearBackgroundImage,
                     icon: const Icon(Icons.format_color_reset),
                     label: const Text('恢复默认背景'),
                   ),
@@ -673,9 +688,7 @@ class _AppearanceTab extends StatelessWidget {
 }
 
 class _AboutTab extends StatelessWidget {
-  const _AboutTab({required this.controller});
-
-  final LibraryController controller;
+  const _AboutTab();
 
   @override
   Widget build(BuildContext context) {

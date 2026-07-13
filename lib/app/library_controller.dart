@@ -3,47 +3,44 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 
-import '../core/images/image_cache_store.dart';
 import '../core/media/media_group.dart';
 import '../core/media/media_item.dart';
 import '../core/media/media_library_sqlite_store.dart';
 import '../core/media/media_library_store.dart';
 import '../core/media/media_scanner.dart';
-import '../core/system/startup_service.dart';
 import '../core/tmdb/tmdb_client.dart';
-import '../core/tmdb/tmdb_settings_store.dart';
+import 'settings_controller.dart';
 
-/// Owns the media library data and every persisted operation. UI-agnostic:
-/// never holds a BuildContext; navigation stays in the widget layer.
+/// Owns the media library data: items, roots, scanning, TMDB matching and
+/// playback progress. UI-agnostic: never holds a BuildContext; navigation
+/// stays in the widget layer. User preferences live in [SettingsController];
+/// this class only reads the TMDB token/proxy from it.
 class LibraryController extends ChangeNotifier {
   LibraryController({
+    required this._settings,
     MediaLibraryStorage? store,
     MediaScanner? scanner,
     TmdbClient? tmdbClient,
-    TmdbSettingsStore? settingsStore,
   }) : _store =
            store ?? MediaLibrarySqliteStore(legacyStore: MediaLibraryStore()),
        _scanner = scanner ?? MediaScanner(),
-       _tmdbClient = tmdbClient ?? TmdbClient(),
-       _settingsStore = settingsStore ?? TmdbSettingsStore();
+       _tmdbClient = tmdbClient ?? TmdbClient();
 
+  final SettingsController _settings;
   final MediaLibraryStorage _store;
   final MediaScanner _scanner;
   final TmdbClient _tmdbClient;
-  final TmdbSettingsStore _settingsStore;
+
+  /// Pause between TMDB matches during a batch run, to stay far away from
+  /// the API rate limit.
+  static const _batchMatchInterval = Duration(milliseconds: 250);
 
   var _roots = <String>[];
   var _items = <MediaItem>[];
+  List<MediaGroup>? _groupsCache;
   var _skippedPaths = <String>[];
   var _loading = true;
   var _scanning = false;
-  var _tmdbAccessToken = '';
-  var _tmdbProxy = '';
-  var _backgroundImagePath = '';
-  var _subtitlePreference = 'zh-hans';
-  var _audioPreference = 'zh';
-  var _themeMode = 'dark';
-  var _launchAtStartup = false;
   String? _metadataLoadingPath;
   var _metadataBatchRunning = false;
   var _metadataBatchDone = 0;
@@ -56,26 +53,18 @@ class LibraryController extends ChangeNotifier {
   List<String> get skippedPaths => List.unmodifiable(_skippedPaths);
   bool get loading => _loading;
   bool get scanning => _scanning;
-  String get tmdbAccessToken => _tmdbAccessToken;
-  String get tmdbProxy => _tmdbProxy;
-  String get backgroundImagePath => _backgroundImagePath;
-  String get subtitlePreference => _subtitlePreference;
-  String get audioPreference => _audioPreference;
-  String get themeMode => _themeMode;
-  bool get launchAtStartup => _launchAtStartup;
-  bool get hasTmdbToken => _tmdbAccessToken.isNotEmpty;
   String? get metadataLoadingPath => _metadataLoadingPath;
   bool get metadataBatchRunning => _metadataBatchRunning;
   int get metadataBatchDone => _metadataBatchDone;
   int get metadataBatchTotal => _metadataBatchTotal;
   String? get error => _error;
 
+  /// Wall entries derived from [items]. Cached — grouping is O(n log n) and
+  /// every page reads this on rebuild, so it must not recompute per caller.
+  List<MediaGroup> get groups => _groupsCache ??= groupMediaItems(_items);
+
   int get favoriteCount {
     return _items.where((item) => item.favorite).length;
-  }
-
-  List<MediaItem> get favoriteItems {
-    return _items.where((item) => item.favorite).toList(growable: false);
   }
 
   List<MediaItem> get continueWatchingItems {
@@ -127,6 +116,29 @@ class LibraryController extends ChangeNotifier {
     return null;
   }
 
+  /// The episode that follows [item] in its series' season/episode order.
+  /// Located by path containment (group keys can differ from the item's own
+  /// key for partially matched series); order-based rather than
+  /// `episode + 1`, so a missing episode doesn't break auto-play-next.
+  MediaItem? nextEpisodeOf(MediaItem item) {
+    if (!item.isEpisode) {
+      return null;
+    }
+    for (final group in groups) {
+      final index = group.episodes.indexWhere(
+        (episode) => episode.path == item.path,
+      );
+      if (index < 0) {
+        continue;
+      }
+      if (index + 1 >= group.episodes.length) {
+        return null;
+      }
+      return group.episodes[index + 1];
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _disposed = true;
@@ -145,25 +157,36 @@ class LibraryController extends ChangeNotifier {
     super.notifyListeners();
   }
 
-  Future<void> loadAppState() async {
+  void clearError() {
+    if (_error == null) {
+      return;
+    }
+    _error = null;
+    notifyListeners();
+  }
+
+  /// Replaces the item list and invalidates every derived cache.
+  void _setItems(List<MediaItem> items) {
+    _items = items;
+    _groupsCache = null;
+  }
+
+  /// Merges [updated] into the item list (matched by path) and persists
+  /// exactly those rows.
+  Future<void> _applyItemUpdates(List<MediaItem> updated) async {
+    if (updated.isEmpty) {
+      return;
+    }
+    final updatedByPath = {for (final item in updated) item.path: item};
+    await _store.upsertItems(updated);
+    _setItems([for (final item in _items) updatedByPath[item.path] ?? item]);
+  }
+
+  Future<void> load() async {
     try {
       final snapshot = await _store.load();
-      final settings = await _settingsStore.load();
       _roots = snapshot.roots;
-      _items = snapshot.items;
-      _tmdbAccessToken = settings.accessToken;
-      _tmdbProxy = settings.proxy;
-      _backgroundImagePath = settings.backgroundImagePath;
-      _subtitlePreference = settings.subtitlePreference;
-      _audioPreference = settings.audioPreference;
-      _themeMode = settings.themeMode;
-      _launchAtStartup = settings.launchAtStartup;
-      try {
-        _launchAtStartup = await StartupService.isEnabled();
-      } catch (_) {
-        // Keep the persisted preference when registry probing is unavailable.
-      }
-      ImageCacheStore.instance.proxy = settings.proxy;
+      _setItems(snapshot.items);
       _loading = false;
       notifyListeners();
     } catch (error) {
@@ -171,89 +194,6 @@ class LibraryController extends ChangeNotifier {
       _loading = false;
       notifyListeners();
     }
-  }
-
-  TmdbSettings get _currentSettings {
-    return TmdbSettings(
-      accessToken: _tmdbAccessToken,
-      proxy: _tmdbProxy,
-      backgroundImagePath: _backgroundImagePath,
-      subtitlePreference: _subtitlePreference,
-      audioPreference: _audioPreference,
-      themeMode: _themeMode,
-      launchAtStartup: _launchAtStartup,
-    );
-  }
-
-  Future<void> saveTmdbSettings({
-    required String accessToken,
-    required String proxy,
-  }) async {
-    _tmdbAccessToken = accessToken.trim();
-    _tmdbProxy = proxy.trim();
-    await _settingsStore.save(_currentSettings);
-
-    ImageCacheStore.instance.proxy = _tmdbProxy;
-    _error = null;
-    notifyListeners();
-  }
-
-  /// Persists the default subtitle/audio preferences used by the player
-  /// (todo §12/§13 默认中文，可配置).
-  Future<void> savePlaybackPreferences({
-    String? subtitlePreference,
-    String? audioPreference,
-  }) async {
-    _subtitlePreference = subtitlePreference ?? _subtitlePreference;
-    _audioPreference = audioPreference ?? _audioPreference;
-    await _settingsStore.save(_currentSettings);
-    notifyListeners();
-  }
-
-  Future<void> saveThemeMode(String themeMode) async {
-    if (!{'dark', 'light', 'system'}.contains(themeMode)) {
-      return;
-    }
-    _themeMode = themeMode;
-    await _settingsStore.save(_currentSettings);
-    notifyListeners();
-  }
-
-  Future<void> setLaunchAtStartup(bool enabled) async {
-    try {
-      await StartupService.setEnabled(enabled);
-      _launchAtStartup = enabled;
-      _error = null;
-      await _settingsStore.save(_currentSettings);
-      notifyListeners();
-    } catch (error) {
-      _error = '设置开机自启动失败：$error';
-      notifyListeners();
-    }
-  }
-
-  /// Lets the user pick a local wallpaper image shown behind the whole app.
-  Future<void> pickBackgroundImage() async {
-    final result = await FilePicker.platform.pickFiles(
-      dialogTitle: '选择背景图片',
-      type: FileType.image,
-      lockParentWindow: true,
-    );
-    final path = result?.files.single.path;
-    if (path == null || path.trim().isEmpty) {
-      return;
-    }
-    await _saveBackgroundImage(path);
-  }
-
-  Future<void> clearBackgroundImage() async {
-    await _saveBackgroundImage('');
-  }
-
-  Future<void> _saveBackgroundImage(String path) async {
-    _backgroundImagePath = path;
-    await _settingsStore.save(_currentSettings);
-    notifyListeners();
   }
 
   Future<void> selectRoot() async {
@@ -266,7 +206,7 @@ class LibraryController extends ChangeNotifier {
     }
 
     final updatedRoots = [..._roots, path];
-    await _store.save(MediaLibrarySnapshot(roots: updatedRoots, items: _items));
+    await _store.saveRoots(updatedRoots);
 
     _roots = updatedRoots;
     notifyListeners();
@@ -274,7 +214,7 @@ class LibraryController extends ChangeNotifier {
 
   Future<void> removeRoot(String path) async {
     final updatedRoots = _roots.where((root) => root != path).toList();
-    await _store.save(MediaLibrarySnapshot(roots: updatedRoots, items: _items));
+    await _store.saveRoots(updatedRoots);
 
     _roots = updatedRoots;
     notifyListeners();
@@ -296,7 +236,7 @@ class LibraryController extends ChangeNotifier {
         MediaLibrarySnapshot(roots: _roots, items: result.items),
       );
 
-      _items = result.items;
+      _setItems(result.items);
       _skippedPaths = result.skippedPaths;
       _scanning = false;
       notifyListeners();
@@ -327,94 +267,80 @@ class LibraryController extends ChangeNotifier {
   }
 
   Future<void> toggleFavorite(MediaItem item) async {
-    final updatedItems = _items.map((current) {
-      if (current.path != item.path) {
-        return current;
-      }
-      return current.copyWith(favorite: !current.favorite);
-    }).toList();
+    final current = itemByPath(item.path);
+    if (current == null) {
+      return;
+    }
+    await _applyItemUpdates([current.copyWith(favorite: !current.favorite)]);
+    notifyListeners();
+  }
 
-    await _store.save(MediaLibrarySnapshot(roots: _roots, items: updatedItems));
+  Future<void> savePlaybackProgress(
+    MediaItem item,
+    Duration position,
+    Duration duration,
+  ) async {
+    if (duration.inMilliseconds <= 0) {
+      return;
+    }
+    final current = itemByPath(item.path);
+    if (current == null) {
+      return;
+    }
 
-    _items = updatedItems;
+    await _applyItemUpdates([
+      current.copyWith(
+        playbackPositionMs: position.inMilliseconds,
+        playbackDurationMs: duration.inMilliseconds,
+        lastPlayedAt: DateTime.now(),
+      ),
+    ]);
     notifyListeners();
   }
 
   Future<void> matchTmdb(MediaItem item) async {
-    if (_tmdbAccessToken.isEmpty) {
-      _error = '请先在设置中填写 TMDB 令牌。';
-      notifyListeners();
-      return;
-    }
-
-    _metadataLoadingPath = item.path;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final match = await _tmdbClient.searchMovie(
-        accessToken: _tmdbAccessToken,
-        query: item.title,
-        proxy: _tmdbProxy,
-      );
-
-      if (match == null) {
-        _metadataLoadingPath = null;
-        _error = 'TMDB 未找到匹配结果：${item.title}';
-        notifyListeners();
-        return;
-      }
-
-      final details = await _tmdbClient.fetchDetails(
-        accessToken: _tmdbAccessToken,
-        id: match.id,
-        mediaType: match.mediaType,
-        proxy: _tmdbProxy,
-      );
-
-      final updatedItems = _applyMatchToPaths(
-        _items,
-        {item.path},
-        match,
-        details,
-      );
-      await _store.save(
-        MediaLibrarySnapshot(roots: _roots, items: updatedItems),
-      );
-
-      _items = updatedItems;
-      _metadataLoadingPath = null;
-      notifyListeners();
-    } catch (error) {
-      _metadataLoadingPath = null;
-      _error = 'TMDB 匹配失败：$error';
-      notifyListeners();
-    }
+    await _matchPaths(
+      paths: {item.path},
+      query: item.title,
+      preferTv: false,
+      loadingPath: item.path,
+    );
   }
 
   /// Matches one wall entry: a whole series gets a single TMDB lookup whose
   /// result is applied to every episode; a movie matches itself.
   Future<void> matchGroup(MediaGroup group) async {
-    if (_tmdbAccessToken.isEmpty) {
+    final rep = group.representative;
+    await _matchPaths(
+      paths: group.paths.toSet(),
+      query: group.isSeries ? (rep.seriesTitle ?? group.title) : rep.title,
+      preferTv: group.isSeries,
+      loadingPath: rep.path,
+    );
+  }
+
+  Future<void> _matchPaths({
+    required Set<String> paths,
+    required String query,
+    required bool preferTv,
+    required String loadingPath,
+  }) async {
+    if (!_settings.hasTmdbToken) {
       _error = '请先在设置中填写 TMDB 令牌。';
       notifyListeners();
       return;
     }
 
-    final rep = group.representative;
-    _metadataLoadingPath = rep.path;
+    _metadataLoadingPath = loadingPath;
     _error = null;
     notifyListeners();
 
     try {
-      final query = group.isSeries
-          ? (rep.seriesTitle ?? group.title)
-          : rep.title;
       final match = await _tmdbClient.searchMovie(
-        accessToken: _tmdbAccessToken,
+        accessToken: _settings.tmdbAccessToken,
         query: query,
-        proxy: _tmdbProxy,
-        preferTv: group.isSeries,
+        proxy: _settings.tmdbProxy,
+        preferTv: preferTv,
       );
 
       if (match == null) {
@@ -425,23 +351,13 @@ class LibraryController extends ChangeNotifier {
       }
 
       final details = await _tmdbClient.fetchDetails(
-        accessToken: _tmdbAccessToken,
+        accessToken: _settings.tmdbAccessToken,
         id: match.id,
         mediaType: match.mediaType,
-        proxy: _tmdbProxy,
+        proxy: _settings.tmdbProxy,
       );
 
-      final updatedItems = _applyMatchToPaths(
-        _items,
-        group.paths.toSet(),
-        match,
-        details,
-      );
-      await _store.save(
-        MediaLibrarySnapshot(roots: _roots, items: updatedItems),
-      );
-
-      _items = updatedItems;
+      await _applyItemUpdates(_matchedItems(_items, paths, match, details));
       _metadataLoadingPath = null;
       notifyListeners();
     } catch (error) {
@@ -466,22 +382,15 @@ class LibraryController extends ChangeNotifier {
 
     try {
       final details = await _tmdbClient.fetchDetails(
-        accessToken: _tmdbAccessToken,
+        accessToken: _settings.tmdbAccessToken,
         id: match.id,
         mediaType: match.mediaType,
-        proxy: _tmdbProxy,
+        proxy: _settings.tmdbProxy,
       );
 
-      final updatedItems = _applyMatchToPaths(
-        _items,
-        paths.toSet(),
-        match,
-        details,
+      await _applyItemUpdates(
+        _matchedItems(_items, paths.toSet(), match, details),
       );
-      await _store.save(
-        MediaLibrarySnapshot(roots: _roots, items: updatedItems),
-      );
-      _items = updatedItems;
     } catch (error) {
       _error = 'TMDB 匹配失败：$error';
     }
@@ -492,16 +401,16 @@ class LibraryController extends ChangeNotifier {
   /// Candidate list for the manual match dialog. Network errors surface as
   /// the shared error banner and return an empty list.
   Future<List<TmdbMovieMatch>> searchTmdbCandidates(String query) async {
-    if (_tmdbAccessToken.isEmpty) {
+    if (!_settings.hasTmdbToken) {
       _error = '请先在设置中填写 TMDB 令牌。';
       notifyListeners();
       return const [];
     }
     try {
       return await _tmdbClient.searchCandidates(
-        accessToken: _tmdbAccessToken,
+        accessToken: _settings.tmdbAccessToken,
         query: query,
-        proxy: _tmdbProxy,
+        proxy: _settings.tmdbProxy,
       );
     } catch (error) {
       _error = 'TMDB 搜索失败：$error';
@@ -515,13 +424,13 @@ class LibraryController extends ChangeNotifier {
       return;
     }
 
-    if (_tmdbAccessToken.isEmpty) {
+    if (!_settings.hasTmdbToken) {
       _error = '请先在设置中填写 TMDB 令牌。';
       notifyListeners();
       return;
     }
 
-    final pendingGroups = groupMediaItems(_items)
+    final pendingGroups = groups
         .where((group) => group.episodes.any((item) => item.tmdbId == null))
         .toList();
     if (pendingGroups.isEmpty) {
@@ -537,7 +446,6 @@ class LibraryController extends ChangeNotifier {
     _error = null;
     notifyListeners();
 
-    var updatedItems = List<MediaItem>.of(_items);
     var failedCount = 0;
 
     for (final group in pendingGroups) {
@@ -551,9 +459,9 @@ class LibraryController extends ChangeNotifier {
 
       try {
         final match = await _tmdbClient.searchMovie(
-          accessToken: _tmdbAccessToken,
+          accessToken: _settings.tmdbAccessToken,
           query: group.isSeries ? (rep.seriesTitle ?? group.title) : rep.title,
-          proxy: _tmdbProxy,
+          proxy: _settings.tmdbProxy,
           preferTv: group.isSeries,
         );
 
@@ -561,19 +469,13 @@ class LibraryController extends ChangeNotifier {
           failedCount++;
         } else {
           final details = await _tmdbClient.fetchDetails(
-            accessToken: _tmdbAccessToken,
+            accessToken: _settings.tmdbAccessToken,
             id: match.id,
             mediaType: match.mediaType,
-            proxy: _tmdbProxy,
+            proxy: _settings.tmdbProxy,
           );
-          updatedItems = _applyMatchToPaths(
-            updatedItems,
-            group.paths.toSet(),
-            match,
-            details,
-          );
-          await _store.save(
-            MediaLibrarySnapshot(roots: _roots, items: updatedItems),
+          await _applyItemUpdates(
+            _matchedItems(_items, group.paths.toSet(), match, details),
           );
         }
       } catch (_) {
@@ -583,9 +485,12 @@ class LibraryController extends ChangeNotifier {
       if (_disposed) {
         return;
       }
-      _items = updatedItems;
       _metadataBatchDone++;
       notifyListeners();
+
+      if (_metadataBatchDone < _metadataBatchTotal) {
+        await Future<void>.delayed(_batchMatchInterval);
+      }
     }
 
     _metadataBatchRunning = false;
@@ -594,87 +499,32 @@ class LibraryController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> savePlaybackProgress(
-    MediaItem item,
-    Duration position,
-    Duration duration,
-  ) async {
-    if (duration.inMilliseconds <= 0) {
-      return;
-    }
-
-    final updatedItems = _items.map((current) {
-      if (current.path != item.path) {
-        return current;
-      }
-      return current.copyWith(
-        playbackPositionMs: position.inMilliseconds,
-        playbackDurationMs: duration.inMilliseconds,
-        lastPlayedAt: DateTime.now(),
-      );
-    }).toList();
-
-    await _store.save(MediaLibrarySnapshot(roots: _roots, items: updatedItems));
-
-    _items = updatedItems;
-    notifyListeners();
-  }
-
-  static List<MediaItem> _applyMatchToPaths(
+  /// The items in [paths] with the TMDB match applied — only the changed
+  /// rows, ready for an upsert.
+  static List<MediaItem> _matchedItems(
     List<MediaItem> items,
     Set<String> paths,
     TmdbMovieMatch match,
     TmdbDetails? details,
   ) {
-    return items.map((current) {
-      if (!paths.contains(current.path)) {
-        return current;
-      }
-      return current.copyWith(
-        tmdbId: match.id,
-        tmdbTitle: match.title,
-        overview: match.overview,
-        posterPath: match.posterPath,
-        backdropPath: match.backdropPath,
-        releaseDate: match.releaseDate,
-        voteAverage: match.voteAverage,
-        tmdbMediaType: match.mediaType,
-        genreIds: details?.genreIds ?? match.genreIds,
-        genres: details?.genres,
-        directors: details?.directors,
-        cast: details?.cast,
-        runtimeMinutes: details?.runtimeMinutes,
-      );
-    }).toList();
-  }
-
-  /// Finds the next episode of the same series: same season next episode,
-  /// otherwise the first episode of the next season.
-  MediaItem? nextEpisodeOf(MediaItem item) {
-    final seriesTitle = item.seriesTitle;
-    final season = item.seasonNumber;
-    final episode = item.episodeNumber;
-    if (seriesTitle == null || season == null || episode == null) {
-      return null;
-    }
-
-    final episodes = _items.where((candidate) {
-      return candidate.isEpisode &&
-          candidate.seriesTitle?.toLowerCase() == seriesTitle.toLowerCase();
-    });
-
-    MediaItem? sameSeasonNext;
-    MediaItem? nextSeasonFirst;
-    for (final candidate in episodes) {
-      if (candidate.seasonNumber == season &&
-          candidate.episodeNumber == episode + 1) {
-        sameSeasonNext = candidate;
-      }
-      if (candidate.seasonNumber == season + 1 &&
-          candidate.episodeNumber == 1) {
-        nextSeasonFirst = candidate;
-      }
-    }
-    return sameSeasonNext ?? nextSeasonFirst;
+    return [
+      for (final item in items)
+        if (paths.contains(item.path))
+          item.copyWith(
+            tmdbId: match.id,
+            tmdbTitle: match.title,
+            overview: match.overview,
+            posterPath: match.posterPath,
+            backdropPath: match.backdropPath,
+            releaseDate: match.releaseDate,
+            voteAverage: match.voteAverage,
+            tmdbMediaType: match.mediaType,
+            genreIds: details?.genreIds ?? match.genreIds,
+            genres: details?.genres,
+            directors: details?.directors,
+            cast: details?.cast,
+            runtimeMinutes: details?.runtimeMinutes,
+          ),
+    ];
   }
 }

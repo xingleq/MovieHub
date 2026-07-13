@@ -22,21 +22,25 @@ import '../ui/widgets/manual_match_dialog.dart';
 import 'app_section.dart';
 import 'library_controller.dart';
 import 'library_scope.dart';
+import 'settings_controller.dart';
+import 'settings_scope.dart';
 
 /// Persistent shell: candy background + capsule nav on the left, the active
 /// section (or a movie/series detail overlay) on the right. Owns the
-/// [LibraryController] lifecycle and the ephemeral navigation state.
+/// ephemeral navigation state; the controllers are created in [MovieHubApp].
 class AppShell extends StatefulWidget {
-  const AppShell({super.key, required this.controller});
+  const AppShell({super.key, required this.library, required this.settings});
 
-  final LibraryController controller;
+  final LibraryController library;
+  final SettingsController settings;
 
   @override
   State<AppShell> createState() => _AppShellState();
 }
 
 class _AppShellState extends State<AppShell> {
-  late final LibraryController _controller;
+  late final LibraryController _library;
+  late final SettingsController _settings;
   var _section = AppSection.home;
   String? _detailPath;
   String? _detailSeriesKey;
@@ -44,8 +48,14 @@ class _AppShellState extends State<AppShell> {
   @override
   void initState() {
     super.initState();
-    _controller = widget.controller;
-    unawaited(_controller.loadAppState());
+    _library = widget.library;
+    _settings = widget.settings;
+    unawaited(_loadControllers());
+  }
+
+  Future<void> _loadControllers() async {
+    await _settings.load();
+    await _library.load();
   }
 
   @override
@@ -78,7 +88,7 @@ class _AppShellState extends State<AppShell> {
     final seriesTitle = item.seriesTitle;
     setState(() {
       if (item.isEpisode && seriesTitle != null && seriesTitle.isNotEmpty) {
-        _detailSeriesKey = MediaGroup.seriesKey(seriesTitle);
+        _detailSeriesKey = MediaGroup.keyOf(item);
         _detailPath = null;
       } else {
         _detailPath = item.path;
@@ -114,10 +124,10 @@ class _AppShellState extends State<AppShell> {
         builder: (context) => PlayerPage(
           item: item,
           startAt: startAt,
-          nextEpisodeOf: _controller.nextEpisodeOf,
-          subtitlePreference: _controller.subtitlePreference,
-          audioPreference: _controller.audioPreference,
-          onProgressChanged: _controller.savePlaybackProgress,
+          nextEpisodeOf: _library.nextEpisodeOf,
+          subtitlePreference: _settings.subtitlePreference,
+          audioPreference: _settings.audioPreference,
+          onProgressChanged: _library.savePlaybackProgress,
         ),
       ),
     );
@@ -131,13 +141,13 @@ class _AppShellState extends State<AppShell> {
       context: context,
       builder: (context) => ManualMatchDialog(
         initialQuery: initialQuery,
-        onSearch: _controller.searchTmdbCandidates,
+        onSearch: _library.searchTmdbCandidates,
       ),
     );
     if (match == null || !mounted) {
       return;
     }
-    await _controller.applyManualMatch(paths, match);
+    await _library.applyManualMatch(paths, match);
   }
 
   @override
@@ -145,81 +155,84 @@ class _AppShellState extends State<AppShell> {
     final tokens = AppTokens.of(context);
 
     return LibraryScope(
-      controller: _controller,
-      child: Scaffold(
-        body: ListenableBuilder(
-          listenable: _controller,
-          builder: (context, _) {
-            return Stack(
-              fit: StackFit.expand,
-              children: [
-                const CandyBackground(),
-                if (_controller.backgroundImagePath.isNotEmpty)
-                  _WallpaperLayer(path: _controller.backgroundImagePath),
-                Row(
-                  children: [
-                    CapsuleNav(
-                      selectedIndex: _section.index,
-                      onSelected: (index) {
-                        _goToSection(AppSection.values[index]);
-                      },
-                      footer: _NavFooter(controller: _controller),
-                      items: [
-                        const CapsuleNavItem(
-                          icon: Icons.home_outlined,
-                          selectedIcon: Icons.home_rounded,
-                          label: '首页',
-                        ),
-                        const CapsuleNavItem(
-                          icon: Icons.auto_awesome_outlined,
-                          selectedIcon: Icons.auto_awesome,
-                          label: '动画',
-                        ),
-                        const CapsuleNavItem(
-                          icon: Icons.movie_outlined,
-                          selectedIcon: Icons.movie_rounded,
-                          label: '电影',
-                        ),
-                        const CapsuleNavItem(
-                          icon: Icons.tv_outlined,
-                          selectedIcon: Icons.tv_rounded,
-                          label: '电视剧',
-                        ),
-                        CapsuleNavItem(
-                          icon: Icons.favorite_outline,
-                          selectedIcon: Icons.favorite_rounded,
-                          label: '收藏',
-                          badgeCount: _controller.favoriteCount,
-                        ),
-                        const CapsuleNavItem(
-                          icon: Icons.settings_outlined,
-                          selectedIcon: Icons.settings_rounded,
-                          label: '设置',
-                        ),
-                      ],
-                    ),
-                    VerticalDivider(
-                      width: 1,
-                      thickness: 1,
-                      color: tokens.cardBorder,
-                    ),
-                    Expanded(child: _buildContent()),
-                  ],
-                ),
-              ],
-            );
-          },
+      controller: _library,
+      child: SettingsScope(
+        controller: _settings,
+        child: Scaffold(
+          body: ListenableBuilder(
+            listenable: Listenable.merge([_library, _settings]),
+            builder: (context, _) {
+              return Stack(
+                fit: StackFit.expand,
+                children: [
+                  const CandyBackground(),
+                  if (_settings.backgroundImagePath.isNotEmpty)
+                    _WallpaperLayer(path: _settings.backgroundImagePath),
+                  Row(
+                    children: [
+                      CapsuleNav(
+                        selectedIndex: _section.index,
+                        onSelected: (index) {
+                          _goToSection(AppSection.values[index]);
+                        },
+                        footer: _NavFooter(controller: _library),
+                        items: [
+                          const CapsuleNavItem(
+                            icon: Icons.home_outlined,
+                            selectedIcon: Icons.home_rounded,
+                            label: '首页',
+                          ),
+                          const CapsuleNavItem(
+                            icon: Icons.auto_awesome_outlined,
+                            selectedIcon: Icons.auto_awesome,
+                            label: '动画',
+                          ),
+                          const CapsuleNavItem(
+                            icon: Icons.movie_outlined,
+                            selectedIcon: Icons.movie_rounded,
+                            label: '电影',
+                          ),
+                          const CapsuleNavItem(
+                            icon: Icons.tv_outlined,
+                            selectedIcon: Icons.tv_rounded,
+                            label: '电视剧',
+                          ),
+                          CapsuleNavItem(
+                            icon: Icons.favorite_outline,
+                            selectedIcon: Icons.favorite_rounded,
+                            label: '收藏',
+                            badgeCount: _library.favoriteCount,
+                          ),
+                          const CapsuleNavItem(
+                            icon: Icons.settings_outlined,
+                            selectedIcon: Icons.settings_rounded,
+                            label: '设置',
+                          ),
+                        ],
+                      ),
+                      VerticalDivider(
+                        width: 1,
+                        thickness: 1,
+                        color: tokens.cardBorder,
+                      ),
+                      Expanded(child: _buildContent()),
+                    ],
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
   Widget _buildContent() {
-    if (_controller.loading) {
+    if (_library.loading) {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final busy = _controller.scanning || _controller.metadataBatchRunning;
+    final busy = _library.scanning || _library.metadataBatchRunning;
 
     return Column(
       children: [
@@ -227,9 +240,8 @@ class _AppShellState extends State<AppShell> {
           LinearProgressIndicator(
             minHeight: 2,
             value:
-                _controller.metadataBatchRunning &&
-                    _controller.metadataBatchTotal > 0
-                ? _controller.metadataBatchDone / _controller.metadataBatchTotal
+                _library.metadataBatchRunning && _library.metadataBatchTotal > 0
+                ? _library.metadataBatchDone / _library.metadataBatchTotal
                 : null,
           ),
         Expanded(
@@ -258,17 +270,11 @@ class _AppShellState extends State<AppShell> {
   Widget _buildDetailOrSections() {
     final seriesKey = _detailSeriesKey;
     if (seriesKey != null) {
-      MediaGroup? group;
-      for (final candidate in groupMediaItems(_controller.items)) {
-        if (candidate.key == seriesKey) {
-          group = candidate;
-          break;
-        }
-      }
+      final group = _findSeriesGroup(seriesKey);
       if (group != null) {
         final loading =
-            _controller.metadataLoadingPath != null &&
-            group.paths.contains(_controller.metadataLoadingPath);
+            _library.metadataLoadingPath != null &&
+            group.paths.contains(_library.metadataLoadingPath);
         return KeyedSubtree(
           key: ValueKey('series:$seriesKey'),
           child: SeriesDetailView(
@@ -276,7 +282,7 @@ class _AppShellState extends State<AppShell> {
             loadingMetadata: loading,
             onBack: _closeDetail,
             onPlayEpisode: (episode) => unawaited(_openPlayer(episode)),
-            onMatch: _controller.matchGroup,
+            onMatch: _library.matchGroup,
             onManualMatch: (group) {
               unawaited(
                 _openManualMatch(
@@ -285,7 +291,7 @@ class _AppShellState extends State<AppShell> {
                 ),
               );
             },
-            onOpenLocation: _controller.openItemLocation,
+            onOpenLocation: _library.openItemLocation,
           ),
         );
       }
@@ -294,23 +300,23 @@ class _AppShellState extends State<AppShell> {
     final detailPath = _detailPath;
     final detailItem = detailPath == null
         ? null
-        : _controller.itemByPath(detailPath);
+        : _library.itemByPath(detailPath);
     if (detailItem != null) {
       return KeyedSubtree(
         key: ValueKey('detail:${detailItem.path}'),
         child: MediaDetailView(
           item: detailItem,
-          loadingMetadata: detailItem.path == _controller.metadataLoadingPath,
+          loadingMetadata: detailItem.path == _library.metadataLoadingPath,
           onBack: _closeDetail,
-          onToggleFavorite: _controller.toggleFavorite,
-          onMatchTmdb: _controller.matchTmdb,
+          onToggleFavorite: _library.toggleFavorite,
+          onMatchTmdb: _library.matchTmdb,
           onManualMatch: (item) {
             unawaited(
               _openManualMatch(initialQuery: item.title, paths: [item.path]),
             );
           },
           onPlay: (item) => unawaited(_openPlayer(item)),
-          onOpenLocation: _controller.openItemLocation,
+          onOpenLocation: _library.openItemLocation,
         ),
       );
     }
@@ -325,6 +331,26 @@ class _AppShellState extends State<AppShell> {
         ],
       ),
     );
+  }
+
+  /// Resolves the series group for a stored navigation key. Falls back to
+  /// the title-based key so an open series page survives its group key
+  /// changing mid-session (a TMDB match switches [MediaGroup.keyOf] from
+  /// title to tmdb id).
+  MediaGroup? _findSeriesGroup(String key) {
+    for (final group in _library.groups) {
+      if (group.key == key) {
+        return group;
+      }
+    }
+    for (final group in _library.groups) {
+      if (group.episodes.any(
+        (episode) => episode.isEpisode && MediaGroup.titleKeyOf(episode) == key,
+      )) {
+        return group;
+      }
+    }
+    return null;
   }
 
   List<Widget> _sectionPages() {

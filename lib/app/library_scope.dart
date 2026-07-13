@@ -3,17 +3,28 @@ import 'package:flutter/widgets.dart';
 import 'library_controller.dart';
 
 /// Exposes the [LibraryController] to the widget tree.
-class LibraryScope extends InheritedNotifier<LibraryController> {
+///
+/// Rebuilds are driven explicitly by the shell's ListenableBuilder. Keeping
+/// this as a plain InheritedWidget avoids InheritedNotifier dependency cleanup
+/// assertions during window teardown and route transitions.
+class LibraryScope extends InheritedWidget {
   const LibraryScope({
     super.key,
-    required LibraryController controller,
+    required this.controller,
     required super.child,
-  }) : super(notifier: controller);
+  });
+
+  final LibraryController controller;
 
   /// Reads the controller and subscribes the calling context to its changes.
   static LibraryController of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<LibraryScope>();
     assert(scope != null, 'LibraryScope not found in widget tree');
-    return scope!.notifier!;
+    return scope!.controller;
+  }
+
+  @override
+  bool updateShouldNotify(LibraryScope oldWidget) {
+    return oldWidget.controller != controller;
   }
 }

@@ -544,6 +544,47 @@ class _PlaybackTab extends StatelessWidget {
           ),
         ),
         _SettingsCard(
+          title: '观看与休息',
+          subtitle: '进入播放器后开始计时，到时会锁定整个软件并显示休息倒计时。',
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.md,
+                children: [
+                  _StatusTile(
+                    icon: Icons.timer_outlined,
+                    label: '单次观看',
+                    value: '${settings.watchLimitMinutes} 分钟',
+                  ),
+                  _StatusTile(
+                    icon: Icons.self_improvement,
+                    label: '休息时长',
+                    value: '${settings.breakMinutes} 分钟',
+                  ),
+                  _StatusTile(
+                    icon: settings.hasScreenTimePassword
+                        ? Icons.lock_outline
+                        : Icons.lock_open_outlined,
+                    label: '修改保护',
+                    value: settings.hasScreenTimePassword ? '已启用' : '未设置',
+                  ),
+                ],
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: FilledButton.tonalIcon(
+                  onPressed: () => _openScreenTimeDialog(context, settings),
+                  icon: const Icon(Icons.admin_panel_settings_outlined),
+                  label: const Text('修改观看时长'),
+                ),
+              ),
+            ],
+          ),
+        ),
+        _SettingsCard(
           title: '播放记录',
           subtitle: '退出播放器时自动保存进度；未看完的视频会出现在继续观看。',
           child: Wrap(
@@ -561,6 +602,111 @@ class _PlaybackTab extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  Future<void> _openScreenTimeDialog(
+    BuildContext context,
+    SettingsController settings,
+  ) async {
+    final watchController = TextEditingController(
+      text: settings.watchLimitMinutes.toString(),
+    );
+    final breakController = TextEditingController(
+      text: settings.breakMinutes.toString(),
+    );
+    final passwordController = TextEditingController();
+    final newPasswordController = TextEditingController();
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('观看时长保护'),
+            content: SizedBox(
+              width: 420,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: watchController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '单次观看时长（分钟）',
+                      prefixIcon: Icon(Icons.timer_outlined),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  TextField(
+                    controller: breakController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '休息时长（分钟）',
+                      prefixIcon: Icon(Icons.self_improvement),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  if (settings.hasScreenTimePassword) ...[
+                    TextField(
+                      controller: passwordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: '管理密码',
+                        prefixIcon: Icon(Icons.lock_outline),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.md),
+                    TextField(
+                      controller: newPasswordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: '新密码（可选）',
+                        prefixIcon: Icon(Icons.password_outlined),
+                      ),
+                    ),
+                  ] else
+                    TextField(
+                      controller: newPasswordController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: '创建管理密码',
+                        prefixIcon: Icon(Icons.lock_outline),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final saved = await settings.saveScreenTimeLimits(
+                    watchLimitMinutes:
+                        int.tryParse(watchController.text.trim()) ?? 45,
+                    breakMinutes:
+                        int.tryParse(breakController.text.trim()) ?? 10,
+                    password: passwordController.text,
+                    newPassword: newPasswordController.text,
+                  );
+                  if (saved && dialogContext.mounted) {
+                    Navigator.of(dialogContext).pop();
+                  }
+                },
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      watchController.dispose();
+      breakController.dispose();
+      passwordController.dispose();
+      newPasswordController.dispose();
+    }
   }
 }
 

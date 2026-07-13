@@ -36,6 +36,23 @@ bool FlutterWindow::OnCreate() {
       std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
           flutter_controller_->engine()->messenger(), "moviehub/session",
           &flutter::StandardMethodCodec::GetInstance());
+  session_channel_->SetMethodCallHandler(
+      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
+             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
+                 result) {
+        const std::string& method = call.method_name();
+        if (method == "minimize") {
+          ShowWindow(GetHandle(), SW_MINIMIZE);
+          result->Success();
+          return;
+        }
+        if (method == "close") {
+          PostMessage(GetHandle(), WM_CLOSE, 0, 0);
+          result->Success();
+          return;
+        }
+        result->NotImplemented();
+      });
 
   // Receive WM_WTSSESSION_CHANGE for this session (screen lock/unlock).
   WTSRegisterSessionNotification(GetHandle(), NOTIFY_FOR_THIS_SESSION);

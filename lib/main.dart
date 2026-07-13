@@ -5,6 +5,7 @@ import 'app/app_shell.dart';
 import 'app/library_controller.dart';
 import 'app/settings_controller.dart';
 import 'theme/app_theme.dart';
+import 'ui/widgets/screen_time_overlay.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -50,6 +51,19 @@ class _MovieHubAppState extends State<MovieHubApp> {
           theme: buildLightTheme(),
           darkTheme: buildDarkTheme(),
           themeMode: _themeModeOf(_settings.themeMode),
+          builder: (context, child) {
+            return ListenableBuilder(
+              listenable: _settings,
+              builder: (context, _) {
+                return Stack(
+                  children: [
+                    ?child,
+                    ScreenTimeOverlay(settings: _settings),
+                  ],
+                );
+              },
+            );
+          },
           home: AppShell(library: _library, settings: _settings),
         );
       },

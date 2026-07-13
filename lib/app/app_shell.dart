@@ -19,6 +19,7 @@ import '../ui/player/player_page.dart';
 import '../ui/widgets/candy_background.dart';
 import '../ui/widgets/capsule_nav.dart';
 import '../ui/widgets/manual_match_dialog.dart';
+import '../ui/widgets/window_control_buttons.dart';
 import 'app_section.dart';
 import 'library_controller.dart';
 import 'library_scope.dart';
@@ -109,6 +110,11 @@ class _AppShellState extends State<AppShell> {
   }
 
   Future<void> _openPlayer(MediaItem item) async {
+    await _settings.startViewingSession();
+    if (_settings.breakActive || !mounted) {
+      return;
+    }
+
     // Auto-resume without asking: partially watched items pick up where they
     // left off; finished or barely-started ones play from the beginning.
     final canResume =
@@ -217,6 +223,11 @@ class _AppShellState extends State<AppShell> {
                       ),
                       Expanded(child: _buildContent()),
                     ],
+                  ),
+                  const Positioned(
+                    top: AppSpacing.md,
+                    right: AppSpacing.md,
+                    child: WindowControlButtons(),
                   ),
                 ],
               );

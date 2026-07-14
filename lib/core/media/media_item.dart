@@ -10,6 +10,7 @@ class MediaItem {
     required this.modifiedAt,
     required this.addedAt,
     required this.favorite,
+    required this.following,
     required this.seriesTitle,
     required this.seasonNumber,
     required this.episodeNumber,
@@ -38,6 +39,7 @@ class MediaItem {
   final DateTime modifiedAt;
   final DateTime addedAt;
   final bool favorite;
+  final bool following;
   final String? seriesTitle;
   final int? seasonNumber;
   final int? episodeNumber;
@@ -87,6 +89,7 @@ class MediaItem {
       modifiedAt: DateTime.parse(json['modifiedAt'] as String),
       addedAt: DateTime.parse(json['addedAt'] as String),
       favorite: json['favorite'] as bool? ?? false,
+      following: json['following'] as bool? ?? false,
       seriesTitle: json['seriesTitle'] as String?,
       seasonNumber: json['seasonNumber'] as int?,
       episodeNumber: json['episodeNumber'] as int?,
@@ -125,6 +128,7 @@ class MediaItem {
       'modifiedAt': modifiedAt.toIso8601String(),
       'addedAt': addedAt.toIso8601String(),
       'favorite': favorite,
+      'following': following,
       'seriesTitle': seriesTitle,
       'seasonNumber': seasonNumber,
       'episodeNumber': episodeNumber,
@@ -156,6 +160,7 @@ class MediaItem {
       modifiedAt: modifiedAt,
       addedAt: previous?.addedAt ?? addedAt,
       favorite: previous?.favorite ?? favorite,
+      following: previous?.following ?? following,
       seriesTitle: seriesTitle,
       seasonNumber: seasonNumber,
       episodeNumber: episodeNumber,
@@ -180,6 +185,7 @@ class MediaItem {
 
   MediaItem copyWith({
     bool? favorite,
+    bool? following,
     String? seriesTitle,
     int? seasonNumber,
     int? episodeNumber,
@@ -208,6 +214,7 @@ class MediaItem {
       modifiedAt: modifiedAt,
       addedAt: addedAt,
       favorite: favorite ?? this.favorite,
+      following: following ?? this.following,
       seriesTitle: seriesTitle ?? this.seriesTitle,
       seasonNumber: seasonNumber ?? this.seasonNumber,
       episodeNumber: episodeNumber ?? this.episodeNumber,

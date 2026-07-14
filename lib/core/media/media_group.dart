@@ -64,6 +64,8 @@ class MediaGroup {
 
   bool get anyFavorite => episodes.any((episode) => episode.favorite);
 
+  bool get anyFollowing => episodes.any((episode) => episode.following);
+
   List<String> get paths =>
       episodes.map((episode) => episode.path).toList(growable: false);
 

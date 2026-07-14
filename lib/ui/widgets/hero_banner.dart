@@ -17,12 +17,18 @@ class HeroBanner extends StatelessWidget {
     required this.item,
     required this.onPlay,
     required this.onOpenDetail,
+    this.activeIndex = 0,
+    this.itemCount = 1,
+    this.onDotSelected,
     this.height = 360,
   });
 
   final MediaItem item;
   final VoidCallback onPlay;
   final VoidCallback onOpenDetail;
+  final int activeIndex;
+  final int itemCount;
+  final ValueChanged<int>? onDotSelected;
   final double height;
 
   @override
@@ -55,11 +61,11 @@ class HeroBanner extends StatelessWidget {
                   begin: Alignment.centerLeft,
                   end: Alignment.centerRight,
                   colors: [
-                    Colors.black.withValues(alpha: 0.82),
-                    Colors.black.withValues(alpha: 0.35),
+                    Colors.black.withValues(alpha: 0.48),
+                    Colors.black.withValues(alpha: 0.12),
                     Colors.transparent,
                   ],
-                  stops: const [0, 0.55, 1],
+                  stops: const [0, 0.58, 1],
                 ),
               ),
             ),
@@ -71,7 +77,7 @@ class HeroBanner extends StatelessWidget {
                   end: Alignment.bottomCenter,
                   colors: [
                     Colors.transparent,
-                    tokens.background.withValues(alpha: 0.9),
+                    tokens.background.withValues(alpha: 0.72),
                   ],
                   stops: const [0.55, 1],
                 ),
@@ -156,31 +162,35 @@ class HeroBanner extends StatelessWidget {
                 ],
               ),
             ),
-            // Decorative page indicators (design spec dots).
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: AppSpacing.md,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  for (var i = 0; i < 3; i++)
-                    Container(
-                      width: i == 0 ? 24 : 8,
-                      height: 8,
-                      margin: const EdgeInsets.symmetric(horizontal: 4),
-                      decoration: BoxDecoration(
-                        color: i == 0
-                            ? Colors.white
-                            : Colors.white.withValues(alpha: 0.35),
-                        borderRadius: const BorderRadius.all(
-                          Radius.circular(AppRadius.pill),
+            if (itemCount > 1)
+              Positioned(
+                left: 0,
+                right: 0,
+                bottom: AppSpacing.md,
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    for (var i = 0; i < itemCount; i++)
+                      GestureDetector(
+                        onTap: () => onDotSelected?.call(i),
+                        child: AnimatedContainer(
+                          duration: AppDurations.hover,
+                          width: i == activeIndex ? 24 : 8,
+                          height: 8,
+                          margin: const EdgeInsets.symmetric(horizontal: 4),
+                          decoration: BoxDecoration(
+                            color: i == activeIndex
+                                ? Colors.white
+                                : Colors.white.withValues(alpha: 0.38),
+                            borderRadius: const BorderRadius.all(
+                              Radius.circular(AppRadius.pill),
+                            ),
+                          ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               ),
-            ),
           ],
         ),
       ),

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -240,6 +241,8 @@ class _SettingsTabBar extends StatelessWidget {
           isScrollable: true,
           tabAlignment: TabAlignment.start,
           dividerColor: Colors.transparent,
+          splashFactory: NoSplash.splashFactory,
+          overlayColor: WidgetStateProperty.all(Colors.transparent),
           indicatorSize: TabBarIndicatorSize.tab,
           indicator: BoxDecoration(
             gradient: const LinearGradient(colors: AppTokens.candyGradient),
@@ -275,6 +278,27 @@ class _LibraryTab extends StatelessWidget {
 
   final LibraryController controller;
   final SettingsController settings;
+
+  /// Runs a scan and reports the outcome. The scan itself already shows
+  /// progress (busy bar + button spinner); this closes the loop when done.
+  Future<void> _scanAndReport(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await controller.scan();
+    if (controller.error != null) {
+      return; // 失败会显示错误横幅，不再叠加提示。
+    }
+    final skipped = controller.skippedPaths.length;
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text(
+          skipped == 0
+              ? '扫描完成，媒体库共 ${controller.items.length} 个视频。'
+              : '扫描完成，共 ${controller.items.length} 个视频，$skipped 个路径无法读取。',
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -312,7 +336,7 @@ class _LibraryTab extends StatelessWidget {
                   FilledButton.tonalIcon(
                     onPressed: controller.roots.isEmpty || controller.scanning
                         ? null
-                        : controller.scan,
+                        : () => unawaited(_scanAndReport(context)),
                     icon: controller.scanning
                         ? const SizedBox.square(
                             dimension: 18,
@@ -388,6 +412,20 @@ class _ScraperTab extends StatelessWidget {
   final TextEditingController proxyController;
   final TextEditingController tokenController;
 
+  Future<void> _saveConnection(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    await settings.saveTmdbConnection(
+      accessToken: tokenController.text,
+      proxy: proxyController.text,
+    );
+    messenger.showSnackBar(
+      const SnackBar(
+        behavior: SnackBarBehavior.floating,
+        content: Text('连接设置已保存。'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
@@ -426,12 +464,7 @@ class _ScraperTab extends StatelessWidget {
                 runSpacing: AppSpacing.sm,
                 children: [
                   FilledButton.icon(
-                    onPressed: () {
-                      settings.saveTmdbConnection(
-                        accessToken: tokenController.text,
-                        proxy: proxyController.text,
-                      );
-                    },
+                    onPressed: () => unawaited(_saveConnection(context)),
                     icon: const Icon(Icons.save_outlined),
                     label: const Text('保存连接设置'),
                   ),

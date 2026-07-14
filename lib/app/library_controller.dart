@@ -90,21 +90,31 @@ class LibraryController extends ChangeNotifier {
   /// The item featured in the home hero banner: prefer something in progress
   /// with a backdrop, then the newest item with a backdrop, then anything.
   MediaItem? get spotlightItem {
+    final items = spotlightItems;
+    return items.isEmpty ? null : items.first;
+  }
+
+  List<MediaItem> get spotlightItems {
     final continueItems = continueWatchingItems;
-    for (final item in continueItems) {
+    final candidates = <MediaItem>[
+      ...continueItems,
+      ...recentlyAddedItems,
+      ..._items,
+    ];
+    final seen = <String>{};
+    final withBackdrop = <MediaItem>[];
+    final fallback = <MediaItem>[];
+    for (final item in candidates) {
+      if (!seen.add(item.path)) {
+        continue;
+      }
       if ((item.backdropPath ?? '').isNotEmpty) {
-        return item;
+        withBackdrop.add(item);
+      } else {
+        fallback.add(item);
       }
     }
-    for (final item in recentlyAddedItems) {
-      if ((item.backdropPath ?? '').isNotEmpty) {
-        return item;
-      }
-    }
-    if (continueItems.isNotEmpty) {
-      return continueItems.first;
-    }
-    return _items.isEmpty ? null : _items.first;
+    return [...withBackdrop, ...fallback].take(3).toList(growable: false);
   }
 
   MediaItem? itemByPath(String path) {
@@ -275,6 +285,44 @@ class LibraryController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> toggleGroupFavorite(MediaGroup group) async {
+    final favorite = !group.anyFavorite;
+    await _applyItemUpdates([
+      for (final episode in group.episodes)
+        if (itemByPath(episode.path) case final current?)
+          current.copyWith(favorite: favorite),
+    ]);
+    notifyListeners();
+  }
+
+  Future<void> toggleGroupFollowing(MediaGroup group) async {
+    final following = !group.anyFollowing;
+    await _applyItemUpdates([
+      for (final episode in group.episodes)
+        if (itemByPath(episode.path) case final current?)
+          current.copyWith(following: following),
+    ]);
+    notifyListeners();
+  }
+
+  Future<void> updateEpisodeInfo(
+    MediaItem item, {
+    required int seasonNumber,
+    required int episodeNumber,
+  }) async {
+    final current = itemByPath(item.path);
+    if (current == null || seasonNumber <= 0 || episodeNumber <= 0) {
+      return;
+    }
+    await _applyItemUpdates([
+      current.copyWith(
+        seasonNumber: seasonNumber,
+        episodeNumber: episodeNumber,
+      ),
+    ]);
+    notifyListeners();
+  }
+
   Future<void> savePlaybackProgress(
     MediaItem item,
     Duration position,
@@ -371,8 +419,10 @@ class LibraryController extends ChangeNotifier {
   /// (one movie, or every episode of a series).
   Future<void> applyManualMatch(
     List<String> paths,
-    TmdbMovieMatch match,
-  ) async {
+    TmdbMovieMatch match, {
+    int? seasonNumber,
+    int? episodeNumber,
+  }) async {
     if (paths.isEmpty) {
       return;
     }
@@ -389,7 +439,14 @@ class LibraryController extends ChangeNotifier {
       );
 
       await _applyItemUpdates(
-        _matchedItems(_items, paths.toSet(), match, details),
+        _matchedItems(
+          _items,
+          paths.toSet(),
+          match,
+          details,
+          seasonNumber: seasonNumber,
+          episodeNumber: episodeNumber,
+        ),
       );
     } catch (error) {
       _error = 'TMDB 匹配失败：$error';
@@ -414,6 +471,44 @@ class LibraryController extends ChangeNotifier {
       );
     } catch (error) {
       _error = 'TMDB 搜索失败：$error';
+      notifyListeners();
+      return const [];
+    }
+  }
+
+  Future<List<TmdbSeasonInfo>> fetchTmdbSeasons(TmdbMovieMatch match) async {
+    if (!_settings.hasTmdbToken || match.mediaType != 'tv') {
+      return const [];
+    }
+    try {
+      return await _tmdbClient.fetchTvSeasons(
+        accessToken: _settings.tmdbAccessToken,
+        tvId: match.id,
+        proxy: _settings.tmdbProxy,
+      );
+    } catch (error) {
+      _error = 'TMDB 读取季信息失败：$error';
+      notifyListeners();
+      return const [];
+    }
+  }
+
+  Future<List<TmdbEpisodeInfo>> fetchTmdbEpisodes(
+    TmdbMovieMatch match,
+    int seasonNumber,
+  ) async {
+    if (!_settings.hasTmdbToken || match.mediaType != 'tv') {
+      return const [];
+    }
+    try {
+      return await _tmdbClient.fetchTvSeasonEpisodes(
+        accessToken: _settings.tmdbAccessToken,
+        tvId: match.id,
+        seasonNumber: seasonNumber,
+        proxy: _settings.tmdbProxy,
+      );
+    } catch (error) {
+      _error = 'TMDB 读取分集失败：$error';
       notifyListeners();
       return const [];
     }
@@ -505,8 +600,10 @@ class LibraryController extends ChangeNotifier {
     List<MediaItem> items,
     Set<String> paths,
     TmdbMovieMatch match,
-    TmdbDetails? details,
-  ) {
+    TmdbDetails? details, {
+    int? seasonNumber,
+    int? episodeNumber,
+  }) {
     return [
       for (final item in items)
         if (paths.contains(item.path))
@@ -519,6 +616,11 @@ class LibraryController extends ChangeNotifier {
             releaseDate: match.releaseDate,
             voteAverage: match.voteAverage,
             tmdbMediaType: match.mediaType,
+            seriesTitle: match.mediaType == 'tv'
+                ? (item.seriesTitle ?? match.title)
+                : item.seriesTitle,
+            seasonNumber: seasonNumber ?? item.seasonNumber,
+            episodeNumber: episodeNumber ?? item.episodeNumber,
             genreIds: details?.genreIds ?? match.genreIds,
             genres: details?.genres,
             directors: details?.directors,

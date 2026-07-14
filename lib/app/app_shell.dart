@@ -6,7 +6,6 @@ import 'package:flutter/material.dart';
 
 import '../core/media/media_group.dart';
 import '../core/media/media_item.dart';
-import '../core/tmdb/tmdb_client.dart';
 import '../theme/app_tokens.dart';
 import '../ui/catalog/media_category.dart';
 import '../ui/detail/media_detail_view.dart';
@@ -133,6 +132,7 @@ class _AppShellState extends State<AppShell> {
           nextEpisodeOf: _library.nextEpisodeOf,
           subtitlePreference: _settings.subtitlePreference,
           audioPreference: _settings.audioPreference,
+          settings: _settings,
           onProgressChanged: _library.savePlaybackProgress,
         ),
       ),
@@ -143,17 +143,98 @@ class _AppShellState extends State<AppShell> {
     required String initialQuery,
     required List<String> paths,
   }) async {
-    final match = await showDialog<TmdbMovieMatch>(
+    final result = await showDialog<ManualMatchResult>(
       context: context,
       builder: (context) => ManualMatchDialog(
         initialQuery: initialQuery,
         onSearch: _library.searchTmdbCandidates,
+        onFetchSeasons: _library.fetchTmdbSeasons,
+        onFetchEpisodes: _library.fetchTmdbEpisodes,
+        allowEpisodeSelection: paths.length == 1,
       ),
     );
-    if (match == null || !mounted) {
+    if (result == null || !mounted) {
       return;
     }
-    await _library.applyManualMatch(paths, match);
+    await _library.applyManualMatch(
+      paths,
+      result.match,
+      seasonNumber: result.seasonNumber,
+      episodeNumber: result.episodeNumber,
+    );
+  }
+
+  Future<void> _openEpisodeEditDialog(MediaItem item) async {
+    final seasonController = TextEditingController(
+      text: (item.seasonNumber ?? 1).toString(),
+    );
+    final episodeController = TextEditingController(
+      text: (item.episodeNumber ?? 1).toString(),
+    );
+    try {
+      final saved = await showDialog<bool>(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            title: const Text('编辑季集'),
+            content: SizedBox(
+              width: 320,
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: seasonController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: '季',
+                        prefixIcon: Icon(Icons.layers_outlined),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Expanded(
+                    child: TextField(
+                      controller: episodeController,
+                      keyboardType: TextInputType.number,
+                      decoration: const InputDecoration(
+                        labelText: '集',
+                        prefixIcon: Icon(Icons.playlist_play),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('取消'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('保存'),
+              ),
+            ],
+          );
+        },
+      );
+      if (saved != true || !mounted) {
+        return;
+      }
+      final season = int.tryParse(seasonController.text.trim());
+      final episode = int.tryParse(episodeController.text.trim());
+      if (season == null || episode == null || season <= 0 || episode <= 0) {
+        return;
+      }
+      await _library.updateEpisodeInfo(
+        item,
+        seasonNumber: season,
+        episodeNumber: episode,
+      );
+    } finally {
+      seasonController.dispose();
+      episodeController.dispose();
+    }
   }
 
   @override
@@ -293,6 +374,12 @@ class _AppShellState extends State<AppShell> {
             loadingMetadata: loading,
             onBack: _closeDetail,
             onPlayEpisode: (episode) => unawaited(_openPlayer(episode)),
+            onToggleFavorite: (group) =>
+                unawaited(_library.toggleGroupFavorite(group)),
+            onToggleFollowing: (group) =>
+                unawaited(_library.toggleGroupFollowing(group)),
+            onEditEpisode: (episode) =>
+                unawaited(_openEpisodeEditDialog(episode)),
             onMatch: _library.matchGroup,
             onManualMatch: (group) {
               unawaited(
@@ -403,7 +490,11 @@ class _AppShellState extends State<AppShell> {
         onOpenEntry: _openEntry,
         onPlayEntry: _playEntry,
       ),
-      const SettingsPage(),
+      // NOT const: the scopes are plain InheritedWidgets, so every rebuild
+      // flows top-down from the shell's ListenableBuilder. A const child is
+      // identical across builds and Flutter would skip its whole subtree —
+      // the settings page would freeze until a tab switch forces a rebuild.
+      SettingsPage(),
     ];
   }
 }

@@ -10,21 +10,8 @@ class WindowControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: tokens.surface.withValues(alpha: 0.64),
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
-        border: Border.all(color: tokens.cardBorder),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.14),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
+    return Padding(
+      padding: const EdgeInsets.all(AppSpacing.xs),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -33,11 +20,11 @@ class WindowControlButtons extends StatelessWidget {
             icon: Icons.remove,
             onPressed: () => unawaited(WindowControls.minimize()),
           ),
+          const SizedBox(width: AppSpacing.xs),
           _WindowButton(
             tooltip: '关闭',
             icon: Icons.close,
-            foreground: Colors.white,
-            background: const Color(0xFFE84D6A),
+            closeButton: true,
             onPressed: () => unawaited(WindowControls.close()),
           ),
         ],
@@ -51,15 +38,13 @@ class _WindowButton extends StatelessWidget {
     required this.tooltip,
     required this.icon,
     required this.onPressed,
-    this.foreground,
-    this.background,
+    this.closeButton = false,
   });
 
   final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
-  final Color? foreground;
-  final Color? background;
+  final bool closeButton;
 
   @override
   Widget build(BuildContext context) {
@@ -69,12 +54,14 @@ class _WindowButton extends StatelessWidget {
       child: IconButton(
         visualDensity: VisualDensity.compact,
         style: IconButton.styleFrom(
-          fixedSize: const Size(34, 34),
-          foregroundColor: foreground ?? tokens.textSecondary,
-          backgroundColor: background,
-          hoverColor: background == null
-              ? Colors.white.withValues(alpha: 0.08)
-              : background!.withValues(alpha: 0.82),
+          fixedSize: const Size(30, 30),
+          foregroundColor: closeButton
+              ? const Color(0xFFE84D6A)
+              : tokens.textSecondary,
+          backgroundColor: tokens.surface.withValues(alpha: 0.42),
+          hoverColor: closeButton
+              ? const Color(0xFFE84D6A).withValues(alpha: 0.16)
+              : tokens.surfaceVariant.withValues(alpha: 0.36),
         ),
         onPressed: onPressed,
         icon: Icon(icon, size: 18),

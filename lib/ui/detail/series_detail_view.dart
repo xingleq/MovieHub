@@ -26,6 +26,9 @@ class SeriesDetailView extends StatelessWidget {
     required this.loadingMetadata,
     required this.onBack,
     required this.onPlayEpisode,
+    required this.onToggleFavorite,
+    required this.onToggleFollowing,
+    required this.onEditEpisode,
     required this.onMatch,
     required this.onManualMatch,
     required this.onOpenLocation,
@@ -35,6 +38,9 @@ class SeriesDetailView extends StatelessWidget {
   final bool loadingMetadata;
   final VoidCallback onBack;
   final ValueChanged<MediaItem> onPlayEpisode;
+  final ValueChanged<MediaGroup> onToggleFavorite;
+  final ValueChanged<MediaGroup> onToggleFollowing;
+  final ValueChanged<MediaItem> onEditEpisode;
   final ValueChanged<MediaGroup> onMatch;
   final ValueChanged<MediaGroup> onManualMatch;
   final ValueChanged<MediaItem> onOpenLocation;
@@ -137,12 +143,14 @@ class SeriesDetailView extends StatelessWidget {
                                         ? Icons.favorite
                                         : Icons.favorite_border,
                                     label: group.anyFavorite ? '已收藏' : '收藏',
-                                    onPressed: null,
+                                    onPressed: () => onToggleFavorite(group),
                                   ),
                                   DetailActionButton(
-                                    icon: Icons.add,
-                                    label: '追番',
-                                    onPressed: null,
+                                    icon: group.anyFollowing
+                                        ? Icons.bookmark
+                                        : Icons.bookmark_add_outlined,
+                                    label: group.anyFollowing ? '已追番' : '追番',
+                                    onPressed: () => onToggleFollowing(group),
                                   ),
                                   DetailActionButton(
                                     icon: loadingMetadata
@@ -218,6 +226,7 @@ class SeriesDetailView extends StatelessWidget {
                         _EpisodeRow(
                           episode: episode,
                           onPlay: () => onPlayEpisode(episode),
+                          onEdit: () => onEditEpisode(episode),
                         ),
                       const SizedBox(height: AppSpacing.lg),
                     ],
@@ -342,10 +351,15 @@ class _EpisodePagination extends StatelessWidget {
 }
 
 class _EpisodeRow extends StatelessWidget {
-  const _EpisodeRow({required this.episode, required this.onPlay});
+  const _EpisodeRow({
+    required this.episode,
+    required this.onPlay,
+    required this.onEdit,
+  });
 
   final MediaItem episode;
   final VoidCallback onPlay;
+  final VoidCallback onEdit;
 
   @override
   Widget build(BuildContext context) {
@@ -425,6 +439,13 @@ class _EpisodeRow extends StatelessWidget {
                 Text(
                   formatBytes(episode.sizeBytes),
                   style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(width: AppSpacing.sm),
+                IconButton(
+                  tooltip: '编辑季集',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onEdit,
+                  icon: const Icon(Icons.edit_outlined, size: 18),
                 ),
               ],
             ),

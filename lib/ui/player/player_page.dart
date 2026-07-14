@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
+import '../../app/settings_controller.dart';
 import '../../core/media/media_item.dart';
 import '../../core/system/session_events.dart';
 import '../../theme/app_tokens.dart';
@@ -18,6 +19,7 @@ class PlayerPage extends StatefulWidget {
     this.nextEpisodeOf,
     this.subtitlePreference = 'zh-hans',
     this.audioPreference = 'zh',
+    required this.settings,
   });
 
   final MediaItem item;
@@ -36,6 +38,8 @@ class PlayerPage extends StatefulWidget {
 
   /// Default audio preference: 'zh' | 'ja' | 'en'.
   final String audioPreference;
+
+  final SettingsController settings;
 
   final Future<void> Function(
     MediaItem item,
@@ -92,6 +96,7 @@ class _PlayerPageState extends State<PlayerPage> {
         unawaited(_player.pause());
       }
     });
+    widget.settings.addListener(_pauseForBreakIfNeeded);
     _progressSaveTimer = Timer.periodic(_progressSaveInterval, (_) {
       if (_player.state.playing && _lastDuration.inMilliseconds > 0) {
         unawaited(
@@ -110,11 +115,18 @@ class _PlayerPageState extends State<PlayerPage> {
     unawaited(_tracksSubscription.cancel());
     unawaited(_completedSubscription.cancel());
     unawaited(_sessionSubscription.cancel());
+    widget.settings.removeListener(_pauseForBreakIfNeeded);
     unawaited(
       widget.onProgressChanged(_currentItem, _lastPosition, _lastDuration),
     );
     _player.dispose();
     super.dispose();
+  }
+
+  void _pauseForBreakIfNeeded() {
+    if (widget.settings.breakActive && _player.state.playing) {
+      unawaited(_player.pause());
+    }
   }
 
   /// Named preference tiers; the user's configured preference is moved to

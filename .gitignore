@@ -39,6 +39,7 @@ migrate_working_dir/
 *.tmp
 *.temp
 Snipaste_*.png
+ChatGPT Image *.png
 
 # Symbolication related
 app.*.symbols

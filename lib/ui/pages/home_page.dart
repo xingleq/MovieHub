@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../app/library_scope.dart';
@@ -16,7 +18,7 @@ import '../widgets/shelf_row.dart';
 /// Home: hero spotlight plus horizontal shelves (continue watching, anime,
 /// recently added, favorites) in a single vertical scroll view. Wall shelves
 /// render grouped entries — a series is one card.
-class HomePage extends StatelessWidget {
+class HomePage extends StatefulWidget {
   const HomePage({
     super.key,
     required this.onOpenEntry,
@@ -32,8 +34,36 @@ class HomePage extends StatelessWidget {
   final ValueChanged<MediaItem> onPlayItem;
   final VoidCallback onGoToSettings;
 
+  @override
+  State<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  static const _heroInterval = Duration(seconds: 7);
   static const _posterShelfCardWidth = 150.0;
   static const _posterShelfHeight = _posterShelfCardWidth * 1.5 + 58;
+
+  Timer? _heroTimer;
+  var _heroIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _heroTimer = Timer.periodic(_heroInterval, (_) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _heroIndex = (_heroIndex + 1) % 3;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _heroTimer?.cancel();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,14 +77,18 @@ class HomePage extends StatelessWidget {
             ? '先在设置里添加动画片文件夹，海报墙马上就出现啦。'
             : '目录已添加，去设置中点一下"重新扫描"就好。',
         action: FilledButton.icon(
-          onPressed: onGoToSettings,
+          onPressed: widget.onGoToSettings,
           icon: const Icon(Icons.settings_outlined),
           label: const Text('前往设置'),
         ),
       );
     }
 
-    final spotlight = controller.spotlightItem;
+    final spotlights = controller.spotlightItems;
+    if (_heroIndex >= spotlights.length) {
+      _heroIndex = 0;
+    }
+    final spotlight = spotlights.isEmpty ? null : spotlights[_heroIndex];
     final continueWatching = controller.continueWatchingItems;
 
     final groups = controller.groups;
@@ -94,8 +128,15 @@ class HomePage extends StatelessWidget {
                 Entrance(
                   child: HeroBanner(
                     item: spotlight,
-                    onPlay: () => onPlayItem(spotlight),
-                    onOpenDetail: () => onOpenItem(spotlight),
+                    activeIndex: _heroIndex,
+                    itemCount: spotlights.length,
+                    onDotSelected: (index) {
+                      setState(() {
+                        _heroIndex = index;
+                      });
+                    },
+                    onPlay: () => widget.onPlayItem(spotlight),
+                    onOpenDetail: () => widget.onOpenItem(spotlight),
                   ),
                 ),
                 const SizedBox(height: AppSpacing.xl),
@@ -111,8 +152,8 @@ class HomePage extends StatelessWidget {
                       delayMs: index.clamp(0, 8) * 40,
                       child: ContinueWatchingCard(
                         item: item,
-                        onOpenDetail: () => onOpenItem(item),
-                        onPlay: () => onPlayItem(item),
+                        onOpenDetail: () => widget.onOpenItem(item),
+                        onPlay: () => widget.onPlayItem(item),
                       ),
                     );
                   },
@@ -148,8 +189,8 @@ class HomePage extends StatelessWidget {
           child: PosterCard(
             group: group,
             width: _posterShelfCardWidth,
-            onOpenDetail: () => onOpenEntry(group),
-            onPlay: () => onPlayEntry(group),
+            onOpenDetail: () => widget.onOpenEntry(group),
+            onPlay: () => widget.onPlayEntry(group),
           ),
         );
       },

@@ -62,6 +62,34 @@ class TmdbDetails {
   final int? runtimeMinutes;
 }
 
+class TmdbSeasonInfo {
+  const TmdbSeasonInfo({
+    required this.seasonNumber,
+    required this.name,
+    required this.episodeCount,
+  });
+
+  final int seasonNumber;
+  final String name;
+  final int episodeCount;
+}
+
+class TmdbEpisodeInfo {
+  const TmdbEpisodeInfo({
+    required this.seasonNumber,
+    required this.episodeNumber,
+    required this.name,
+    required this.overview,
+    required this.stillPath,
+  });
+
+  final int seasonNumber;
+  final int episodeNumber;
+  final String name;
+  final String overview;
+  final String? stillPath;
+}
+
 class TmdbClient {
   Future<TmdbMovieMatch?> searchMovie({
     required String accessToken,
@@ -129,6 +157,94 @@ class TmdbClient {
         query: query.trim(),
       );
       return results.take(limit).toList(growable: false);
+    } on TimeoutException {
+      throw const TmdbNetworkException(
+        '连接 TMDB 超时。请检查网络，或在 TMDB 设置里填写本机代理，例如 127.0.0.1:7890。',
+      );
+    } on SocketException catch (error) {
+      throw TmdbNetworkException('无法连接 TMDB：${error.message}。请检查网络，或配置本机代理。');
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<List<TmdbSeasonInfo>> fetchTvSeasons({
+    required String accessToken,
+    required int tvId,
+    required String proxy,
+  }) async {
+    if (accessToken.trim().isEmpty) {
+      return const [];
+    }
+
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 10)
+      ..findProxy = (uri) => _findProxy(uri, proxy);
+    try {
+      final payload = await _getJson(
+        client: client,
+        accessToken: accessToken,
+        uri: Uri.https('api.themoviedb.org', '/3/tv/$tvId', {
+          'language': 'zh-CN',
+        }),
+      );
+      final seasons = payload['seasons'] as List<Object?>? ?? [];
+      return [
+        for (final season in seasons.whereType<Map<String, Object?>>())
+          if ((season['season_number'] as num?) != null &&
+              (season['season_number'] as num).toInt() > 0)
+            TmdbSeasonInfo(
+              seasonNumber: (season['season_number'] as num).toInt(),
+              name: season['name'] as String? ?? '',
+              episodeCount: (season['episode_count'] as num? ?? 0).toInt(),
+            ),
+      ];
+    } on TimeoutException {
+      throw const TmdbNetworkException(
+        '连接 TMDB 超时。请检查网络，或在 TMDB 设置里填写本机代理，例如 127.0.0.1:7890。',
+      );
+    } on SocketException catch (error) {
+      throw TmdbNetworkException('无法连接 TMDB：${error.message}。请检查网络，或配置本机代理。');
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<List<TmdbEpisodeInfo>> fetchTvSeasonEpisodes({
+    required String accessToken,
+    required int tvId,
+    required int seasonNumber,
+    required String proxy,
+  }) async {
+    if (accessToken.trim().isEmpty) {
+      return const [];
+    }
+
+    final client = HttpClient()
+      ..connectionTimeout = const Duration(seconds: 10)
+      ..findProxy = (uri) => _findProxy(uri, proxy);
+    try {
+      final payload = await _getJson(
+        client: client,
+        accessToken: accessToken,
+        uri: Uri.https(
+          'api.themoviedb.org',
+          '/3/tv/$tvId/season/$seasonNumber',
+          {'language': 'zh-CN'},
+        ),
+      );
+      final episodes = payload['episodes'] as List<Object?>? ?? [];
+      return [
+        for (final episode in episodes.whereType<Map<String, Object?>>())
+          if ((episode['episode_number'] as num?) != null)
+            TmdbEpisodeInfo(
+              seasonNumber: seasonNumber,
+              episodeNumber: (episode['episode_number'] as num).toInt(),
+              name: episode['name'] as String? ?? '',
+              overview: episode['overview'] as String? ?? '',
+              stillPath: episode['still_path'] as String?,
+            ),
+      ];
     } on TimeoutException {
       throw const TmdbNetworkException(
         '连接 TMDB 超时。请检查网络，或在 TMDB 设置里填写本机代理，例如 127.0.0.1:7890。',
@@ -289,6 +405,37 @@ class TmdbClient {
         if (result['media_type'] == 'movie' || result['media_type'] == 'tv')
           TmdbMovieMatch.fromJson(result),
     ];
+  }
+
+  Future<Map<String, Object?>> _getJson({
+    required HttpClient client,
+    required String accessToken,
+    required Uri uri,
+  }) async {
+    final request = await client
+        .getUrl(uri)
+        .timeout(const Duration(seconds: 10));
+    request.headers.set(
+      HttpHeaders.authorizationHeader,
+      'Bearer ${accessToken.trim()}',
+    );
+    request.headers.set(HttpHeaders.acceptHeader, 'application/json');
+
+    final response = await request.close().timeout(const Duration(seconds: 20));
+    final body = await response
+        .transform(utf8.decoder)
+        .join()
+        .timeout(const Duration(seconds: 20));
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw TmdbException(
+        'TMDB 请求失败：HTTP ${response.statusCode}',
+        response.statusCode,
+        body,
+      );
+    }
+
+    return jsonDecode(body) as Map<String, Object?>;
   }
 
   /// Search queries derived from a raw filename title, best first: the

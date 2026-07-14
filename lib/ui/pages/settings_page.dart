@@ -806,12 +806,12 @@ class _AppearanceTab extends StatelessWidget {
                   settings.backgroundImagePath,
                   style: TextStyle(color: tokens.textSecondary, fontSize: 12),
                 ),
-                const SizedBox(height: AppSpacing.md),
               ] else
                 _EmptySettingsState(
                   icon: Icons.wallpaper_outlined,
-                  message: '当前使用默认深色动态背景。',
+                  message: '当前使用默认浅蓝动态背景。',
                 ),
+              const SizedBox(height: AppSpacing.lg),
               Wrap(
                 spacing: AppSpacing.md,
                 runSpacing: AppSpacing.sm,
@@ -835,7 +835,7 @@ class _AppearanceTab extends StatelessWidget {
         ),
         _SettingsCard(
           title: '视觉风格',
-          subtitle: '当前主题使用深色背景、粉紫重点色和紧凑桌面布局。',
+          subtitle: '当前分为深色和浅色风格',
           child: Row(
             children: [
               for (final color in [
@@ -881,7 +881,7 @@ class _AboutTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('当前版本：0.1.0', style: TextStyle(color: tokens.textSecondary)),
+              Text('当前版本：1.0.0', style: TextStyle(color: tokens.textSecondary)),
               const SizedBox(height: AppSpacing.md),
               Wrap(
                 spacing: AppSpacing.sm,
@@ -992,14 +992,14 @@ class _SettingsCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        color: tokens.surface.withValues(alpha: 0.58),
+        color: tokens.surface.withValues(alpha: 0.94),
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
         border: Border.all(color: tokens.cardBorder),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
+            color: tokens.accent.withValues(alpha: 0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),

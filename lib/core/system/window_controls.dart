@@ -9,6 +9,10 @@ class WindowControls {
     return _channel.invokeMethod<void>('minimize');
   }
 
+  static Future<void> toggleMaximize() {
+    return _channel.invokeMethod<void>('toggleMaximize');
+  }
+
   static Future<void> close() {
     return _channel.invokeMethod<void>('close');
   }

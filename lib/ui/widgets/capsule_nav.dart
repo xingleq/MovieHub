@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:lottie/lottie.dart';
 
 import '../../theme/app_tokens.dart';
 import 'hoverable.dart';
@@ -60,8 +61,31 @@ class CapsuleNav extends StatelessWidget {
                 ),
               ),
             const Spacer(),
+            const _Mascot(),
+            const SizedBox(height: AppSpacing.md),
             ?footer,
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Side-rail visual anchor. The animation intentionally stays independent of
+/// navigation state, so replacing the mascot asset never affects app flow.
+class _Mascot extends StatelessWidget {
+  const _Mascot();
+
+  @override
+  Widget build(BuildContext context) {
+    return RepaintBoundary(
+      child: SizedBox(
+        height: 154,
+        child: Lottie.asset(
+          'assets/animations/mascot.json',
+          fit: BoxFit.contain,
+          repeat: true,
+          errorBuilder: (context, error, stackTrace) => const SizedBox.shrink(),
         ),
       ),
     );
@@ -81,7 +105,6 @@ class _Header extends StatelessWidget {
         children: [
           DecoratedBox(
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: AppTokens.candyGradient),
               borderRadius: const BorderRadius.all(
                 Radius.circular(AppRadius.md),
               ),
@@ -92,13 +115,30 @@ class _Header extends StatelessWidget {
                 ),
               ],
             ),
-            child: const SizedBox(
+            child: SizedBox(
               width: 40,
               height: 40,
-              child: Icon(
-                Icons.play_circle_fill,
-                color: Colors.white,
-                size: 22,
+              child: ClipRRect(
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.md),
+                ),
+                child: Image.asset(
+                  'assets/images/branding/moviehub-mascot.png',
+                  fit: BoxFit.cover,
+                  errorBuilder: (context, error, stackTrace) =>
+                      const DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: AppTokens.candyGradient,
+                          ),
+                        ),
+                        child: Icon(
+                          Icons.play_circle_fill,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                ),
               ),
             ),
           ),

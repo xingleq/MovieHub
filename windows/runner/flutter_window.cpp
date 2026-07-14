@@ -46,6 +46,12 @@ bool FlutterWindow::OnCreate() {
           result->Success();
           return;
         }
+        if (method == "toggleMaximize") {
+          ShowWindow(GetHandle(),
+                     IsZoomed(GetHandle()) ? SW_RESTORE : SW_MAXIMIZE);
+          result->Success();
+          return;
+        }
         if (method == "close") {
           PostMessage(GetHandle(), WM_CLOSE, 0, 0);
           result->Success();

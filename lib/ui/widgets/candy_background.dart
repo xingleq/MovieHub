@@ -2,7 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Slowly breathing candy-gradient backdrop with twinkling star particles —
+/// Slowly breathing sky-gradient backdrop with twinkling star particles —
 /// the ambient layer of the anime-styled UI. Cheap: one repaint boundary,
 /// one animation controller.
 class CandyBackground extends StatefulWidget {
@@ -17,24 +17,24 @@ class _CandyBackgroundState extends State<CandyBackground>
   late final AnimationController _controller;
 
   static const _paletteA = [
-    Color(0xFF120E20),
-    Color(0xFF171429),
-    Color(0xFF0F1226),
+    Color(0xFF0C1B31),
+    Color(0xFF102847),
+    Color(0xFF0C203A),
   ];
   static const _paletteB = [
-    Color(0xFF1A1030),
-    Color(0xFF141A33),
-    Color(0xFF1D1128),
+    Color(0xFF102442),
+    Color(0xFF15345A),
+    Color(0xFF0E294A),
   ];
   static const _lightPaletteA = [
-    Color(0xFFFFF7FC),
-    Color(0xFFFFEFF8),
-    Color(0xFFF4F7FF),
+    Color(0xFFF4FAFF),
+    Color(0xFFEAF6FF),
+    Color(0xFFF7FBFF),
   ];
   static const _lightPaletteB = [
-    Color(0xFFFFFDF6),
-    Color(0xFFFFEAF4),
-    Color(0xFFEEF7FF),
+    Color(0xFFF9FCFF),
+    Color(0xFFE5F3FF),
+    Color(0xFFF0F8FF),
   ];
 
   @override
@@ -109,7 +109,7 @@ class _StarPainter extends CustomPainter {
       final opacity = light ? 0.05 + twinkle * 0.1 : 0.04 + twinkle * 0.22;
       final radius = 0.8 + _fraction(i * 31 + 7) * 1.6;
 
-      paint.color = (light ? const Color(0xFFE75CAA) : Colors.white).withValues(
+      paint.color = (light ? const Color(0xFF5AB4F6) : Colors.white).withValues(
         alpha: opacity,
       );
       canvas.drawCircle(

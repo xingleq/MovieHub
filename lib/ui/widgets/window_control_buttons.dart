@@ -10,25 +10,61 @@ class WindowControlButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
     return Padding(
-      padding: const EdgeInsets.all(AppSpacing.xs),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _WindowButton(
-            tooltip: '最小化',
-            icon: Icons.remove,
-            onPressed: () => unawaited(WindowControls.minimize()),
-          ),
-          const SizedBox(width: AppSpacing.xs),
-          _WindowButton(
-            tooltip: '关闭',
-            icon: Icons.close,
-            closeButton: true,
-            onPressed: () => unawaited(WindowControls.close()),
-          ),
-        ],
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
+      child: Container(
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+        decoration: BoxDecoration(
+          color: tokens.surface.withValues(alpha: 0.9),
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+          border: Border.all(color: tokens.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: tokens.accent.withValues(alpha: 0.1),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _WindowButton(
+              tooltip: '最小化',
+              icon: Icons.remove,
+              onPressed: () => unawaited(WindowControls.minimize()),
+            ),
+            const _ControlDivider(),
+            _WindowButton(
+              tooltip: '最大化 / 还原',
+              icon: Icons.crop_square,
+              onPressed: () => unawaited(WindowControls.toggleMaximize()),
+            ),
+            const _ControlDivider(),
+            _WindowButton(
+              tooltip: '关闭',
+              icon: Icons.close,
+              closeButton: true,
+              onPressed: () => unawaited(WindowControls.close()),
+            ),
+          ],
+        ),
       ),
+    );
+  }
+}
+
+class _ControlDivider extends StatelessWidget {
+  const _ControlDivider();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 1,
+      height: 16,
+      color: AppTokens.of(context).cardBorder,
     );
   }
 }
@@ -54,14 +90,14 @@ class _WindowButton extends StatelessWidget {
       child: IconButton(
         visualDensity: VisualDensity.compact,
         style: IconButton.styleFrom(
-          fixedSize: const Size(30, 30),
+          fixedSize: const Size(38, 30),
           foregroundColor: closeButton
               ? const Color(0xFFE84D6A)
               : tokens.textSecondary,
-          backgroundColor: tokens.surface.withValues(alpha: 0.42),
+          backgroundColor: Colors.transparent,
           hoverColor: closeButton
               ? const Color(0xFFE84D6A).withValues(alpha: 0.16)
-              : tokens.surfaceVariant.withValues(alpha: 0.36),
+              : tokens.surfaceVariant.withValues(alpha: 0.72),
         ),
         onPressed: onPressed,
         icon: Icon(icon, size: 18),

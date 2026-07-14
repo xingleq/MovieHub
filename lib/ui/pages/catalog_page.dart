@@ -7,7 +7,6 @@ import '../catalog/catalog_options.dart';
 import '../widgets/catalog_toolbar.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/poster_grid.dart';
-import '../widgets/section_header.dart';
 
 /// Shared poster-wall page for 动画 / 电影 / 电视剧 / 收藏, rendering grouped
 /// entries (a series = one card). Each instance owns its own search query,
@@ -89,14 +88,6 @@ class _CatalogPageState extends State<CatalogPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          SectionHeader(
-            title: widget.title,
-            trailing: Text(
-              '${visibleGroups.length} / ${sectionGroups.length}',
-              style: TextStyle(color: AppTokens.of(context).textSecondary),
-            ),
-          ),
-          const SizedBox(height: AppSpacing.lg),
           CatalogToolbar(
             searchController: _searchController,
             sortKey: _sortKey,

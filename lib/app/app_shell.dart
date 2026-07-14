@@ -302,13 +302,20 @@ class _AppShellState extends State<AppShell> {
                         thickness: 1,
                         color: tokens.cardBorder,
                       ),
-                      Expanded(child: _buildContent()),
+                      Expanded(
+                        child: Column(
+                          children: [
+                            _AppTopBar(section: _section),
+                            Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: tokens.cardBorder,
+                            ),
+                            Expanded(child: _buildContent()),
+                          ],
+                        ),
+                      ),
                     ],
-                  ),
-                  const Positioned(
-                    top: AppSpacing.md,
-                    right: AppSpacing.md,
-                    child: WindowControlButtons(),
                   ),
                 ],
               );
@@ -496,6 +503,108 @@ class _AppShellState extends State<AppShell> {
       // the settings page would freeze until a tab switch forces a rebuild.
       SettingsPage(),
     ];
+  }
+}
+
+/// A dedicated title bar prevents window controls from competing with page
+/// toolbars. Its center decorations are deliberately subtle and remain
+/// non-interactive, leaving the whole content area available to each page.
+class _AppTopBar extends StatelessWidget {
+  const _AppTopBar({required this.section});
+
+  final AppSection section;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return SizedBox(
+      height: 62,
+      child: Padding(
+        padding: const EdgeInsets.only(
+          left: AppSpacing.xl,
+          right: AppSpacing.md,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: tokens.accent.withValues(alpha: 0.12),
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.sm),
+                ),
+              ),
+              child: Icon(section.icon, size: 18, color: tokens.accent),
+            ),
+            const SizedBox(width: AppSpacing.sm),
+            Text(
+              section.title,
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+            ),
+            const Expanded(child: _TopBarDecorations()),
+            const WindowControlButtons(),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TopBarDecorations extends StatelessWidget {
+  const _TopBarDecorations();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return IgnorePointer(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth < 220) {
+            return const SizedBox.shrink();
+          }
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              Positioned(
+                left: constraints.maxWidth * .24,
+                child: Icon(
+                  Icons.cloud_rounded,
+                  size: 30,
+                  color: tokens.textSecondary.withValues(alpha: 0.12),
+                ),
+              ),
+              Icon(
+                Icons.public,
+                size: 34,
+                color: AppTokens.candyGradient.last.withValues(alpha: 0.18),
+              ),
+              Positioned(
+                right: constraints.maxWidth * .19,
+                top: 12,
+                child: Icon(
+                  Icons.star_rounded,
+                  size: 16,
+                  color: tokens.accent.withValues(alpha: 0.26),
+                ),
+              ),
+              Positioned(
+                right: constraints.maxWidth * .31,
+                bottom: 10,
+                child: Icon(
+                  Icons.auto_awesome,
+                  size: 13,
+                  color: AppTokens.cyanAccent.withValues(alpha: 0.22),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
   }
 }
 

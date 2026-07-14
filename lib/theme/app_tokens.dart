@@ -51,39 +51,38 @@ class AppTokens extends ThemeExtension<AppTokens> {
   final Color scrim;
   final Color cardBorder;
 
-  /// Palette from the approved design spec: 主色 #FF8BD1 / 辅助 #7861FF /
-  /// 强调 #00D4FF on 背景 #0F0D1A, 卡片 #171429, 描边 #241A3A.
+  /// Sky-blue palette for the young adventure theme: bright blue actions,
+  /// warm yellow highlights and calm blue-grey surfaces.
   static const AppTokens dark = AppTokens(
-    background: Color(0xFF0F0D1A),
-    surface: Color(0xFF171429),
-    surfaceVariant: Color(0xFF201B38),
-    accent: Color(0xFFFF8BD1),
-    textPrimary: Color(0xFFF7F5FF),
-    textSecondary: Color(0xFFA8A3C7),
-    scrim: Color(0xCC0A0912),
-    cardBorder: Color(0xFF241A3A),
+    background: Color(0xFF0B1628),
+    surface: Color(0xFF12223B),
+    surfaceVariant: Color(0xFF193154),
+    accent: Color(0xFF48A8FF),
+    textPrimary: Color(0xFFF3F8FF),
+    textSecondary: Color(0xFFA9C4E8),
+    scrim: Color(0xCC07101F),
+    cardBorder: Color(0xFF27466F),
   );
 
   static const AppTokens light = AppTokens(
-    background: Color(0xFFFFF7FC),
+    background: Color(0xFFF3F9FF),
     surface: Color(0xFFFFFFFF),
-    surfaceVariant: Color(0xFFFFEDF8),
-    accent: Color(0xFFE75CAA),
-    textPrimary: Color(0xFF261B33),
-    textSecondary: Color(0xFF6F6380),
-    scrim: Color(0xCCFFF7FC),
-    cardBorder: Color(0xFFEAD7EC),
+    surfaceVariant: Color(0xFFE8F4FF),
+    accent: Color(0xFF318CE7),
+    textPrimary: Color(0xFF17324F),
+    textSecondary: Color(0xFF66809C),
+    scrim: Color(0xCCF3F9FF),
+    cardBorder: Color(0xFFCFE4F7),
   );
 
-  /// Signature candy gradient for jelly buttons and the nav highlight
-  /// (主色粉 → 辅助紫).
+  /// Signature sky gradient for buttons, selected tabs and navigation.
   static const List<Color> candyGradient = [
-    Color(0xFFFF8BD1),
-    Color(0xFF7861FF),
+    Color(0xFF57C7FF),
+    Color(0xFF3975E8),
   ];
 
-  /// Cyan highlight for ratings and small accents (强调色).
-  static const Color cyanAccent = Color(0xFF00D4FF);
+  /// Warm yellow highlight for ratings, stars and small achievements.
+  static const Color cyanAccent = Color(0xFFFFC44D);
 
   /// Reads the tokens from [context], falling back to [dark] so a missing
   /// extension can never null-crash.

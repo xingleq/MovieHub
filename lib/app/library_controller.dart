@@ -79,7 +79,19 @@ class LibraryController extends ChangeNotifier {
           return bDate.compareTo(aDate);
         });
 
-    return items.take(12).toList(growable: false);
+    // Episodes of a series share one home-shelf card, even when the user has
+    // progress in different seasons. Items are already newest-first, so the
+    // first one retained is always the most recently watched episode and
+    // remains the resume target for that series.
+    final uniqueItems = <String, MediaItem>{};
+    for (final item in items) {
+      final key = item.isEpisode
+          ? MediaGroup.keyOf(item)
+          : 'movie:${item.path}';
+      uniqueItems.putIfAbsent(key, () => item);
+    }
+
+    return uniqueItems.values.take(12).toList(growable: false);
   }
 
   List<MediaItem> get recentlyAddedItems {

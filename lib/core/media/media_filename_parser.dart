@@ -119,6 +119,10 @@ final _explicitEpisodePatterns = [
 ];
 
 final _leadingEpisodeNumberPattern = RegExp(r'^[\s\[（(【]*(\d{1,3})(?!\d)');
+final _trailingEpisodeNumberPattern = RegExp(r'(?:[._\-\s])(\d{1,3})\s*$');
+final _bracketEpisodeNumberPattern = RegExp(
+  r'[\[【（(]\s*(\d{1,3})\s*[\]】）)]',
+);
 
 /// Finds an episode number in a file name (without extension): an explicit
 /// `第01集/话/回` or `EP01`/`E01` marker, else a bare leading number
@@ -135,9 +139,31 @@ EpisodeNumber? parseEpisodeNumber(String rawTitle) {
     }
   }
 
+  // Common release naming such as `[Group][01][1080P]` puts the episode
+  // number in a bracket rather than at the start of the file name.
+  final bracketed = _bracketEpisodeNumberPattern.firstMatch(rawTitle);
+  if (bracketed != null) {
+    final value = int.tryParse(bracketed.group(1)!);
+    if (value != null) {
+      return EpisodeNumber(value: value, explicit: false);
+    }
+  }
+
   final leading = _leadingEpisodeNumberPattern.firstMatch(rawTitle);
   if (leading != null) {
     final value = int.tryParse(leading.group(1)!);
+    if (value != null) {
+      return EpisodeNumber(value: value, explicit: false);
+    }
+  }
+
+  // Release groups often shorten a title and append the episode number, e.g.
+  // `迪jia.01` or `Show-12`. It remains non-explicit: the scanner still
+  // requires a season folder or multiple similarly numbered sibling files
+  // before treating it as a series.
+  final trailing = _trailingEpisodeNumberPattern.firstMatch(rawTitle);
+  if (trailing != null) {
+    final value = int.tryParse(trailing.group(1)!);
     if (value != null) {
       return EpisodeNumber(value: value, explicit: false);
     }
@@ -168,11 +194,39 @@ DirectoryInfo parseDirectoryName(String directoryName) {
         .replaceRange(match.start, match.end, ' ')
         .trim();
     return DirectoryInfo(
-      seriesTitle: stripped.isEmpty ? '' : cleanTitle(stripped),
+      seriesTitle: stripped.isEmpty ? '' : cleanSeriesDirectoryTitle(stripped),
       seasonNumber: season,
     );
   }
-  return DirectoryInfo(seriesTitle: cleanTitle(directoryName));
+  return DirectoryInfo(seriesTitle: cleanSeriesDirectoryTitle(directoryName));
+}
+
+/// Produces a TMDB-friendly title from a release-folder name. Prefer a useful
+/// Chinese title when bracketed release metadata mixes languages and technical
+/// labels, e.g. `[GM-Team][国漫][那年那兔那些事儿 第五季][1080P]`.
+String cleanSeriesDirectoryTitle(String rawTitle) {
+  final withoutTags = rawTitle
+      .replaceAll(
+        RegExp(
+          r'\b(?:\d{3,4}p|\d{3,4}x\d{3,4}|avc|hevc|x26[45]|h\.?26[45]|'
+          r'web-?dl|bluray|bdrip|remux|gb|big5|aac|flac)\b',
+          caseSensitive: false,
+        ),
+        ' ',
+      )
+      .replaceAll(RegExp(r'(?:国语|粤语|日语|英语|中字|双语|蓝光|国漫)'), ' ')
+      .replaceAll(RegExp(r'[\[\]【】()（）_]'), ' ');
+  final normalized = cleanTitle(withoutTags);
+
+  final chineseTitles = RegExp(r'[\u4e00-\u9fff]{3,}')
+      .allMatches(normalized)
+      .map((match) => match.group(0)!)
+      .toList();
+  if (chineseTitles.isNotEmpty) {
+    chineseTitles.sort((a, b) => b.length.compareTo(a.length));
+    return chineseTitles.first;
+  }
+  return normalized;
 }
 
 /// Parses ASCII digits or simple Chinese numerals (一 ~ 九十九).

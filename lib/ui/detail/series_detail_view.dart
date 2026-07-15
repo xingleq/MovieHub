@@ -201,35 +201,13 @@ class SeriesDetailView extends StatelessWidget {
                       ),
                     ],
                     const SizedBox(height: AppSpacing.xl),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          '剧集列表',
-                          style: Theme.of(context).textTheme.titleMedium
-                              ?.copyWith(fontWeight: FontWeight.w700),
-                        ),
-                        _EpisodePagination(total: group.episodes.length),
-                      ],
+                    _SeasonEpisodeList(
+                      key: ValueKey(group.key),
+                      seasons: seasons,
+                      suggestedSeason: next?.seasonNumber,
+                      onPlayEpisode: onPlayEpisode,
+                      onEditEpisode: onEditEpisode,
                     ),
-                    const SizedBox(height: AppSpacing.sm),
-                    for (final season in seasons.keys.toList()..sort()) ...[
-                      if (season != 0)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: AppSpacing.sm),
-                          child: Text(
-                            '第 $season 季',
-                            style: TextStyle(color: tokens.textSecondary),
-                          ),
-                        ),
-                      for (final episode in seasons[season]!)
-                        _EpisodeRow(
-                          episode: episode,
-                          onPlay: () => onPlayEpisode(episode),
-                          onEdit: () => onEditEpisode(episode),
-                        ),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
                     if (related.isNotEmpty) ...[
                       RelatedDetailShelf(
                         title: '相关推荐',
@@ -298,53 +276,93 @@ class SeriesDetailView extends StatelessWidget {
   }
 }
 
-class _EpisodePagination extends StatelessWidget {
-  const _EpisodePagination({required this.total});
+class _SeasonEpisodeList extends StatefulWidget {
+  const _SeasonEpisodeList({
+    super.key,
+    required this.seasons,
+    required this.suggestedSeason,
+    required this.onPlayEpisode,
+    required this.onEditEpisode,
+  });
 
-  final int total;
+  final Map<int, List<MediaItem>> seasons;
+  final int? suggestedSeason;
+  final ValueChanged<MediaItem> onPlayEpisode;
+  final ValueChanged<MediaItem> onEditEpisode;
+
+  @override
+  State<_SeasonEpisodeList> createState() => _SeasonEpisodeListState();
+}
+
+class _SeasonEpisodeListState extends State<_SeasonEpisodeList> {
+  int? _selectedSeason;
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
+    final seasonNumbers = widget.seasons.keys.toList()..sort();
+    final fallback = widget.seasons.containsKey(widget.suggestedSeason)
+        ? widget.suggestedSeason!
+        : seasonNumbers.first;
+    final selectedSeason = widget.seasons.containsKey(_selectedSeason)
+        ? _selectedSeason!
+        : fallback;
+    final episodes = widget.seasons[selectedSeason]!;
 
-    // Visual pagination matching the design: first few pages + ellipsis + last.
-    final pages = <int>{
-      for (var i = 1; i <= total.clamp(1, 7); i++) i,
-      if (total > 7) total,
-    }.toList()..sort();
-
-    return Wrap(
-      spacing: AppSpacing.xs,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (var i = 0; i < pages.length; i++) ...[
-          Container(
-            width: 28,
-            height: 28,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: pages[i] == 1
-                  ? tokens.accent
-                  : tokens.surface.withValues(alpha: 0.6),
-              borderRadius: const BorderRadius.all(
-                Radius.circular(AppRadius.sm),
-              ),
-              border: Border.all(color: tokens.cardBorder),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              '剧集列表',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
             ),
-            child: Text(
-              '${pages[i]}',
-              style: TextStyle(
-                fontSize: 12,
-                fontWeight: pages[i] == 1 ? FontWeight.w700 : FontWeight.w500,
-                color: pages[i] == 1 ? Colors.white : tokens.textSecondary,
-              ),
+            Text(
+              '共 ${episodes.length} 集',
+              style: TextStyle(color: tokens.textSecondary),
             ),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (final season in seasonNumbers)
+                Padding(
+                  padding: const EdgeInsets.only(right: AppSpacing.sm),
+                  child: ChoiceChip(
+                    label: Text(season == 0 ? '未分季' : '第 $season 季'),
+                    selected: season == selectedSeason,
+                    onSelected: (_) {
+                      setState(() => _selectedSeason = season);
+                    },
+                    selectedColor: tokens.accent,
+                    backgroundColor: tokens.surface.withValues(alpha: 0.7),
+                    labelStyle: TextStyle(
+                      color: season == selectedSeason
+                          ? Colors.white
+                          : tokens.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                    side: BorderSide(color: tokens.cardBorder),
+                  ),
+                ),
+            ],
           ),
-          if (i == pages.length - 2 && pages.last > pages[i] + 1)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-              child: Text('...', style: TextStyle(color: tokens.textSecondary)),
-            ),
-        ],
+        ),
+        const SizedBox(height: AppSpacing.md),
+        for (final episode in episodes)
+          _EpisodeRow(
+            episode: episode,
+            onPlay: () => widget.onPlayEpisode(episode),
+            onEdit: () => widget.onEditEpisode(episode),
+          ),
+        const SizedBox(height: AppSpacing.lg),
       ],
     );
   }

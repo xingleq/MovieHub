@@ -11,5 +11,6 @@
 | `assets/images/decorations/cloud-bottom.webp` | 页面右下云朵 | 720 × 320，透明 PNG/WebP | `cloud-bottom.webp` |
 | `assets/images/decorations/planet.webp` | 设置页或首页顶部行星 | 360 × 360，透明 PNG/WebP | `planet.webp` |
 | `assets/images/decorations/star-*.webp` | 零散星星装饰（可选） | 64–160 px，透明 PNG/WebP | `star-01.webp` |
+| `assets/images/screenshots/*.png` | README 与发布页使用的功能截图 | 1920 × 1080 或等比例 PNG | `home.png`、`settings.png` |
 
 注意：海报、剧集横幅仍由 TMDB 获取，不要放进这里。请确保素材拥有可用于桌面应用的授权；优先选择透明背景的 PNG/WebP，以便叠加到 UI。

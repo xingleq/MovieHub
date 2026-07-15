@@ -881,7 +881,7 @@ class _AboutTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('当前版本：1.0.0', style: TextStyle(color: tokens.textSecondary)),
+              Text('当前版本：1.0.1', style: TextStyle(color: tokens.textSecondary)),
               const SizedBox(height: AppSpacing.md),
               Wrap(
                 spacing: AppSpacing.sm,
@@ -899,7 +899,7 @@ class _AboutTab extends StatelessWidget {
                   showAboutDialog(
                     context: context,
                     applicationName: 'MovieHub',
-                    applicationVersion: '0.1.0',
+                    applicationVersion: '1.0.1',
                   );
                 },
                 icon: const Icon(Icons.info_outline),

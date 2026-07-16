@@ -12,6 +12,7 @@ import '../ui/detail/media_detail_view.dart';
 import '../ui/detail/series_detail_view.dart';
 import '../ui/format/formatters.dart';
 import '../ui/pages/catalog_page.dart';
+import '../ui/pages/gacha_page.dart';
 import '../ui/pages/home_page.dart';
 import '../ui/pages/settings_page.dart';
 import '../ui/player/player_page.dart';
@@ -284,6 +285,11 @@ class _AppShellState extends State<AppShell> {
                             selectedIcon: Icons.tv_rounded,
                             label: '电视剧',
                           ),
+                          const CapsuleNavItem(
+                            icon: Icons.style_outlined,
+                            selectedIcon: Icons.style_rounded,
+                            label: '抽卡',
+                          ),
                           CapsuleNavItem(
                             icon: Icons.favorite_outline,
                             selectedIcon: Icons.favorite_rounded,
@@ -490,6 +496,7 @@ class _AppShellState extends State<AppShell> {
         onOpenEntry: _openEntry,
         onPlayEntry: _playEntry,
       ),
+      const GachaPage(),
       CatalogPage(
         title: '我的收藏',
         groupFilter: isFavoriteGroup,

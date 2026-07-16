@@ -7,6 +7,7 @@ import '../../app/library_controller.dart';
 import '../../app/library_scope.dart';
 import '../../app/settings_controller.dart';
 import '../../app/settings_scope.dart';
+import '../../core/gacha/gacha_store.dart';
 import '../../theme/app_tokens.dart';
 import '../format/formatters.dart';
 import '../widgets/message_banner.dart';
@@ -577,6 +578,30 @@ class _PlaybackTab extends StatelessWidget {
           ),
         ),
         _SettingsCard(
+          title: '管理密码',
+          subtitle: '单独管理家长密码；观看时长和抽卡次数都会使用它校验。',
+          child: Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _StatusTile(
+                icon: settings.hasManagementPassword
+                    ? Icons.lock_outline
+                    : Icons.lock_open_outlined,
+                label: '密码状态',
+                value: settings.hasManagementPassword ? '已设置' : '未设置',
+              ),
+              FilledButton.tonalIcon(
+                onPressed: () =>
+                    _openManagementPasswordDialog(context, settings),
+                icon: const Icon(Icons.password_outlined),
+                label: Text(settings.hasManagementPassword ? '修改密码' : '设置密码'),
+              ),
+            ],
+          ),
+        ),
+        _SettingsCard(
           title: '观看与休息',
           subtitle: '进入播放器后开始计时，到时会锁定整个软件并显示休息倒计时。',
           child: Column(
@@ -597,11 +622,11 @@ class _PlaybackTab extends StatelessWidget {
                     value: '${settings.breakMinutes} 分钟',
                   ),
                   _StatusTile(
-                    icon: settings.hasScreenTimePassword
+                    icon: settings.hasManagementPassword
                         ? Icons.lock_outline
                         : Icons.lock_open_outlined,
-                    label: '修改保护',
-                    value: settings.hasScreenTimePassword ? '已启用' : '未设置',
+                    label: '管理密码',
+                    value: settings.hasManagementPassword ? '已设置' : '未设置',
                   ),
                 ],
               ),
@@ -615,6 +640,41 @@ class _PlaybackTab extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+        _SettingsCard(
+          title: '抽卡次数',
+          subtitle: '每天免费抽一张；这里可以输入管理密码给当前用户增加额外抽卡次数。',
+          child: FutureBuilder<GachaSnapshot>(
+            future: Future(() {
+              final store = GachaStore();
+              try {
+                return store.load();
+              } finally {
+                store.dispose();
+              }
+            }),
+            builder: (context, snapshot) {
+              final bonusDraws = snapshot.data?.bonusDraws ?? 0;
+              return Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.md,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                children: [
+                  _StatusTile(
+                    icon: Icons.confirmation_num_outlined,
+                    label: '额外次数',
+                    value: '$bonusDraws 次',
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: () =>
+                        _openAddGachaDrawsDialog(context, settings),
+                    icon: const Icon(Icons.add_card_outlined),
+                    label: const Text('增加抽卡次数'),
+                  ),
+                ],
+              );
+            },
           ),
         ),
         _SettingsCard(
@@ -637,109 +697,287 @@ class _PlaybackTab extends StatelessWidget {
     );
   }
 
+  Future<void> _openManagementPasswordDialog(
+    BuildContext context,
+    SettingsController settings,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ManagementPasswordDialog(settings: settings),
+    );
+  }
+
+  Future<void> _openAddGachaDrawsDialog(
+    BuildContext context,
+    SettingsController settings,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _AddGachaDrawsDialog(settings: settings),
+    );
+  }
+
   Future<void> _openScreenTimeDialog(
     BuildContext context,
     SettingsController settings,
   ) async {
-    final watchController = TextEditingController(
-      text: settings.watchLimitMinutes.toString(),
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _ScreenTimeDialog(settings: settings),
     );
-    final breakController = TextEditingController(
-      text: settings.breakMinutes.toString(),
-    );
-    final passwordController = TextEditingController();
-    final newPasswordController = TextEditingController();
+  }
+}
 
-    try {
-      await showDialog<void>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('观看时长保护'),
-            content: SizedBox(
-              width: 420,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: watchController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '单次观看时长（分钟）',
-                      prefixIcon: Icon(Icons.timer_outlined),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  TextField(
-                    controller: breakController,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: '休息时长（分钟）',
-                      prefixIcon: Icon(Icons.self_improvement),
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  if (settings.hasScreenTimePassword) ...[
-                    TextField(
-                      controller: passwordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: '管理密码',
-                        prefixIcon: Icon(Icons.lock_outline),
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.md),
-                    TextField(
-                      controller: newPasswordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: '新密码（可选）',
-                        prefixIcon: Icon(Icons.password_outlined),
-                      ),
-                    ),
-                  ] else
-                    TextField(
-                      controller: newPasswordController,
-                      obscureText: true,
-                      decoration: const InputDecoration(
-                        labelText: '创建管理密码',
-                        prefixIcon: Icon(Icons.lock_outline),
-                      ),
-                    ),
-                ],
+class _ManagementPasswordDialog extends StatefulWidget {
+  const _ManagementPasswordDialog({required this.settings});
+
+  final SettingsController settings;
+
+  @override
+  State<_ManagementPasswordDialog> createState() =>
+      _ManagementPasswordDialogState();
+}
+
+class _ManagementPasswordDialogState extends State<_ManagementPasswordDialog> {
+  final _passwordController = TextEditingController();
+  final _newPasswordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _newPasswordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = widget.settings;
+    return AlertDialog(
+      title: Text(settings.hasManagementPassword ? '修改管理密码' : '设置管理密码'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (settings.hasManagementPassword) ...[
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '当前管理密码',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.md),
+            ],
+            TextField(
+              controller: _newPasswordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: '新管理密码',
+                prefixIcon: Icon(Icons.password_outlined),
               ),
             ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('取消'),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            final saved = await settings.saveManagementPassword(
+              password: _passwordController.text,
+              newPassword: _newPasswordController.text,
+            );
+            if (saved && context.mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+          child: const Text('保存'),
+        ),
+      ],
+    );
+  }
+}
+
+class _AddGachaDrawsDialog extends StatefulWidget {
+  const _AddGachaDrawsDialog({required this.settings});
+
+  final SettingsController settings;
+
+  @override
+  State<_AddGachaDrawsDialog> createState() => _AddGachaDrawsDialogState();
+}
+
+class _AddGachaDrawsDialogState extends State<_AddGachaDrawsDialog> {
+  final _countController = TextEditingController(text: '1');
+  final _passwordController = TextEditingController();
+
+  @override
+  void dispose() {
+    _countController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('增加抽卡次数'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _countController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: '增加次数',
+                prefixIcon: Icon(Icons.confirmation_num_outlined),
               ),
-              FilledButton(
-                onPressed: () async {
-                  final saved = await settings.saveScreenTimeLimits(
-                    watchLimitMinutes:
-                        int.tryParse(watchController.text.trim()) ?? 45,
-                    breakMinutes:
-                        int.tryParse(breakController.text.trim()) ?? 10,
-                    password: passwordController.text,
-                    newPassword: newPasswordController.text,
-                  );
-                  if (saved && dialogContext.mounted) {
-                    Navigator.of(dialogContext).pop();
-                  }
-                },
-                child: const Text('保存'),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: '管理密码',
+                prefixIcon: Icon(Icons.lock_outline),
               ),
-            ],
-          );
-        },
-      );
-    } finally {
-      watchController.dispose();
-      breakController.dispose();
-      passwordController.dispose();
-      newPasswordController.dispose();
-    }
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final count = int.tryParse(_countController.text.trim()) ?? 0;
+            if (count <= 0) {
+              widget.settings.clearError();
+              return;
+            }
+            if (!widget.settings.verifyManagementPassword(
+              _passwordController.text,
+            )) {
+              return;
+            }
+            final store = GachaStore();
+            try {
+              store.addBonusDraws(count.clamp(1, 999));
+            } finally {
+              store.dispose();
+            }
+            if (context.mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+          child: const Text('确认增加'),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScreenTimeDialog extends StatefulWidget {
+  const _ScreenTimeDialog({required this.settings});
+
+  final SettingsController settings;
+
+  @override
+  State<_ScreenTimeDialog> createState() => _ScreenTimeDialogState();
+}
+
+class _ScreenTimeDialogState extends State<_ScreenTimeDialog> {
+  late final TextEditingController _watchController;
+  late final TextEditingController _breakController;
+  final _passwordController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _watchController = TextEditingController(
+      text: widget.settings.watchLimitMinutes.toString(),
+    );
+    _breakController = TextEditingController(
+      text: widget.settings.breakMinutes.toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _watchController.dispose();
+    _breakController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('观看时长保护'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: _watchController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: '单次观看时长（分钟）',
+                prefixIcon: Icon(Icons.timer_outlined),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _breakController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: '休息时长（分钟）',
+                prefixIcon: Icon(Icons.self_improvement),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: '管理密码',
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () async {
+            final saved = await widget.settings.saveScreenTimeLimits(
+              watchLimitMinutes:
+                  int.tryParse(_watchController.text.trim()) ?? 45,
+              breakMinutes: int.tryParse(_breakController.text.trim()) ?? 10,
+              password: _passwordController.text,
+            );
+            if (saved && context.mounted) {
+              Navigator.of(context).pop();
+            }
+          },
+          child: const Text('保存'),
+        ),
+      ],
+    );
   }
 }
 
@@ -881,7 +1119,7 @@ class _AboutTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('当前版本：1.0.1', style: TextStyle(color: tokens.textSecondary)),
+              Text('当前版本：1.1.0', style: TextStyle(color: tokens.textSecondary)),
               const SizedBox(height: AppSpacing.md),
               Wrap(
                 spacing: AppSpacing.sm,
@@ -899,7 +1137,7 @@ class _AboutTab extends StatelessWidget {
                   showAboutDialog(
                     context: context,
                     applicationName: 'MovieHub',
-                    applicationVersion: '1.0.1',
+                    applicationVersion: '1.1.0',
                   );
                 },
                 icon: const Icon(Icons.info_outline),

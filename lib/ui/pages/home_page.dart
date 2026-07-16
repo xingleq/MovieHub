@@ -49,12 +49,21 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _startHeroTimer();
+  }
+
+  void _startHeroTimer() {
+    _heroTimer?.cancel();
     _heroTimer = Timer.periodic(_heroInterval, (_) {
       if (!mounted) {
         return;
       }
+      final count = LibraryScope.of(context).spotlightItems.length;
+      if (count <= 1) {
+        return;
+      }
       setState(() {
-        _heroIndex = (_heroIndex + 1) % 3;
+        _heroIndex = (_heroIndex + 1) % count;
       });
     });
   }
@@ -128,12 +137,14 @@ class _HomePageState extends State<HomePage> {
                 Entrance(
                   child: HeroBanner(
                     item: spotlight,
+                    key: ValueKey(spotlight.path),
                     activeIndex: _heroIndex,
                     itemCount: spotlights.length,
                     onDotSelected: (index) {
                       setState(() {
                         _heroIndex = index;
                       });
+                      _startHeroTimer();
                     },
                     onPlay: () => widget.onPlayItem(spotlight),
                     onOpenDetail: () => widget.onOpenItem(spotlight),

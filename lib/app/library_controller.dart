@@ -88,10 +88,37 @@ class LibraryController extends ChangeNotifier {
       final key = item.isEpisode
           ? MediaGroup.keyOf(item)
           : 'movie:${item.path}';
-      uniqueItems.putIfAbsent(key, () => item);
+      uniqueItems.putIfAbsent(key, () => _withGroupArtwork(item));
     }
 
     return uniqueItems.values.take(12).toList(growable: false);
+  }
+
+  MediaItem _withGroupArtwork(MediaItem item) {
+    if (!item.isEpisode) {
+      return item;
+    }
+    for (final group in groups) {
+      if (!group.paths.contains(item.path)) {
+        continue;
+      }
+      final rep = group.representative;
+      return item.copyWith(
+        tmdbTitle: item.tmdbTitle ?? rep.tmdbTitle,
+        overview: item.overview ?? rep.overview,
+        posterPath: item.posterPath ?? rep.posterPath,
+        backdropPath: item.backdropPath ?? rep.backdropPath,
+        releaseDate: item.releaseDate ?? rep.releaseDate,
+        voteAverage: item.voteAverage ?? rep.voteAverage,
+        tmdbMediaType: item.tmdbMediaType ?? rep.tmdbMediaType,
+        genreIds: item.genreIds ?? rep.genreIds,
+        genres: item.genres ?? rep.genres,
+        directors: item.directors ?? rep.directors,
+        cast: item.cast ?? rep.cast,
+        runtimeMinutes: item.runtimeMinutes ?? rep.runtimeMinutes,
+      );
+    }
+    return item;
   }
 
   List<MediaItem> get recentlyAddedItems {

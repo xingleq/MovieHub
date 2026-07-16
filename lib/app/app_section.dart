@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Top-level sections reachable from the navigation rail.
-enum AppSection { home, anime, movies, tv, favorites, settings }
+enum AppSection { home, anime, movies, tv, gacha, favorites, settings }
 
 extension AppSectionPresentation on AppSection {
   String get title => switch (this) {
@@ -9,6 +9,7 @@ extension AppSectionPresentation on AppSection {
     AppSection.anime => '动画乐园',
     AppSection.movies => '电影',
     AppSection.tv => '电视剧',
+    AppSection.gacha => '抽卡',
     AppSection.favorites => '我的收藏',
     AppSection.settings => '设置',
   };
@@ -18,6 +19,7 @@ extension AppSectionPresentation on AppSection {
     AppSection.anime => Icons.auto_awesome,
     AppSection.movies => Icons.movie_rounded,
     AppSection.tv => Icons.tv_rounded,
+    AppSection.gacha => Icons.style_rounded,
     AppSection.favorites => Icons.favorite_rounded,
     AppSection.settings => Icons.settings_rounded,
   };

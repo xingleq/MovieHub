@@ -46,6 +46,7 @@ class SettingsController extends ChangeNotifier {
   int get watchLimitMinutes => _watchLimitMinutes;
   int get breakMinutes => _breakMinutes;
   bool get hasScreenTimePassword => _screenTimePasswordHash.isNotEmpty;
+  bool get hasManagementPassword => _screenTimePasswordHash.isNotEmpty;
   bool get breakActive {
     final breakUntil = _breakUntil;
     return breakUntil != null && DateTime.now().isBefore(breakUntil);
@@ -183,18 +184,14 @@ class SettingsController extends ChangeNotifier {
     required int watchLimitMinutes,
     required int breakMinutes,
     required String password,
-    String? newPassword,
   }) async {
     final trimmedPassword = password.trim();
-    final trimmedNewPassword = newPassword?.trim() ?? '';
     if (_screenTimePasswordHash.isEmpty) {
-      if (trimmedNewPassword.length < 4) {
-        _error = '请设置至少 4 位的管理密码。';
-        notifyListeners();
-        return false;
-      }
-      _screenTimePasswordHash = _hashPassword(trimmedNewPassword);
-    } else if (_screenTimePasswordHash != _hashPassword(trimmedPassword)) {
+      _error = '请先设置管理密码。';
+      notifyListeners();
+      return false;
+    }
+    if (_screenTimePasswordHash != _hashPassword(trimmedPassword)) {
       _error = '管理密码不正确，无法修改观看时长。';
       notifyListeners();
       return false;
@@ -202,18 +199,50 @@ class SettingsController extends ChangeNotifier {
 
     _watchLimitMinutes = watchLimitMinutes.clamp(1, 600);
     _breakMinutes = breakMinutes.clamp(1, 600);
-    if (trimmedNewPassword.isNotEmpty) {
-      if (trimmedNewPassword.length < 4) {
-        _error = '新管理密码至少需要 4 位。';
-        notifyListeners();
-        return false;
-      }
-      _screenTimePasswordHash = _hashPassword(trimmedNewPassword);
-    }
     await _normalizeScreenTimeState();
     await _store.save(_current);
     _error = null;
     _startScreenTimeTimer();
+    notifyListeners();
+    return true;
+  }
+
+  bool verifyManagementPassword(String password) {
+    if (_screenTimePasswordHash.isEmpty) {
+      _error = '请先设置管理密码。';
+      notifyListeners();
+      return false;
+    }
+    if (_screenTimePasswordHash != _hashPassword(password.trim())) {
+      _error = '管理密码不正确。';
+      notifyListeners();
+      return false;
+    }
+    _error = null;
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> saveManagementPassword({
+    required String password,
+    required String newPassword,
+  }) async {
+    final trimmedPassword = password.trim();
+    final trimmedNewPassword = newPassword.trim();
+    if (trimmedNewPassword.length < 4) {
+      _error = '管理密码至少需要 4 位。';
+      notifyListeners();
+      return false;
+    }
+    if (_screenTimePasswordHash.isNotEmpty &&
+        _screenTimePasswordHash != _hashPassword(trimmedPassword)) {
+      _error = '当前管理密码不正确。';
+      notifyListeners();
+      return false;
+    }
+    _screenTimePasswordHash = _hashPassword(trimmedNewPassword);
+    await _store.save(_current);
+    _error = null;
     notifyListeners();
     return true;
   }

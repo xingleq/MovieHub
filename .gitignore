@@ -55,3 +55,9 @@ app.*.map.json
 .claude/
 
 *.exe
+
+# Local card images are personal assets and should not be pushed.
+assets/cards/images/**/*.png
+assets/cards/images/**/*.jpg
+assets/cards/images/**/*.jpeg
+assets/cards/images/**/*.webp

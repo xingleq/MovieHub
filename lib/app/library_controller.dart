@@ -102,7 +102,12 @@ class LibraryController extends ChangeNotifier {
       if (!group.paths.contains(item.path)) {
         continue;
       }
-      final rep = group.representative;
+      final rep = group.episodes.firstWhere(
+        (episode) =>
+            (episode.backdropPath ?? '').isNotEmpty ||
+            (episode.posterPath ?? '').isNotEmpty,
+        orElse: () => group.representative,
+      );
       return item.copyWith(
         tmdbTitle: item.tmdbTitle ?? rep.tmdbTitle,
         overview: item.overview ?? rep.overview,
@@ -184,6 +189,23 @@ class LibraryController extends ChangeNotifier {
         return null;
       }
       return group.episodes[index + 1];
+    }
+    return null;
+  }
+
+  /// The episode before [item] in its series' ordered episode list.
+  MediaItem? previousEpisodeOf(MediaItem item) {
+    if (!item.isEpisode) {
+      return null;
+    }
+    for (final group in groups) {
+      final index = group.episodes.indexWhere(
+        (episode) => episode.path == item.path,
+      );
+      if (index <= 0) {
+        continue;
+      }
+      return group.episodes[index - 1];
     }
     return null;
   }

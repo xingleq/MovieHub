@@ -134,21 +134,40 @@ class _HomePageState extends State<HomePage> {
                 const SizedBox(height: AppSpacing.md),
               ],
               if (spotlight != null) ...[
-                Entrance(
-                  child: HeroBanner(
-                    item: spotlight,
-                    key: ValueKey(spotlight.path),
-                    activeIndex: _heroIndex,
-                    itemCount: spotlights.length,
-                    onDotSelected: (index) {
-                      setState(() {
-                        _heroIndex = index;
-                      });
-                      _startHeroTimer();
-                    },
-                    onPlay: () => widget.onPlayItem(spotlight),
-                    onOpenDetail: () => widget.onOpenItem(spotlight),
-                  ),
+                LayoutBuilder(
+                  builder: (context, constraints) {
+                    final bannerWidth = constraints.maxWidth.clamp(
+                      720.0,
+                      1240.0,
+                    );
+                    final bannerHeight = (bannerWidth * 0.36).clamp(
+                      300.0,
+                      420.0,
+                    );
+                    return Align(
+                      alignment: Alignment.center,
+                      child: ConstrainedBox(
+                        constraints: BoxConstraints(maxWidth: bannerWidth),
+                        child: Entrance(
+                          child: HeroBanner(
+                            item: spotlight,
+                            key: ValueKey(spotlight.path),
+                            height: bannerHeight,
+                            activeIndex: _heroIndex,
+                            itemCount: spotlights.length,
+                            onDotSelected: (index) {
+                              setState(() {
+                                _heroIndex = index;
+                              });
+                              _startHeroTimer();
+                            },
+                            onPlay: () => widget.onPlayItem(spotlight),
+                            onOpenDetail: () => widget.onOpenItem(spotlight),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: AppSpacing.xl),
               ],

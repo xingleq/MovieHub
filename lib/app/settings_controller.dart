@@ -258,6 +258,16 @@ class SettingsController extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> refreshScreenTimeState() async {
+    final beforeBreakUntil = _breakUntil;
+    final beforeStartedAt = _watchSessionStartedAt;
+    await _normalizeScreenTimeState();
+    if (beforeBreakUntil != _breakUntil ||
+        beforeStartedAt != _watchSessionStartedAt) {
+      notifyListeners();
+    }
+  }
+
   Future<void> _normalizeScreenTimeState() async {
     final now = DateTime.now();
     final breakUntil = _breakUntil;

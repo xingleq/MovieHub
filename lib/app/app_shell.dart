@@ -39,16 +39,21 @@ class AppShell extends StatefulWidget {
   State<AppShell> createState() => _AppShellState();
 }
 
-class _AppShellState extends State<AppShell> {
+class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final LibraryController _library;
   late final SettingsController _settings;
   var _section = AppSection.home;
   String? _detailPath;
   String? _detailSeriesKey;
+  MediaItem? _playerItem;
+  Duration? _playerStartAt;
+  var _playerToken = 0;
+  var _playerCompact = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _library = widget.library;
     _settings = widget.settings;
     unawaited(_loadControllers());
@@ -61,7 +66,15 @@ class _AppShellState extends State<AppShell> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_settings.refreshScreenTimeState());
+    }
   }
 
   void _goToSection(AppSection section) {
@@ -125,19 +138,21 @@ class _AppShellState extends State<AppShell> {
         ? Duration(milliseconds: item.playbackPositionMs)
         : null;
 
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (context) => PlayerPage(
-          item: item,
-          startAt: startAt,
-          nextEpisodeOf: _library.nextEpisodeOf,
-          subtitlePreference: _settings.subtitlePreference,
-          audioPreference: _settings.audioPreference,
-          settings: _settings,
-          onProgressChanged: _library.savePlaybackProgress,
-        ),
-      ),
-    );
+    setState(() {
+      _playerItem = item;
+      _playerStartAt = startAt;
+      _playerCompact = false;
+      _playerToken++;
+    });
+  }
+
+  void _closePlayer() {
+    setState(() {
+      _playerItem = null;
+      _playerStartAt = null;
+      _playerCompact = false;
+      _playerToken++;
+    });
   }
 
   Future<void> _openManualMatch({
@@ -323,6 +338,30 @@ class _AppShellState extends State<AppShell> {
                       ),
                     ],
                   ),
+                  if (_playerItem case final MediaItem item)
+                    _PlayerOverlay(
+                      key: ValueKey('player:$_playerToken:${item.path}'),
+                      compact: _playerCompact,
+                      child: PlayerPage(
+                        item: item,
+                        startAt: _playerStartAt,
+                        previousEpisodeOf: _library.previousEpisodeOf,
+                        nextEpisodeOf: _library.nextEpisodeOf,
+                        subtitlePreference: _settings.subtitlePreference,
+                        audioPreference: _settings.audioPreference,
+                        settings: _settings,
+                        onClose: _closePlayer,
+                        onCompactChanged: (compact) {
+                          if (!mounted || _playerCompact == compact) {
+                            return;
+                          }
+                          setState(() {
+                            _playerCompact = compact;
+                          });
+                        },
+                        onProgressChanged: _library.savePlaybackProgress,
+                      ),
+                    ),
                 ],
               );
             },
@@ -510,6 +549,55 @@ class _AppShellState extends State<AppShell> {
       // the settings page would freeze until a tab switch forces a rebuild.
       SettingsPage(),
     ];
+  }
+}
+
+class _PlayerOverlay extends StatelessWidget {
+  const _PlayerOverlay({super.key, required this.compact, required this.child});
+
+  final bool compact;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    if (!compact) {
+      return Positioned.fill(
+        child: DecoratedBox(
+          decoration: const BoxDecoration(color: Colors.black),
+          child: child,
+        ),
+      );
+    }
+
+    final windowSize = MediaQuery.sizeOf(context);
+    final width = (windowSize.width - AppSpacing.xl * 2).clamp(360.0, 720.0);
+    final height = (width * 9 / 16 + 72).clamp(280.0, 430.0);
+
+    return Positioned(
+      right: AppSpacing.xl,
+      bottom: AppSpacing.xl,
+      width: width,
+      height: height,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black,
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+          border: Border.all(color: tokens.cardBorder),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.28),
+              blurRadius: 28,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+          child: child,
+        ),
+      ),
+    );
   }
 }
 

@@ -16,7 +16,10 @@ class PlayerPage extends StatefulWidget {
     required this.item,
     required this.onProgressChanged,
     this.startAt,
+    this.previousEpisodeOf,
     this.nextEpisodeOf,
+    this.onClose,
+    this.onCompactChanged,
     this.subtitlePreference = 'zh-hans',
     this.audioPreference = 'zh',
     required this.settings,
@@ -31,7 +34,11 @@ class PlayerPage extends StatefulWidget {
 
   /// Looks up the following episode of a series item; enables the next
   /// button and auto-play-next on completion (todo §15).
+  final MediaItem? Function(MediaItem item)? previousEpisodeOf;
   final MediaItem? Function(MediaItem item)? nextEpisodeOf;
+
+  final VoidCallback? onClose;
+  final ValueChanged<bool>? onCompactChanged;
 
   /// Default subtitle preference: 'zh-hans' | 'zh-hant' | 'en' | 'off'.
   final String subtitlePreference;
@@ -58,6 +65,7 @@ class _PlayerPageState extends State<PlayerPage> {
   late final StreamSubscription<Duration> _positionSubscription;
   late final StreamSubscription<Duration> _durationSubscription;
   late final StreamSubscription<Tracks> _tracksSubscription;
+  late final StreamSubscription<bool> _playingSubscription;
   late final StreamSubscription<bool> _completedSubscription;
   late final StreamSubscription<String> _sessionSubscription;
   late final Timer _progressSaveTimer;
@@ -67,6 +75,8 @@ class _PlayerPageState extends State<PlayerPage> {
   var _lastDuration = Duration.zero;
   String? _autoTracksAppliedFor;
   var _switchingEpisode = false;
+  var _compact = false;
+  var _hasStartedPlaying = false;
 
   /// Progress is also checkpointed while playing (a crash or force-close
   /// otherwise loses the whole session); each save writes a single row.
@@ -85,6 +95,19 @@ class _PlayerPageState extends State<PlayerPage> {
       _lastDuration = duration;
     });
     _tracksSubscription = _player.stream.tracks.listen(_applyPreferredTracks);
+    _playingSubscription = _player.stream.playing.listen((playing) {
+      if (playing) {
+        _hasStartedPlaying = true;
+      }
+      final compact = _hasStartedPlaying && !playing;
+      if (_compact == compact) {
+        return;
+      }
+      setState(() {
+        _compact = compact;
+      });
+      widget.onCompactChanged?.call(compact);
+    });
     _completedSubscription = _player.stream.completed.listen((completed) {
       if (completed) {
         unawaited(_autoPlayNext());
@@ -113,6 +136,7 @@ class _PlayerPageState extends State<PlayerPage> {
     unawaited(_positionSubscription.cancel());
     unawaited(_durationSubscription.cancel());
     unawaited(_tracksSubscription.cancel());
+    unawaited(_playingSubscription.cancel());
     unawaited(_completedSubscription.cancel());
     unawaited(_sessionSubscription.cancel());
     widget.settings.removeListener(_pauseForBreakIfNeeded);
@@ -226,6 +250,10 @@ class _PlayerPageState extends State<PlayerPage> {
     return widget.nextEpisodeOf?.call(_currentItem);
   }
 
+  MediaItem? get _previousEpisode {
+    return widget.previousEpisodeOf?.call(_currentItem);
+  }
+
   /// On natural completion: mark the finished episode watched, then continue
   /// with the next one.
   Future<void> _autoPlayNext() async {
@@ -258,6 +286,20 @@ class _PlayerPageState extends State<PlayerPage> {
     await _switchTo(next);
   }
 
+  Future<void> _playPreviousManually() async {
+    if (_switchingEpisode) {
+      return;
+    }
+    final previous = _previousEpisode;
+    if (previous == null) {
+      return;
+    }
+    unawaited(
+      widget.onProgressChanged(_currentItem, _lastPosition, _lastDuration),
+    );
+    await _switchTo(previous);
+  }
+
   Future<void> _switchTo(MediaItem next) async {
     _switchingEpisode = true;
     try {
@@ -267,6 +309,9 @@ class _PlayerPageState extends State<PlayerPage> {
       _autoTracksAppliedFor = null;
       _lastPosition = Duration.zero;
       _lastDuration = Duration.zero;
+      _compact = false;
+      _hasStartedPlaying = false;
+      widget.onCompactChanged?.call(false);
 
       final resume =
           next.playbackPositionMs > 5000 && next.playbackProgress < 0.95
@@ -324,6 +369,16 @@ class _PlayerPageState extends State<PlayerPage> {
         const MaterialDesktopVolumeButton(),
         const MaterialDesktopPositionIndicator(),
         const Spacer(),
+        if (_previousEpisode != null)
+          MaterialDesktopCustomButton(
+            onPressed: () => unawaited(_playPreviousManually()),
+            icon: const Icon(Icons.skip_previous),
+          ),
+        if (_nextEpisode != null)
+          MaterialDesktopCustomButton(
+            onPressed: () => unawaited(_playNextManually()),
+            icon: const Icon(Icons.skip_next),
+          ),
         _RateButton(player: _player),
         _TrackMenuButton(
           tooltip: '字幕',
@@ -360,11 +415,6 @@ class _PlayerPageState extends State<PlayerPage> {
           onPressed: () => unawaited(_takeScreenshot()),
           icon: const Icon(Icons.photo_camera_outlined),
         ),
-        if (_nextEpisode != null)
-          MaterialDesktopCustomButton(
-            onPressed: () => unawaited(_playNextManually()),
-            icon: const Icon(Icons.skip_next),
-          ),
         const MaterialDesktopFullscreenButton(),
       ],
     );
@@ -374,11 +424,39 @@ class _PlayerPageState extends State<PlayerPage> {
       appBar: AppBar(
         backgroundColor: Colors.black,
         foregroundColor: Colors.white,
+        leading: IconButton(
+          tooltip: '关闭播放器',
+          onPressed: widget.onClose ?? () => Navigator.of(context).maybePop(),
+          icon: const Icon(Icons.close),
+        ),
         title: Text(
           _currentItem.tmdbTitle ?? _currentItem.title,
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
+        actions: [
+          IconButton(
+            tooltip: _previousEpisode == null ? '没有上一集' : '上一集',
+            onPressed: _previousEpisode == null
+                ? null
+                : () => unawaited(_playPreviousManually()),
+            icon: const Icon(Icons.skip_previous),
+          ),
+          IconButton(
+            tooltip: _nextEpisode == null ? '没有下一集' : '下一集',
+            onPressed: _nextEpisode == null
+                ? null
+                : () => unawaited(_playNextManually()),
+            icon: const Icon(Icons.skip_next),
+          ),
+          if (_compact)
+            IconButton(
+              tooltip: '恢复播放',
+              onPressed: () => unawaited(_player.play()),
+              icon: const Icon(Icons.open_in_full),
+            ),
+          const SizedBox(width: 8),
+        ],
       ),
       body: MaterialDesktopVideoControlsTheme(
         normal: controlsTheme,

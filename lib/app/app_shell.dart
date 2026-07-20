@@ -123,8 +123,17 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   Future<void> _openPlayer(MediaItem item) async {
-    await _settings.startViewingSession();
-    if (_settings.breakActive || !mounted) {
+    final allowed = await _settings.startViewingSession();
+    if (!mounted) {
+      return;
+    }
+    if (!allowed) {
+      final message = _settings.error;
+      if (!_settings.breakActive && message != null) {
+        ScaffoldMessenger.of(context)
+          ..hideCurrentSnackBar()
+          ..showSnackBar(SnackBar(content: Text(message)));
+      }
       return;
     }
 

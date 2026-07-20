@@ -20,6 +20,14 @@ class AppSettings {
     this.screenTimePasswordHash = '',
     this.watchSessionStartedAt,
     this.breakUntil,
+    this.workdayDailyWatchLimit = 1,
+    this.restDayDailyWatchLimit = 3,
+    this.dailyViewingDate = '',
+    this.dailyViewingCount = 0,
+    this.temporaryDailyWatchLimitDate = '',
+    this.temporaryDailyWatchLimit,
+    this.watchElapsedMilliseconds = 0,
+    this.holidayCalendarCache = const {},
   });
 
   final String accessToken;
@@ -50,11 +58,29 @@ class AppSettings {
   /// Hash for the local guardian password used to change screen-time limits.
   final String screenTimePasswordHash;
 
-  /// Start of the current viewing session. Persisted so restarts cannot reset it.
+  /// Legacy wall-clock session marker retained only for settings compatibility.
   final DateTime? watchSessionStartedAt;
 
   /// When non-null and in the future, the whole app is locked until this time.
   final DateTime? breakUntil;
+
+  /// Daily completed-viewing quota. Transfer workdays use the workday value;
+  /// weekends and public holidays use the rest-day value.
+  final int workdayDailyWatchLimit;
+  final int restDayDailyWatchLimit;
+  final String dailyViewingDate;
+  final int dailyViewingCount;
+
+  /// Optional one-day total quota override; it does not alter configured
+  /// workday or rest-day defaults.
+  final String temporaryDailyWatchLimitDate;
+  final int? temporaryDailyWatchLimit;
+
+  /// Actual playing time accumulated toward the next completed viewing.
+  final int watchElapsedMilliseconds;
+
+  /// Raw API responses keyed by year, retained for offline classification.
+  final Map<String, String> holidayCalendarCache;
 
   static const empty = AppSettings(accessToken: '', proxy: '');
 }
@@ -96,6 +122,15 @@ class AppSettingsStore {
       screenTimePasswordHash: json['screenTimePasswordHash'] as String? ?? '',
       watchSessionStartedAt: _parseDate(json['watchSessionStartedAt']),
       breakUntil: _parseDate(json['breakUntil']),
+      workdayDailyWatchLimit: json['workdayDailyWatchLimit'] as int? ?? 1,
+      restDayDailyWatchLimit: json['restDayDailyWatchLimit'] as int? ?? 3,
+      dailyViewingDate: json['dailyViewingDate'] as String? ?? '',
+      dailyViewingCount: json['dailyViewingCount'] as int? ?? 0,
+      temporaryDailyWatchLimitDate:
+          json['temporaryDailyWatchLimitDate'] as String? ?? '',
+      temporaryDailyWatchLimit: json['temporaryDailyWatchLimit'] as int?,
+      watchElapsedMilliseconds: json['watchElapsedMilliseconds'] as int? ?? 0,
+      holidayCalendarCache: _stringMap(json['holidayCalendarCache']),
     );
   }
 
@@ -118,6 +153,14 @@ class AppSettingsStore {
       'watchSessionStartedAt': settings.watchSessionStartedAt
           ?.toIso8601String(),
       'breakUntil': settings.breakUntil?.toIso8601String(),
+      'workdayDailyWatchLimit': settings.workdayDailyWatchLimit,
+      'restDayDailyWatchLimit': settings.restDayDailyWatchLimit,
+      'dailyViewingDate': settings.dailyViewingDate,
+      'dailyViewingCount': settings.dailyViewingCount,
+      'temporaryDailyWatchLimitDate': settings.temporaryDailyWatchLimitDate,
+      'temporaryDailyWatchLimit': settings.temporaryDailyWatchLimit,
+      'watchElapsedMilliseconds': settings.watchElapsedMilliseconds,
+      'holidayCalendarCache': settings.holidayCalendarCache,
     };
     await _storageFile.writeAsString(
       const JsonEncoder.withIndent('  ').convert(payload),
@@ -129,5 +172,15 @@ class AppSettingsStore {
       return null;
     }
     return DateTime.tryParse(value);
+  }
+
+  static Map<String, String> _stringMap(Object? value) {
+    if (value is! Map<String, Object?>) {
+      return const {};
+    }
+    return {
+      for (final entry in value.entries)
+        if (entry.value is String) entry.key: entry.value! as String,
+    };
   }
 }

@@ -96,6 +96,7 @@ class _PlayerPageState extends State<PlayerPage> {
     });
     _tracksSubscription = _player.stream.tracks.listen(_applyPreferredTracks);
     _playingSubscription = _player.stream.playing.listen((playing) {
+      unawaited(_handlePlaybackStateChanged(playing));
       if (playing) {
         _hasStartedPlaying = true;
       }
@@ -133,6 +134,7 @@ class _PlayerPageState extends State<PlayerPage> {
   @override
   void dispose() {
     _progressSaveTimer.cancel();
+    unawaited(widget.settings.setPlaybackActive(false));
     unawaited(_positionSubscription.cancel());
     unawaited(_durationSubscription.cancel());
     unawaited(_tracksSubscription.cancel());
@@ -150,6 +152,23 @@ class _PlayerPageState extends State<PlayerPage> {
   void _pauseForBreakIfNeeded() {
     if (widget.settings.breakActive && _player.state.playing) {
       unawaited(_player.pause());
+    }
+  }
+
+  Future<void> _handlePlaybackStateChanged(bool playing) async {
+    final allowed = await widget.settings.setPlaybackActive(playing);
+    if (!playing || allowed || !_player.state.playing) {
+      return;
+    }
+    await _player.pause();
+    if (!mounted || widget.settings.breakActive) {
+      return;
+    }
+    final message = widget.settings.error;
+    if (message != null) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(SnackBar(content: Text(message)));
     }
   }
 

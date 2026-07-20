@@ -16,7 +16,7 @@ class ScreenTimeOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (!settings.breakActive) {
+    if (!settings.showBreakOverlay) {
       return const SizedBox.shrink();
     }
 
@@ -32,66 +32,65 @@ class ScreenTimeOverlay extends StatelessWidget {
         .padLeft(2, '0');
 
     return Positioned.fill(
-      child: AbsorbPointer(
-        child: Material(
-          type: MaterialType.transparency,
-          child: ClipRect(
-            // Frosted daylight wash over the whole app, per the design mock:
-            // the content stays visible but bright, blurred and untouchable.
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-              child: DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [Color(0xB8F3EDFF), Color(0xC2E4D9FF)],
-                  ),
+      child: Material(
+        type: MaterialType.transparency,
+        child: ClipRect(
+          // Frosted daylight wash over the whole app, per the design mock:
+          // the content stays visible but bright, blurred and untouchable.
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+            child: DecoratedBox(
+              decoration: const BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Color(0xB8F3EDFF), Color(0xC2E4D9FF)],
                 ),
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Stack(
-                        clipBehavior: Clip.none,
-                        alignment: Alignment.topCenter,
-                        children: [
-                          const Positioned(
-                            top: -26,
-                            right: 26,
-                            child: Icon(
-                              Icons.nightlight_round,
-                              color: Color(0xFFFFD97A),
-                              size: 44,
-                            ),
+              ),
+              child: Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Stack(
+                      clipBehavior: Clip.none,
+                      alignment: Alignment.topCenter,
+                      children: [
+                        const Positioned(
+                          top: -26,
+                          right: 26,
+                          child: Icon(
+                            Icons.nightlight_round,
+                            color: Color(0xFFFFD97A),
+                            size: 44,
                           ),
-                          const Positioned(
-                            top: -6,
-                            left: 10,
-                            child: Icon(
-                              Icons.auto_awesome,
-                              color: Color(0xFFB79BFF),
-                              size: 28,
-                            ),
-                          ),
-                          _BreakCard(
-                            hours: hours,
-                            minutes: minutes,
-                            seconds: seconds,
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      const Text(
-                        '自律一点，才能更好地遇见喜欢的世界哦！✨',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFF7A6A9E),
                         ),
+                        const Positioned(
+                          top: -6,
+                          left: 10,
+                          child: Icon(
+                            Icons.auto_awesome,
+                            color: Color(0xFFB79BFF),
+                            size: 28,
+                          ),
+                        ),
+                        _BreakCard(
+                          hours: hours,
+                          minutes: minutes,
+                          seconds: seconds,
+                          onClose: settings.dismissBreakOverlay,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                    const Text(
+                      '自律一点，才能更好地遇见喜欢的世界哦！✨',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Color(0xFF7A6A9E),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -107,11 +106,13 @@ class _BreakCard extends StatelessWidget {
     required this.hours,
     required this.minutes,
     required this.seconds,
+    required this.onClose,
   });
 
   final String hours;
   final String minutes;
   final String seconds;
+  final VoidCallback onClose;
 
   @override
   Widget build(BuildContext context) {
@@ -166,7 +167,7 @@ class _BreakCard extends StatelessWidget {
           ),
           const SizedBox(height: AppSpacing.sm),
           const Text(
-            '今日使用时间已达上限，请稍作休息哦～',
+            '本轮观看时间已达上限，请稍作休息哦～',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: Color(0xFF8C82A6)),
           ),
@@ -207,6 +208,18 @@ class _BreakCard extends StatelessWidget {
                 ),
               ],
             ),
+          ),
+          const SizedBox(height: AppSpacing.md),
+          TextButton.icon(
+            onPressed: onClose,
+            icon: const Icon(Icons.close_rounded),
+            label: const Text('关闭提示并进入设置'),
+          ),
+          const SizedBox(height: AppSpacing.xs),
+          const Text(
+            '休息期间再次播放时，会重新显示此倒计时',
+            textAlign: TextAlign.center,
+            style: TextStyle(fontSize: 12, color: Color(0xFF8C82A6)),
           ),
         ],
       ),

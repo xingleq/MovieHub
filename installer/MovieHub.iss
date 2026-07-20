@@ -1,5 +1,5 @@
 #define MyAppName "MovieHub"
-#define MyAppVersion "1.1.1"
+#define MyAppVersion "1.1.2"
 #define MyAppPublisher "MovieHub"
 #define MyAppExeName "moviehub.exe"
 

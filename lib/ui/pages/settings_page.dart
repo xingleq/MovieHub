@@ -603,7 +603,7 @@ class _PlaybackTab extends StatelessWidget {
         ),
         _SettingsCard(
           title: '观看与休息',
-          subtitle: '进入播放器后开始计时，到时会锁定整个软件并显示休息倒计时。',
+          subtitle: '仅在视频实际播放时累计；暂停或退出后停止计时，累计达到单次时长才消耗一次并开始强制休息。',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -622,6 +622,17 @@ class _PlaybackTab extends StatelessWidget {
                     value: '${settings.breakMinutes} 分钟',
                   ),
                   _StatusTile(
+                    icon: Icons.event_available_outlined,
+                    label: '今日已完成',
+                    value:
+                        '${settings.todayViewingCount}/${settings.todayDailyWatchLimit} · ${settings.todayDayTypeLabel}${settings.hasTodayTemporaryWatchLimit ? ' · 临时' : ''}',
+                  ),
+                  _StatusTile(
+                    icon: Icons.timelapse_outlined,
+                    label: '本轮已观看',
+                    value: formatDuration(settings.currentViewingElapsed),
+                  ),
+                  _StatusTile(
                     icon: settings.hasManagementPassword
                         ? Icons.lock_outline
                         : Icons.lock_open_outlined,
@@ -631,13 +642,22 @@ class _PlaybackTab extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: AppSpacing.lg),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: FilledButton.tonalIcon(
-                  onPressed: () => _openScreenTimeDialog(context, settings),
-                  icon: const Icon(Icons.admin_panel_settings_outlined),
-                  label: const Text('修改观看时长'),
-                ),
+              Wrap(
+                spacing: AppSpacing.md,
+                runSpacing: AppSpacing.md,
+                children: [
+                  FilledButton.tonalIcon(
+                    onPressed: () =>
+                        _openTodayWatchLimitDialog(context, settings),
+                    icon: const Icon(Icons.today_outlined),
+                    label: const Text('设置今日临时次数'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: () => _openScreenTimeDialog(context, settings),
+                    icon: const Icon(Icons.admin_panel_settings_outlined),
+                    label: const Text('修改默认观看限制'),
+                  ),
+                ],
               ),
             ],
           ),
@@ -724,6 +744,16 @@ class _PlaybackTab extends StatelessWidget {
     await showDialog<void>(
       context: context,
       builder: (_) => _ScreenTimeDialog(settings: settings),
+    );
+  }
+
+  Future<void> _openTodayWatchLimitDialog(
+    BuildContext context,
+    SettingsController settings,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _TodayWatchLimitDialog(settings: settings),
     );
   }
 }
@@ -886,6 +916,104 @@ class _AddGachaDrawsDialogState extends State<_AddGachaDrawsDialog> {
   }
 }
 
+class _TodayWatchLimitDialog extends StatefulWidget {
+  const _TodayWatchLimitDialog({required this.settings});
+
+  final SettingsController settings;
+
+  @override
+  State<_TodayWatchLimitDialog> createState() => _TodayWatchLimitDialogState();
+}
+
+class _TodayWatchLimitDialogState extends State<_TodayWatchLimitDialog> {
+  late final TextEditingController _countController;
+  final _passwordController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _countController = TextEditingController(
+      text:
+          (widget.settings.todayTemporaryWatchLimit ??
+                  widget.settings.todayDailyWatchLimit)
+              .toString(),
+    );
+  }
+
+  @override
+  void dispose() {
+    _countController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save(int? watchLimit) async {
+    final saved = await widget.settings.saveTodayTemporaryWatchLimit(
+      watchLimit: watchLimit,
+      password: _passwordController.text,
+    );
+    if (saved && mounted) {
+      Navigator.of(context).pop();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final settings = widget.settings;
+    return AlertDialog(
+      title: const Text('设置今日临时次数'),
+      content: SizedBox(
+        width: 400,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              '只影响今天；明天自动恢复默认值。今日已完成 ${settings.todayViewingCount} 次。',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _countController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: '今天允许的总次数',
+                prefixIcon: Icon(Icons.today_outlined),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              decoration: const InputDecoration(
+                labelText: '管理密码',
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        if (settings.hasTodayTemporaryWatchLimit)
+          TextButton(onPressed: () => _save(null), child: const Text('恢复默认')),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(
+          onPressed: () {
+            final count = int.tryParse(_countController.text.trim());
+            if (count == null || count < 0) {
+              return;
+            }
+            _save(count);
+          },
+          child: const Text('保存今日次数'),
+        ),
+      ],
+    );
+  }
+}
+
 class _ScreenTimeDialog extends StatefulWidget {
   const _ScreenTimeDialog({required this.settings});
 
@@ -898,6 +1026,8 @@ class _ScreenTimeDialog extends StatefulWidget {
 class _ScreenTimeDialogState extends State<_ScreenTimeDialog> {
   late final TextEditingController _watchController;
   late final TextEditingController _breakController;
+  late final TextEditingController _workdayCountController;
+  late final TextEditingController _restDayCountController;
   final _passwordController = TextEditingController();
 
   @override
@@ -909,12 +1039,20 @@ class _ScreenTimeDialogState extends State<_ScreenTimeDialog> {
     _breakController = TextEditingController(
       text: widget.settings.breakMinutes.toString(),
     );
+    _workdayCountController = TextEditingController(
+      text: widget.settings.workdayDailyWatchLimit.toString(),
+    );
+    _restDayCountController = TextEditingController(
+      text: widget.settings.restDayDailyWatchLimit.toString(),
+    );
   }
 
   @override
   void dispose() {
     _watchController.dispose();
     _breakController.dispose();
+    _workdayCountController.dispose();
+    _restDayCountController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
@@ -922,7 +1060,7 @@ class _ScreenTimeDialogState extends State<_ScreenTimeDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('观看时长保护'),
+      title: const Text('观看限制保护'),
       content: SizedBox(
         width: 420,
         child: Column(
@@ -944,6 +1082,32 @@ class _ScreenTimeDialogState extends State<_ScreenTimeDialog> {
                 labelText: '休息时长（分钟）',
                 prefixIcon: Icon(Icons.self_improvement),
               ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _workdayCountController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '工作日/补班次数',
+                      prefixIcon: Icon(Icons.work_outline),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: TextField(
+                    controller: _restDayCountController,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: '周末/节假日次数',
+                      prefixIcon: Icon(Icons.weekend_outlined),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: AppSpacing.md),
             TextField(
@@ -968,6 +1132,10 @@ class _ScreenTimeDialogState extends State<_ScreenTimeDialog> {
               watchLimitMinutes:
                   int.tryParse(_watchController.text.trim()) ?? 45,
               breakMinutes: int.tryParse(_breakController.text.trim()) ?? 10,
+              workdayDailyWatchLimit:
+                  int.tryParse(_workdayCountController.text.trim()) ?? 1,
+              restDayDailyWatchLimit:
+                  int.tryParse(_restDayCountController.text.trim()) ?? 3,
               password: _passwordController.text,
             );
             if (saved && context.mounted) {

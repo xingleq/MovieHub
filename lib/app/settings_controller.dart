@@ -6,7 +6,7 @@ import 'package:flutter/foundation.dart';
 import '../core/images/image_cache_store.dart';
 import '../core/settings/app_settings_store.dart';
 import '../core/settings/holiday_calendar.dart';
-import '../core/system/startup_service.dart';
+import '../core/system/platform_services.dart';
 
 /// Owns every user preference: TMDB connection, playback defaults,
 /// appearance and system integration. Split from the library state so that
@@ -16,13 +16,16 @@ class SettingsController extends ChangeNotifier {
   SettingsController({
     AppSettingsStore? store,
     HolidayCalendar? holidayCalendar,
+    StartupService? startupService,
     DateTime Function()? now,
   }) : _store = store ?? AppSettingsStore(),
        _holidayCalendar = holidayCalendar ?? HolidayCalendar(),
+       _startup = startupService ?? PlatformServices.instance.startup,
        _now = now ?? DateTime.now;
 
   final AppSettingsStore _store;
   final HolidayCalendar _holidayCalendar;
+  final StartupService _startup;
   final DateTime Function() _now;
 
   var _loaded = false;
@@ -229,7 +232,7 @@ class SettingsController extends ChangeNotifier {
       );
       _holidayCalendarCache = Map.of(settings.holidayCalendarCache);
       try {
-        _launchAtStartup = await StartupService.isEnabled();
+        _launchAtStartup = await _startup.isEnabled();
       } catch (_) {
         // Keep the persisted preference when registry probing is unavailable.
       }
@@ -309,7 +312,7 @@ class SettingsController extends ChangeNotifier {
 
   Future<void> setLaunchAtStartup(bool enabled) async {
     try {
-      await StartupService.setEnabled(enabled);
+      await _startup.setEnabled(enabled);
       _launchAtStartup = enabled;
       _error = null;
       await _store.save(_current);

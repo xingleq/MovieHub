@@ -3,7 +3,7 @@ import 'dart:math';
 
 import 'package:sqlite3/sqlite3.dart';
 
-import '../system/app_paths.dart';
+import '../system/platform_services.dart';
 import 'gacha_card.dart';
 
 class GachaSnapshot {
@@ -22,7 +22,8 @@ class GachaSnapshot {
 
 class GachaStore {
   GachaStore({Directory? storageDirectory})
-    : _storageDirectory = storageDirectory ?? defaultAppDataDirectory();
+    : _storageDirectory =
+          storageDirectory ?? PlatformServices.instance.paths.appDataDirectory;
 
   final Directory _storageDirectory;
   Database? _database;

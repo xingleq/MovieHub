@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../system/app_paths.dart';
+import '../system/platform_services.dart';
 
 /// App-wide user settings: TMDB connection plus playback, appearance and
 /// system-integration preferences. JSON keys keep their historical names
@@ -87,7 +87,8 @@ class AppSettings {
 
 class AppSettingsStore {
   AppSettingsStore({Directory? storageDirectory})
-    : _storageDirectory = storageDirectory ?? defaultAppDataDirectory();
+    : _storageDirectory =
+          storageDirectory ?? PlatformServices.instance.paths.appDataDirectory;
 
   final Directory _storageDirectory;
 

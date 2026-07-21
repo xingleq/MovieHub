@@ -32,7 +32,10 @@ class MediaDetailView extends StatelessWidget {
   final ValueChanged<MediaItem> onMatchTmdb;
   final ValueChanged<MediaItem> onManualMatch;
   final ValueChanged<MediaItem> onPlay;
-  final ValueChanged<MediaItem> onOpenLocation;
+
+  /// Null when the platform has no file manager to reveal in — the
+  /// "打开位置" action hides itself.
+  final ValueChanged<MediaItem>? onOpenLocation;
 
   static const _backdropHeight = 340.0;
 
@@ -132,11 +135,12 @@ class MediaDetailView extends StatelessWidget {
                                     label: item.favorite ? '已收藏' : '收藏',
                                     onPressed: () => onToggleFavorite(item),
                                   ),
-                                  DetailActionButton(
-                                    icon: Icons.folder_open,
-                                    label: '打开位置',
-                                    onPressed: () => onOpenLocation(item),
-                                  ),
+                                  if (onOpenLocation case final onOpenLocation?)
+                                    DetailActionButton(
+                                      icon: Icons.folder_open,
+                                      label: '打开位置',
+                                      onPressed: () => onOpenLocation(item),
+                                    ),
                                   DetailActionButton(
                                     icon: loadingMetadata
                                         ? Icons.hourglass_empty

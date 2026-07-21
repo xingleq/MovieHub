@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import '../system/app_paths.dart';
+import '../system/platform_services.dart';
 import 'media_item.dart';
 
 class MediaLibrarySnapshot {
@@ -25,7 +25,8 @@ abstract interface class MediaLibraryStorage {
   /// Full replace: persists exactly [snapshot], removing absent items.
   Future<void> save(MediaLibrarySnapshot snapshot);
 
-  /// Writes only [items] (keyed by path), leaving every other row untouched.
+  /// Writes only [items] (keyed by source id + path), leaving every other row
+  /// untouched.
   Future<void> upsertItems(Iterable<MediaItem> items);
 
   /// Replaces the media root list without touching items.
@@ -36,7 +37,8 @@ abstract interface class MediaLibraryStorage {
 /// migration source for [MediaLibrarySqliteStore]; new writes never land here.
 class MediaLibraryStore {
   MediaLibraryStore({Directory? storageDirectory})
-    : _storageDirectory = storageDirectory ?? defaultAppDataDirectory();
+    : _storageDirectory =
+          storageDirectory ?? PlatformServices.instance.paths.appDataDirectory;
 
   final Directory _storageDirectory;
 

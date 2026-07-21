@@ -52,7 +52,9 @@ app.*.map.json
 /android/app/release
 
 .agents/
-.claude/
+# Ignore local Claude state but keep shared project skills in version control.
+.claude/*
+!.claude/skills/
 
 *.exe
 
@@ -61,3 +63,7 @@ assets/cards/images/**/*.png
 assets/cards/images/**/*.jpg
 assets/cards/images/**/*.jpeg
 assets/cards/images/**/*.webp
+
+.workbuddy/
+
+design/

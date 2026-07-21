@@ -8,6 +8,7 @@ import '../../app/library_scope.dart';
 import '../../app/settings_controller.dart';
 import '../../app/settings_scope.dart';
 import '../../core/gacha/gacha_store.dart';
+import '../../core/system/platform_services.dart';
 import '../../theme/app_tokens.dart';
 import '../format/formatters.dart';
 import '../widgets/message_banner.dart';
@@ -376,22 +377,23 @@ class _LibraryTab extends StatelessWidget {
             ],
           ),
         ),
-        _SettingsCard(
-          title: '系统集成',
-          subtitle: '控制 MovieHub 是否在当前 Windows 用户登录后自动启动。',
-          child: _SwitchRow(
-            icon: Icons.rocket_launch_outlined,
-            title: '开机时自动启动 MovieHub',
-            subtitle: '开启后写入当前用户启动项，关闭后自动移除。',
-            value: settings.launchAtStartup,
-            onChanged: settings.setLaunchAtStartup,
+        if (PlatformServices.instance.startup.isSupported)
+          _SettingsCard(
+            title: '系统集成',
+            subtitle: '控制 MovieHub 是否在当前 Windows 用户登录后自动启动。',
+            child: _SwitchRow(
+              icon: Icons.rocket_launch_outlined,
+              title: '开机时自动启动 MovieHub',
+              subtitle: '开启后写入当前用户启动项，关闭后自动移除。',
+              value: settings.launchAtStartup,
+              onChanged: settings.setLaunchAtStartup,
+            ),
           ),
-        ),
         _SettingsCard(
           title: '数据位置',
           subtitle: '媒体库使用 SQLite 保存到本机用户目录，令牌和壁纸路径单独保存。',
           child: Text(
-            Platform.isWindows ? r'%APPDATA%\MovieHub' : '~/.moviehub',
+            PlatformServices.instance.paths.appDataDirectory.path,
             style: TextStyle(color: tokens.textSecondary),
           ),
         ),

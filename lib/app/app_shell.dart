@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../core/media/media_group.dart';
 import '../core/media/media_item.dart';
+import '../core/system/platform_services.dart';
 import '../theme/app_tokens.dart';
 import '../ui/catalog/media_category.dart';
 import '../ui/detail/media_detail_view.dart';
@@ -42,7 +43,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late final LibraryController _library;
   late final SettingsController _settings;
   var _section = AppSection.home;
-  String? _detailPath;
+  MediaIdentity? _detailIdentity;
   String? _detailSeriesKey;
   MediaItem? _playerItem;
   Duration? _playerStartAt;
@@ -83,7 +84,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
     setState(() {
       _section = section;
-      _detailPath = null;
+      _detailIdentity = null;
       _detailSeriesKey = null;
     });
   }
@@ -135,9 +136,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     setState(() {
       if (group.isSeries) {
         _detailSeriesKey = group.key;
-        _detailPath = null;
+        _detailIdentity = null;
       } else {
-        _detailPath = group.episodes.first.path;
+        _detailIdentity = group.episodes.first.identity;
         _detailSeriesKey = null;
       }
     });
@@ -149,9 +150,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     setState(() {
       if (item.isEpisode && seriesTitle != null && seriesTitle.isNotEmpty) {
         _detailSeriesKey = MediaGroup.keyOf(item);
-        _detailPath = null;
+        _detailIdentity = null;
       } else {
-        _detailPath = item.path;
+        _detailIdentity = item.identity;
         _detailSeriesKey = null;
       }
     });
@@ -159,7 +160,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   void _closeDetail() {
     setState(() {
-      _detailPath = null;
+      _detailIdentity = null;
       _detailSeriesKey = null;
     });
   }
@@ -212,7 +213,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   Future<void> _openManualMatch({
     required String initialQuery,
-    required List<String> paths,
+    required List<MediaIdentity> identities,
   }) async {
     final result = await showDialog<ManualMatchResult>(
       context: context,
@@ -221,14 +222,14 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         onSearch: _library.searchTmdbCandidates,
         onFetchSeasons: _library.fetchTmdbSeasons,
         onFetchEpisodes: _library.fetchTmdbEpisodes,
-        allowEpisodeSelection: paths.length == 1,
+        allowEpisodeSelection: identities.length == 1,
       ),
     );
     if (result == null || !mounted) {
       return;
     }
     await _library.applyManualMatch(
-      paths,
+      identities,
       result.match,
       seasonNumber: result.seasonNumber,
       episodeNumber: result.episodeNumber,
@@ -310,6 +311,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final windowControlsSupported =
+        PlatformServices.instance.windowControls.isSupported;
     return LibraryScope(
       controller: _library,
       child: SettingsScope(
@@ -327,7 +330,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   Padding(
                     padding:
                         _section == AppSection.home &&
-                            _detailPath == null &&
+                            _detailIdentity == null &&
                             _detailSeriesKey == null
                         ? EdgeInsets.zero
                         : const EdgeInsets.only(top: 88),
@@ -336,7 +339,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   Positioned(
                     top: AppSpacing.md,
                     left: AppSpacing.xl,
-                    right: 150,
+                    // Keeps clear of the window buttons where they exist.
+                    right: windowControlsSupported ? 150 : AppSpacing.xl,
                     child: ImmersiveTopNav(
                       selected: _section,
                       onSelected: (section) {
@@ -349,21 +353,25 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                       onOpenResult: _openEntry,
                     ),
                   ),
-                  const Positioned(
-                    top: AppSpacing.md,
-                    right: AppSpacing.sm,
-                    height: 58,
-                    child: WindowControlButtons(),
-                  ),
+                  if (windowControlsSupported)
+                    const Positioned(
+                      top: AppSpacing.md,
+                      right: AppSpacing.sm,
+                      height: 58,
+                      child: WindowControlButtons(),
+                    ),
                   if (_playerItem case final MediaItem item)
                     _PlayerOverlay(
-                      key: ValueKey('player:$_playerToken:${item.path}'),
+                      key: ValueKey(
+                        'player:$_playerToken:${item.sourceId}:${item.path}',
+                      ),
                       compact: _playerCompact,
                       child: PlayerPage(
                         item: item,
                         startAt: _playerStartAt,
                         previousEpisodeOf: _library.previousEpisodeOf,
                         nextEpisodeOf: _library.nextEpisodeOf,
+                        playbackUriOf: _library.playbackUriOf,
                         subtitlePreference: _settings.subtitlePreference,
                         audioPreference: _settings.audioPreference,
                         settings: _settings,
@@ -438,8 +446,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       final group = _findSeriesGroup(seriesKey);
       if (group != null) {
         final loading =
-            _library.metadataLoadingPath != null &&
-            group.paths.contains(_library.metadataLoadingPath);
+            _library.metadataLoadingIdentity != null &&
+            group.identities.contains(_library.metadataLoadingIdentity);
         return KeyedSubtree(
           key: ValueKey('series:$seriesKey'),
           child: SeriesDetailView(
@@ -456,36 +464,44 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               unawaited(
                 _openManualMatch(
                   initialQuery: group.representative.seriesTitle ?? group.title,
-                  paths: group.paths,
+                  identities: group.identities,
                 ),
               );
             },
-            onOpenLocation: _library.openItemLocation,
+            onOpenLocation: _library.canOpenItemLocation(group.episodes.first)
+                ? _library.openItemLocation
+                : null,
           ),
         );
       }
     }
 
-    final detailPath = _detailPath;
-    final detailItem = detailPath == null
+    final detailIdentity = _detailIdentity;
+    final detailItem = detailIdentity == null
         ? null
-        : _library.itemByPath(detailPath);
+        : _library.itemByIdentity(detailIdentity);
     if (detailItem != null) {
       return KeyedSubtree(
-        key: ValueKey('detail:${detailItem.path}'),
+        key: ValueKey('detail:${detailItem.sourceId}:${detailItem.path}'),
         child: MediaDetailView(
           item: detailItem,
-          loadingMetadata: detailItem.path == _library.metadataLoadingPath,
+          loadingMetadata:
+              detailItem.identity == _library.metadataLoadingIdentity,
           onBack: _closeDetail,
           onToggleFavorite: _library.toggleFavorite,
           onMatchTmdb: _library.matchTmdb,
           onManualMatch: (item) {
             unawaited(
-              _openManualMatch(initialQuery: item.title, paths: [item.path]),
+              _openManualMatch(
+                initialQuery: item.title,
+                identities: [item.identity],
+              ),
             );
           },
           onPlay: (item) => unawaited(_openPlayer(item)),
-          onOpenLocation: _library.openItemLocation,
+          onOpenLocation: _library.canOpenItemLocation(detailItem)
+              ? _library.openItemLocation
+              : null,
         ),
       );
     }

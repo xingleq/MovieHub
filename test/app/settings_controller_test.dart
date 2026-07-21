@@ -5,6 +5,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:moviehub/app/settings_controller.dart';
 import 'package:moviehub/core/settings/app_settings_store.dart';
 import 'package:moviehub/core/settings/holiday_calendar.dart';
+import 'package:moviehub/core/system/platform_services.dart';
 import 'package:moviehub/theme/app_theme.dart';
 import 'package:moviehub/ui/widgets/screen_time_overlay.dart';
 
@@ -29,6 +30,27 @@ class _MemorySettingsStore extends AppSettingsStore {
   @override
   Future<void> save(AppSettings settings) async {
     this.settings = settings;
+  }
+}
+
+class _FakeStartupService implements StartupService {
+  _FakeStartupService({this.failOnSet = false});
+
+  final bool failOnSet;
+  var enabled = false;
+
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<bool> isEnabled() async => enabled;
+
+  @override
+  Future<void> setEnabled(bool value) async {
+    if (failOnSet) {
+      throw UnsupportedError('nope');
+    }
+    enabled = value;
   }
 }
 
@@ -283,6 +305,41 @@ void main() {
     expect(find.text('小时'), findsOneWidget);
     expect(find.text('分钟'), findsOneWidget);
     expect(find.text('秒'), findsOneWidget);
+  });
+
+  test('开机自启动读写走注入的 StartupService', () async {
+    final startup = _FakeStartupService()..enabled = true;
+    final controller = SettingsController(
+      store: _MemorySettingsStore(),
+      holidayCalendar: _FakeHolidayCalendar(payload),
+      startupService: startup,
+      now: () => DateTime(2026, 1, 5, 10),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    expect(controller.launchAtStartup, isTrue);
+
+    await controller.setLaunchAtStartup(false);
+    expect(startup.enabled, isFalse);
+    expect(controller.launchAtStartup, isFalse);
+    expect(controller.error, isNull);
+  });
+
+  test('设置开机自启动失败时保留原值并给出错误', () async {
+    final controller = SettingsController(
+      store: _MemorySettingsStore(),
+      holidayCalendar: _FakeHolidayCalendar(payload),
+      startupService: _FakeStartupService(failOnSet: true),
+      now: () => DateTime(2026, 1, 5, 10),
+    );
+    addTearDown(controller.dispose);
+
+    await controller.load();
+    await controller.setLaunchAtStartup(true);
+
+    expect(controller.launchAtStartup, isFalse);
+    expect(controller.error, contains('设置开机自启动失败'));
   });
 }
 

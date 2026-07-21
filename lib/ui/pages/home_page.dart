@@ -30,7 +30,7 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  String? _focusedPath;
+  MediaIdentity? _focusedIdentity;
 
   @override
   Widget build(BuildContext context) {
@@ -57,7 +57,7 @@ class _HomePageState extends State<HomePage> {
         ? controller.spotlightItems
         : controller.items.take(16).toList(growable: false);
     final selected = candidates.cast<MediaItem?>().firstWhere(
-      (item) => item?.path == _focusedPath,
+      (item) => item?.identity == _focusedIdentity,
       orElse: () => candidates.first,
     )!;
 
@@ -76,7 +76,7 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           child: _ImmersiveBackdrop(
-            key: ValueKey(selected.path),
+            key: ValueKey(selected.identity),
             item: selected,
           ),
         ),
@@ -121,8 +121,8 @@ class _HomePageState extends State<HomePage> {
               return _FocusPoster(
                 item: item,
                 onFocused: () {
-                  if (_focusedPath != item.path) {
-                    setState(() => _focusedPath = item.path);
+                  if (_focusedIdentity != item.identity) {
+                    setState(() => _focusedIdentity = item.identity);
                   }
                 },
                 onOpen: () => widget.onOpenItem(item),
@@ -233,7 +233,7 @@ class _FocusPoster extends StatelessWidget {
             children: [
               Expanded(
                 child: GestureDetector(
-                  key: ValueKey('home-poster:${item.path}'),
+                  key: ValueKey('home-poster:${item.sourceId}:${item.path}'),
                   behavior: HitTestBehavior.opaque,
                   onTap: onOpen,
                   child: ClipRRect(
@@ -260,7 +260,9 @@ class _FocusPoster extends StatelessWidget {
                                 color: Colors.black.withValues(alpha: 0.32),
                                 child: Center(
                                   child: IconButton.filled(
-                                    key: ValueKey('home-play:${item.path}'),
+                                    key: ValueKey(
+                                      'home-play:${item.sourceId}:${item.path}',
+                                    ),
                                     tooltip: '播放',
                                     onPressed: onPlay,
                                     style: IconButton.styleFrom(

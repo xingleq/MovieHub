@@ -1,24 +1,23 @@
 import 'dart:io';
 
-class StartupService {
-  StartupService._();
+import '../platform_services.dart';
 
+/// Launch-on-login via the per-user Run registry key.
+class WindowsStartupService implements StartupService {
   static const _appName = 'MovieHub';
   static const _runKey = r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run';
 
-  static Future<bool> isEnabled() async {
-    if (!Platform.isWindows) {
-      return false;
-    }
+  @override
+  bool get isSupported => true;
+
+  @override
+  Future<bool> isEnabled() async {
     final result = await Process.run('reg', ['query', _runKey, '/v', _appName]);
     return result.exitCode == 0;
   }
 
-  static Future<void> setEnabled(bool enabled) async {
-    if (!Platform.isWindows) {
-      throw UnsupportedError('开机自启动当前仅支持 Windows。');
-    }
-
+  @override
+  Future<void> setEnabled(bool enabled) async {
     if (enabled) {
       final executable = Platform.resolvedExecutable;
       final result = await Process.run('reg', [

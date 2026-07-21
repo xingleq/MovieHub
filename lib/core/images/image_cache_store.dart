@@ -1,6 +1,6 @@
 import 'dart:io';
 
-import '../system/app_paths.dart';
+import '../system/platform_services.dart';
 import '../tmdb/tmdb_client.dart';
 
 /// Disk cache for TMDB artwork (todo §20 海报本地缓存). Images are downloaded
@@ -115,8 +115,7 @@ class ImageCacheStore {
   }
 
   static Directory _defaultCacheDirectory() {
-    return Directory(
-      '${defaultAppDataDirectory().path}${Platform.pathSeparator}images',
-    );
+    final dataPath = PlatformServices.instance.paths.appDataDirectory.path;
+    return Directory('$dataPath${Platform.pathSeparator}images');
   }
 }

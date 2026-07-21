@@ -1,9 +1,18 @@
+import 'sources/media_source.dart';
+
+/// Stable library identity. Paths are only unique inside one media source.
+typedef MediaIdentity = ({String sourceId, String path});
+
 /// One video file in the library. Plain data record: file identity, parsed
 /// title parts, TMDB metadata and playback state. Filename parsing lives in
 /// `media_filename_parser.dart`; scanning in `media_scanner.dart`.
+///
+/// Identity is ([sourceId], [path]): the source that enumerated the file
+/// plus its source-native path.
 class MediaItem {
   const MediaItem({
     required this.path,
+    required this.sourceId,
     required this.title,
     required this.extension,
     required this.sizeBytes,
@@ -33,6 +42,12 @@ class MediaItem {
   });
 
   final String path;
+
+  /// Which [MediaSource] this item belongs to.
+  final String sourceId;
+
+  MediaIdentity get identity => (sourceId: sourceId, path: path);
+
   final String title;
   final String extension;
   final int sizeBytes;
@@ -83,6 +98,7 @@ class MediaItem {
   factory MediaItem.fromJson(Map<String, Object?> json) {
     return MediaItem(
       path: json['path'] as String,
+      sourceId: json['sourceId'] as String? ?? localMediaSourceId,
       title: json['title'] as String,
       extension: json['extension'] as String,
       sizeBytes: json['sizeBytes'] as int,
@@ -122,6 +138,7 @@ class MediaItem {
   Map<String, Object?> toJson() {
     return {
       'path': path,
+      'sourceId': sourceId,
       'title': title,
       'extension': extension,
       'sizeBytes': sizeBytes,
@@ -154,6 +171,7 @@ class MediaItem {
   MediaItem preserveAddedAt(MediaItem? previous) {
     return MediaItem(
       path: path,
+      sourceId: sourceId,
       title: title,
       extension: extension,
       sizeBytes: sizeBytes,
@@ -208,6 +226,7 @@ class MediaItem {
   }) {
     return MediaItem(
       path: path,
+      sourceId: sourceId,
       title: title,
       extension: extension,
       sizeBytes: sizeBytes,

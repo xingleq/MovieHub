@@ -7,7 +7,7 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 import '../../app/settings_controller.dart';
 import '../../core/media/media_item.dart';
-import '../../core/system/session_events.dart';
+import '../../core/system/platform_services.dart';
 import '../../theme/app_tokens.dart';
 
 class PlayerPage extends StatefulWidget {
@@ -20,6 +20,7 @@ class PlayerPage extends StatefulWidget {
     this.nextEpisodeOf,
     this.onClose,
     this.onCompactChanged,
+    required this.playbackUriOf,
     this.subtitlePreference = 'zh-hans',
     this.audioPreference = 'zh',
     required this.settings,
@@ -33,12 +34,17 @@ class PlayerPage extends StatefulWidget {
   final Duration? startAt;
 
   /// Looks up the following episode of a series item; enables the next
-  /// button and auto-play-next on completion (todo §15).
+  /// button and auto-play-next on completion.
   final MediaItem? Function(MediaItem item)? previousEpisodeOf;
   final MediaItem? Function(MediaItem item)? nextEpisodeOf;
 
   final VoidCallback? onClose;
   final ValueChanged<bool>? onCompactChanged;
+
+  /// What the player actually opens for an item — resolved by the item's
+  /// media source (local items play by file path; remote sources return
+  /// streamable URLs).
+  final String Function(MediaItem item) playbackUriOf;
 
   /// Default subtitle preference: 'zh-hans' | 'zh-hant' | 'en' | 'off'.
   final String subtitlePreference;
@@ -115,11 +121,12 @@ class _PlayerPageState extends State<PlayerPage> {
       }
     });
     // Pause when the workstation locks; resuming stays a manual action.
-    _sessionSubscription = SessionEvents.stream.listen((event) {
-      if (event == 'lock' && _player.state.playing) {
-        unawaited(_player.pause());
-      }
-    });
+    _sessionSubscription = PlatformServices.instance.sessionEvents.stream
+        .listen((event) {
+          if (event == 'lock' && _player.state.playing) {
+            unawaited(_player.pause());
+          }
+        });
     widget.settings.addListener(_pauseForBreakIfNeeded);
     _progressSaveTimer = Timer.periodic(_progressSaveInterval, (_) {
       if (_player.state.playing && _lastDuration.inMilliseconds > 0) {
@@ -128,7 +135,11 @@ class _PlayerPageState extends State<PlayerPage> {
         );
       }
     });
-    unawaited(_player.open(Media(_currentItem.path, start: widget.startAt)));
+    unawaited(_player.open(Media(_uriOf(_currentItem), start: widget.startAt)));
+  }
+
+  String _uriOf(MediaItem item) {
+    return widget.playbackUriOf(item);
   }
 
   @override
@@ -336,7 +347,7 @@ class _PlayerPageState extends State<PlayerPage> {
           next.playbackPositionMs > 5000 && next.playbackProgress < 0.95
           ? Duration(milliseconds: next.playbackPositionMs)
           : null;
-      await _player.open(Media(next.path, start: resume));
+      await _player.open(Media(_uriOf(next), start: resume));
     } finally {
       _switchingEpisode = false;
     }
@@ -354,11 +365,7 @@ class _PlayerPageState extends State<PlayerPage> {
     }
 
     try {
-      final home = Platform.environment['USERPROFILE'] ?? '';
-      final separator = Platform.pathSeparator;
-      final directory = Directory(
-        '$home${separator}Pictures${separator}MovieHub',
-      );
+      final directory = PlatformServices.instance.paths.screenshotsDirectory;
       await directory.create(recursive: true);
 
       final safeTitle = (_currentItem.tmdbTitle ?? _currentItem.title)
@@ -368,7 +375,9 @@ class _PlayerPageState extends State<PlayerPage> {
           '${now.hour.toString().padLeft(2, '0')}'
           '${now.minute.toString().padLeft(2, '0')}'
           '${now.second.toString().padLeft(2, '0')}';
-      final file = File('${directory.path}$separator${safeTitle}_$stamp.png');
+      final file = File(
+        '${directory.path}${Platform.pathSeparator}${safeTitle}_$stamp.png',
+      );
       await file.writeAsBytes(bytes);
       messenger.showSnackBar(SnackBar(content: Text('截图已保存：${file.path}')));
     } catch (error) {
@@ -430,10 +439,11 @@ class _PlayerPageState extends State<PlayerPage> {
           onSelected: (track) =>
               unawaited(_player.setAudioTrack(track as AudioTrack)),
         ),
-        MaterialDesktopCustomButton(
-          onPressed: () => unawaited(_takeScreenshot()),
-          icon: const Icon(Icons.photo_camera_outlined),
-        ),
+        if (PlatformServices.instance.paths.supportsScreenshots)
+          MaterialDesktopCustomButton(
+            onPressed: () => unawaited(_takeScreenshot()),
+            icon: const Icon(Icons.photo_camera_outlined),
+          ),
         const MaterialDesktopFullscreenButton(),
       ],
     );

@@ -1,5 +1,3 @@
-import 'dart:io';
-
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 
@@ -8,6 +6,8 @@ import '../core/media/media_item.dart';
 import '../core/media/media_library_sqlite_store.dart';
 import '../core/media/media_library_store.dart';
 import '../core/media/media_scanner.dart';
+import '../core/media/sources/media_source.dart';
+import '../core/system/platform_services.dart';
 import '../core/tmdb/tmdb_client.dart';
 import 'settings_controller.dart';
 
@@ -20,15 +20,22 @@ class LibraryController extends ChangeNotifier {
     required this._settings,
     MediaLibraryStorage? store,
     MediaScanner? scanner,
+    Iterable<MediaSource> mediaSources = const [],
     TmdbClient? tmdbClient,
   }) : _store =
            store ?? MediaLibrarySqliteStore(legacyStore: MediaLibraryStore()),
        _scanner = scanner ?? MediaScanner(),
-       _tmdbClient = tmdbClient ?? TmdbClient();
+       _tmdbClient = tmdbClient ?? TmdbClient() {
+    _sources = {
+      _scanner.source.id: _scanner.source,
+      for (final source in mediaSources) source.id: source,
+    };
+  }
 
   final SettingsController _settings;
   final MediaLibraryStorage _store;
   final MediaScanner _scanner;
+  late final Map<String, MediaSource> _sources;
   final TmdbClient _tmdbClient;
 
   /// Pause between TMDB matches during a batch run, to stay far away from
@@ -41,7 +48,7 @@ class LibraryController extends ChangeNotifier {
   var _skippedPaths = <String>[];
   var _loading = true;
   var _scanning = false;
-  String? _metadataLoadingPath;
+  MediaIdentity? _metadataLoadingIdentity;
   var _metadataBatchRunning = false;
   var _metadataBatchDone = 0;
   var _metadataBatchTotal = 0;
@@ -53,7 +60,7 @@ class LibraryController extends ChangeNotifier {
   List<String> get skippedPaths => List.unmodifiable(_skippedPaths);
   bool get loading => _loading;
   bool get scanning => _scanning;
-  String? get metadataLoadingPath => _metadataLoadingPath;
+  MediaIdentity? get metadataLoadingIdentity => _metadataLoadingIdentity;
   bool get metadataBatchRunning => _metadataBatchRunning;
   int get metadataBatchDone => _metadataBatchDone;
   int get metadataBatchTotal => _metadataBatchTotal;
@@ -87,7 +94,7 @@ class LibraryController extends ChangeNotifier {
     for (final item in items) {
       final key = item.isEpisode
           ? MediaGroup.keyOf(item)
-          : 'movie:${item.path}';
+          : 'movie:${item.sourceId}:${item.path}';
       uniqueItems.putIfAbsent(key, () => _withGroupArtwork(item));
     }
 
@@ -99,7 +106,7 @@ class LibraryController extends ChangeNotifier {
       return item;
     }
     for (final group in groups) {
-      if (!group.paths.contains(item.path)) {
+      if (!group.contains(item)) {
         continue;
       }
       final rep = group.episodes.firstWhere(
@@ -145,11 +152,11 @@ class LibraryController extends ChangeNotifier {
       ...recentlyAddedItems,
       ..._items,
     ];
-    final seen = <String>{};
+    final seen = <MediaIdentity>{};
     final withBackdrop = <MediaItem>[];
     final fallback = <MediaItem>[];
     for (final item in candidates) {
-      if (!seen.add(item.path)) {
+      if (!seen.add(item.identity)) {
         continue;
       }
       if ((item.backdropPath ?? '').isNotEmpty) {
@@ -161,9 +168,9 @@ class LibraryController extends ChangeNotifier {
     return [...withBackdrop, ...fallback].take(3).toList(growable: false);
   }
 
-  MediaItem? itemByPath(String path) {
+  MediaItem? itemByIdentity(MediaIdentity identity) {
     for (final item in _items) {
-      if (item.path == path) {
+      if (item.identity == identity) {
         return item;
       }
     }
@@ -180,7 +187,7 @@ class LibraryController extends ChangeNotifier {
     }
     for (final group in groups) {
       final index = group.episodes.indexWhere(
-        (episode) => episode.path == item.path,
+        (episode) => episode.identity == item.identity,
       );
       if (index < 0) {
         continue;
@@ -200,7 +207,7 @@ class LibraryController extends ChangeNotifier {
     }
     for (final group in groups) {
       final index = group.episodes.indexWhere(
-        (episode) => episode.path == item.path,
+        (episode) => episode.identity == item.identity,
       );
       if (index <= 0) {
         continue;
@@ -242,15 +249,17 @@ class LibraryController extends ChangeNotifier {
     _groupsCache = null;
   }
 
-  /// Merges [updated] into the item list (matched by path) and persists
+  /// Merges [updated] into the item list (matched by source id + path) and persists
   /// exactly those rows.
   Future<void> _applyItemUpdates(List<MediaItem> updated) async {
     if (updated.isEmpty) {
       return;
     }
-    final updatedByPath = {for (final item in updated) item.path: item};
+    final updatedByIdentity = {for (final item in updated) item.identity: item};
     await _store.upsertItems(updated);
-    _setItems([for (final item in _items) updatedByPath[item.path] ?? item]);
+    _setItems([
+      for (final item in _items) updatedByIdentity[item.identity] ?? item,
+    ]);
   }
 
   Future<void> load() async {
@@ -320,25 +329,34 @@ class LibraryController extends ChangeNotifier {
 
   Future<void> openItemLocation(MediaItem item) async {
     try {
-      if (Platform.isWindows) {
-        await Process.start('explorer.exe', ['/select,', item.path]);
-        return;
+      if (!canOpenItemLocation(item)) {
+        throw UnsupportedError('当前媒体源不支持打开文件位置。');
       }
-
-      if (Platform.isMacOS) {
-        await Process.start('open', ['-R', item.path]);
-        return;
-      }
-
-      await Process.start('xdg-open', [File(item.path).parent.path]);
+      await PlatformServices.instance.shell.revealInFileManager(item.path);
     } catch (error) {
       _error = '打开文件位置失败：$error';
       notifyListeners();
     }
   }
 
+  bool canOpenItemLocation(MediaItem item) {
+    return item.sourceId == localMediaSourceId &&
+        PlatformServices.instance.shell.canRevealInFileManager;
+  }
+
+  /// Where the player opens [item] from: local items play by file path;
+  /// future NAS/网盘 sources return streamable URLs. Once more than one
+  /// source is configured, this looks the source up by [MediaItem.sourceId].
+  String playbackUriOf(MediaItem item) {
+    final source = _sources[item.sourceId];
+    if (source == null) {
+      throw StateError('未配置媒体源：${item.sourceId}');
+    }
+    return source.playbackUriOf(item.path);
+  }
+
   Future<void> toggleFavorite(MediaItem item) async {
-    final current = itemByPath(item.path);
+    final current = itemByIdentity(item.identity);
     if (current == null) {
       return;
     }
@@ -350,7 +368,7 @@ class LibraryController extends ChangeNotifier {
     final favorite = !group.anyFavorite;
     await _applyItemUpdates([
       for (final episode in group.episodes)
-        if (itemByPath(episode.path) case final current?)
+        if (itemByIdentity(episode.identity) case final current?)
           current.copyWith(favorite: favorite),
     ]);
     notifyListeners();
@@ -361,7 +379,7 @@ class LibraryController extends ChangeNotifier {
     required int seasonNumber,
     required int episodeNumber,
   }) async {
-    final current = itemByPath(item.path);
+    final current = itemByIdentity(item.identity);
     if (current == null || seasonNumber <= 0 || episodeNumber <= 0) {
       return;
     }
@@ -382,7 +400,7 @@ class LibraryController extends ChangeNotifier {
     if (duration.inMilliseconds <= 0) {
       return;
     }
-    final current = itemByPath(item.path);
+    final current = itemByIdentity(item.identity);
     if (current == null) {
       return;
     }
@@ -398,11 +416,11 @@ class LibraryController extends ChangeNotifier {
   }
 
   Future<void> matchTmdb(MediaItem item) async {
-    await _matchPaths(
-      paths: {item.path},
+    await _matchItems(
+      identities: {item.identity},
       query: item.title,
       preferTv: false,
-      loadingPath: item.path,
+      loadingIdentity: item.identity,
     );
   }
 
@@ -410,19 +428,19 @@ class LibraryController extends ChangeNotifier {
   /// result is applied to every episode; a movie matches itself.
   Future<void> matchGroup(MediaGroup group) async {
     final rep = group.representative;
-    await _matchPaths(
-      paths: group.paths.toSet(),
+    await _matchItems(
+      identities: group.identities.toSet(),
       query: group.isSeries ? (rep.seriesTitle ?? group.title) : rep.title,
       preferTv: group.isSeries,
-      loadingPath: rep.path,
+      loadingIdentity: rep.identity,
     );
   }
 
-  Future<void> _matchPaths({
-    required Set<String> paths,
+  Future<void> _matchItems({
+    required Set<MediaIdentity> identities,
     required String query,
     required bool preferTv,
-    required String loadingPath,
+    required MediaIdentity loadingIdentity,
   }) async {
     if (!_settings.hasTmdbToken) {
       _error = '请先在设置中填写 TMDB 令牌。';
@@ -430,7 +448,7 @@ class LibraryController extends ChangeNotifier {
       return;
     }
 
-    _metadataLoadingPath = loadingPath;
+    _metadataLoadingIdentity = loadingIdentity;
     _error = null;
     notifyListeners();
 
@@ -443,7 +461,7 @@ class LibraryController extends ChangeNotifier {
       );
 
       if (match == null) {
-        _metadataLoadingPath = null;
+        _metadataLoadingIdentity = null;
         _error = 'TMDB 未找到匹配结果：$query';
         notifyListeners();
         return;
@@ -456,28 +474,30 @@ class LibraryController extends ChangeNotifier {
         proxy: _settings.tmdbProxy,
       );
 
-      await _applyItemUpdates(_matchedItems(_items, paths, match, details));
-      _metadataLoadingPath = null;
+      await _applyItemUpdates(
+        _matchedItems(_items, identities, match, details),
+      );
+      _metadataLoadingIdentity = null;
       notifyListeners();
     } catch (error) {
-      _metadataLoadingPath = null;
+      _metadataLoadingIdentity = null;
       _error = 'TMDB 匹配失败：$error';
       notifyListeners();
     }
   }
 
-  /// Manual match chosen from the search dialog — applied to all [paths]
+  /// Manual match chosen from the search dialog — applied to all [identities]
   /// (one movie, or every episode of a series).
   Future<void> applyManualMatch(
-    List<String> paths,
+    List<MediaIdentity> identities,
     TmdbMovieMatch match, {
     int? seasonNumber,
     int? episodeNumber,
   }) async {
-    if (paths.isEmpty) {
+    if (identities.isEmpty) {
       return;
     }
-    _metadataLoadingPath = paths.first;
+    _metadataLoadingIdentity = identities.first;
     _error = null;
     notifyListeners();
 
@@ -492,7 +512,7 @@ class LibraryController extends ChangeNotifier {
       await _applyItemUpdates(
         _matchedItems(
           _items,
-          paths.toSet(),
+          identities.toSet(),
           match,
           details,
           seasonNumber: seasonNumber,
@@ -502,7 +522,7 @@ class LibraryController extends ChangeNotifier {
     } catch (error) {
       _error = 'TMDB 匹配失败：$error';
     }
-    _metadataLoadingPath = null;
+    _metadataLoadingIdentity = null;
     notifyListeners();
   }
 
@@ -588,7 +608,7 @@ class LibraryController extends ChangeNotifier {
     _metadataBatchRunning = true;
     _metadataBatchDone = 0;
     _metadataBatchTotal = pendingGroups.length;
-    _metadataLoadingPath = null;
+    _metadataLoadingIdentity = null;
     _error = null;
     notifyListeners();
 
@@ -600,7 +620,7 @@ class LibraryController extends ChangeNotifier {
       }
 
       final rep = group.representative;
-      _metadataLoadingPath = rep.path;
+      _metadataLoadingIdentity = rep.identity;
       notifyListeners();
 
       try {
@@ -621,7 +641,7 @@ class LibraryController extends ChangeNotifier {
             proxy: _settings.tmdbProxy,
           );
           await _applyItemUpdates(
-            _matchedItems(_items, group.paths.toSet(), match, details),
+            _matchedItems(_items, group.identities.toSet(), match, details),
           );
         }
       } catch (_) {
@@ -640,16 +660,16 @@ class LibraryController extends ChangeNotifier {
     }
 
     _metadataBatchRunning = false;
-    _metadataLoadingPath = null;
+    _metadataLoadingIdentity = null;
     _error = failedCount == 0 ? null : '批量匹配完成，$failedCount 个条目未匹配。';
     notifyListeners();
   }
 
-  /// The items in [paths] with the TMDB match applied — only the changed
+  /// The items in [identities] with the TMDB match applied — only the changed
   /// rows, ready for an upsert.
   static List<MediaItem> _matchedItems(
     List<MediaItem> items,
-    Set<String> paths,
+    Set<MediaIdentity> identities,
     TmdbMovieMatch match,
     TmdbDetails? details, {
     int? seasonNumber,
@@ -657,7 +677,7 @@ class LibraryController extends ChangeNotifier {
   }) {
     return [
       for (final item in items)
-        if (paths.contains(item.path))
+        if (identities.contains(item.identity))
           item.copyWith(
             tmdbId: match.id,
             tmdbTitle: match.title,

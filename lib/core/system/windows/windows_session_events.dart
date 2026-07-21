@@ -2,17 +2,19 @@ import 'dart:async';
 
 import 'package:flutter/services.dart';
 
+import '../platform_services.dart';
+
 /// Windows workstation session events forwarded from the native runner
 /// (WM_WTSSESSION_CHANGE): emits 'lock' when the screen locks and 'unlock'
 /// when it unlocks.
-class SessionEvents {
-  SessionEvents._();
-
+class WindowsSessionEvents implements SessionEvents {
   static const _channel = MethodChannel('moviehub/session');
-  static final _events = StreamController<String>.broadcast();
-  static var _bound = false;
 
-  static Stream<String> get stream {
+  final _events = StreamController<String>.broadcast();
+  var _bound = false;
+
+  @override
+  Stream<String> get stream {
     if (!_bound) {
       _bound = true;
       _channel.setMethodCallHandler((call) async {

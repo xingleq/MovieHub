@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../core/system/window_controls.dart';
+import '../../core/system/platform_services.dart';
 import '../../theme/app_tokens.dart';
 
 class WindowControlButtons extends StatelessWidget {
@@ -11,6 +11,10 @@ class WindowControlButtons extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
+    final windowControls = PlatformServices.instance.windowControls;
+    if (!windowControls.isSupported) {
+      return const SizedBox.shrink();
+    }
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: AppSpacing.sm),
       child: Container(
@@ -34,20 +38,20 @@ class WindowControlButtons extends StatelessWidget {
             _WindowButton(
               tooltip: '最小化',
               icon: Icons.remove,
-              onPressed: () => unawaited(WindowControls.minimize()),
+              onPressed: () => unawaited(windowControls.minimize()),
             ),
             const _ControlDivider(),
             _WindowButton(
               tooltip: '最大化 / 还原',
               icon: Icons.crop_square,
-              onPressed: () => unawaited(WindowControls.toggleMaximize()),
+              onPressed: () => unawaited(windowControls.toggleMaximize()),
             ),
             const _ControlDivider(),
             _WindowButton(
               tooltip: '关闭',
               icon: Icons.close,
               closeButton: true,
-              onPressed: () => unawaited(WindowControls.close()),
+              onPressed: () => unawaited(windowControls.close()),
             ),
           ],
         ),

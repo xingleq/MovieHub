@@ -4,7 +4,7 @@ import 'dart:isolate';
 
 import 'package:sqlite3/sqlite3.dart';
 
-import '../system/app_paths.dart';
+import '../system/platform_services.dart';
 import 'media_item.dart';
 import 'media_library_store.dart';
 
@@ -21,7 +21,8 @@ import 'media_library_store.dart';
 /// migrations when [MediaItem] gains fields.
 class MediaLibrarySqliteStore implements MediaLibraryStorage {
   MediaLibrarySqliteStore({Directory? storageDirectory, this.legacyStore})
-    : _storageDirectory = storageDirectory ?? defaultAppDataDirectory();
+    : _storageDirectory =
+          storageDirectory ?? PlatformServices.instance.paths.appDataDirectory;
 
   final Directory _storageDirectory;
 
@@ -50,13 +51,51 @@ class MediaLibrarySqliteStore implements MediaLibraryStorage {
         path TEXT PRIMARY KEY
       );
     ''');
+    _ensureItemsTable(database);
+    return database;
+  }
+
+  static void _ensureItemsTable(Database database) {
+    final columns = database.select('PRAGMA table_info(items)');
+    if (columns.isEmpty) {
+      _createItemsTable(database);
+      return;
+    }
+    if (columns.any((row) => row['name'] == 'source_id')) {
+      return;
+    }
+
+    // v1.1.x keyed rows by path only. Preserve every document and backfill
+    // its source id while changing the primary key to (source_id, path).
+    final legacyRows = [
+      for (final row in database.select('SELECT path, json FROM items'))
+        (row['path'] as String, row['json'] as String),
+    ];
+    _inTransaction(database, () {
+      database.execute('ALTER TABLE items RENAME TO items_v1');
+      _createItemsTable(database);
+      _insertItemRows(database, [
+        for (final (path, json) in legacyRows)
+          (
+            (jsonDecode(json) as Map<String, Object?>)['sourceId'] as String? ??
+                'local',
+            path,
+            json,
+          ),
+      ]);
+      database.execute('DROP TABLE items_v1');
+    });
+  }
+
+  static void _createItemsTable(Database database) {
     database.execute('''
-      CREATE TABLE IF NOT EXISTS items (
-        path TEXT PRIMARY KEY,
-        json TEXT NOT NULL
+      CREATE TABLE items (
+        source_id TEXT NOT NULL,
+        path TEXT NOT NULL,
+        json TEXT NOT NULL,
+        PRIMARY KEY (source_id, path)
       );
     ''');
-    return database;
   }
 
   @override
@@ -81,7 +120,8 @@ class MediaLibrarySqliteStore implements MediaLibraryStorage {
   @override
   Future<void> upsertItems(Iterable<MediaItem> items) async {
     final rows = [
-      for (final item in items) (item.path, jsonEncode(item.toJson())),
+      for (final item in items)
+        (item.sourceId, item.path, jsonEncode(item.toJson())),
     ];
     if (rows.isEmpty) {
       return;
@@ -113,7 +153,8 @@ class MediaLibrarySqliteStore implements MediaLibraryStorage {
           database.execute('DELETE FROM items');
           _insertRootRows(database, roots);
           _insertItemRows(database, [
-            for (final item in items) (item.path, jsonEncode(item.toJson())),
+            for (final item in items)
+              (item.sourceId, item.path, jsonEncode(item.toJson())),
           ]);
         });
       } finally {
@@ -146,13 +187,16 @@ class MediaLibrarySqliteStore implements MediaLibraryStorage {
     }
   }
 
-  static void _insertItemRows(Database database, List<(String, String)> rows) {
+  static void _insertItemRows(
+    Database database,
+    List<(String, String, String)> rows,
+  ) {
     final statement = database.prepare(
-      'INSERT OR REPLACE INTO items (path, json) VALUES (?, ?)',
+      'INSERT OR REPLACE INTO items (source_id, path, json) VALUES (?, ?, ?)',
     );
     try {
-      for (final (path, json) in rows) {
-        statement.execute([path, json]);
+      for (final (sourceId, path, json) in rows) {
+        statement.execute([sourceId, path, json]);
       }
     } finally {
       statement.dispose();

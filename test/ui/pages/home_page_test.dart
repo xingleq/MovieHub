@@ -7,6 +7,7 @@ import 'package:moviehub/app/library_scope.dart';
 import 'package:moviehub/app/settings_controller.dart';
 import 'package:moviehub/core/media/media_item.dart';
 import 'package:moviehub/core/media/media_library_store.dart';
+import 'package:moviehub/core/media/sources/media_source.dart';
 import 'package:moviehub/theme/app_theme.dart';
 import 'package:moviehub/ui/pages/home_page.dart';
 
@@ -64,8 +65,12 @@ void main() {
       ),
     );
 
-    final poster = find.byKey(ValueKey('home-poster:${item.path}'));
-    final playButton = find.byKey(ValueKey('home-play:${item.path}'));
+    final poster = find.byKey(
+      ValueKey('home-poster:${item.sourceId}:${item.path}'),
+    );
+    final playButton = find.byKey(
+      ValueKey('home-play:${item.sourceId}:${item.path}'),
+    );
     expect(poster, findsOneWidget);
     expect(tester.getSize(poster).width, 168);
 
@@ -90,6 +95,7 @@ MediaItem _mediaItem() {
   final now = DateTime(2026, 7, 20);
   return MediaItem(
     path: 'D:/Movies/test.mp4',
+    sourceId: localMediaSourceId,
     title: '测试电影',
     extension: 'mp4',
     sizeBytes: 1024,

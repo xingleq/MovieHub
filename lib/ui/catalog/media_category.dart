@@ -3,8 +3,6 @@ import '../../core/media/media_item.dart';
 
 /// TMDB genre id for Animation (both movie and TV).
 const _animationGenreId = 16;
-
-// TODO(genre): 纪录片(99)/综艺(10764 真人秀, 10767 脱口秀) can join the rail the
 // same way now that genre ids are scraped — add when the library carries them.
 
 /// Anime/animation: TMDB genre 16. Unmatched items can't be classified yet,

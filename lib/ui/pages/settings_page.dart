@@ -578,8 +578,8 @@ class _PlaybackTab extends StatelessWidget {
           ),
         ),
         _SettingsCard(
-          title: '管理密码',
-          subtitle: '单独管理家长密码；观看时长和抽卡次数都会使用它校验。',
+          title: '家长密码',
+          subtitle: '每次进入设置时验证；进入后可修改本页所有受保护项。',
           child: Wrap(
             spacing: AppSpacing.md,
             runSpacing: AppSpacing.md,
@@ -636,7 +636,7 @@ class _PlaybackTab extends StatelessWidget {
                     icon: settings.hasManagementPassword
                         ? Icons.lock_outline
                         : Icons.lock_open_outlined,
-                    label: '管理密码',
+                    label: '家长密码',
                     value: settings.hasManagementPassword ? '已设置' : '未设置',
                   ),
                 ],
@@ -664,7 +664,7 @@ class _PlaybackTab extends StatelessWidget {
         ),
         _SettingsCard(
           title: '抽卡次数',
-          subtitle: '每天免费抽一张；这里可以输入管理密码给当前用户增加额外抽卡次数。',
+          subtitle: '每天免费抽一张；家长进入设置后可增加额外抽卡次数。',
           child: FutureBuilder<GachaSnapshot>(
             future: Future(() {
               final store = GachaStore();
@@ -783,18 +783,19 @@ class _ManagementPasswordDialogState extends State<_ManagementPasswordDialog> {
   Widget build(BuildContext context) {
     final settings = widget.settings;
     return AlertDialog(
-      title: Text(settings.hasManagementPassword ? '修改管理密码' : '设置管理密码'),
+      title: Text(settings.hasManagementPassword ? '修改家长密码' : '设置家长密码'),
       content: SizedBox(
         width: 380,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            if (settings.hasManagementPassword) ...[
+            if (settings.hasManagementPassword &&
+                !settings.settingsUnlocked) ...[
               TextField(
                 controller: _passwordController,
                 obscureText: true,
                 decoration: const InputDecoration(
-                  labelText: '当前管理密码',
+                  labelText: '当前家长密码',
                   prefixIcon: Icon(Icons.lock_outline),
                 ),
               ),
@@ -804,7 +805,7 @@ class _ManagementPasswordDialogState extends State<_ManagementPasswordDialog> {
               controller: _newPasswordController,
               obscureText: true,
               decoration: const InputDecoration(
-                labelText: '新管理密码',
+                labelText: '新家长密码',
                 prefixIcon: Icon(Icons.password_outlined),
               ),
             ),
@@ -870,15 +871,17 @@ class _AddGachaDrawsDialogState extends State<_AddGachaDrawsDialog> {
                 prefixIcon: Icon(Icons.confirmation_num_outlined),
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: '管理密码',
-                prefixIcon: Icon(Icons.lock_outline),
+            if (!widget.settings.settingsUnlocked) ...[
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '家长密码',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -894,9 +897,10 @@ class _AddGachaDrawsDialogState extends State<_AddGachaDrawsDialog> {
               widget.settings.clearError();
               return;
             }
-            if (!widget.settings.verifyManagementPassword(
-              _passwordController.text,
-            )) {
+            if (!widget.settings.settingsUnlocked &&
+                !widget.settings.verifyManagementPassword(
+                  _passwordController.text,
+                )) {
               return;
             }
             final store = GachaStore();
@@ -980,15 +984,17 @@ class _TodayWatchLimitDialogState extends State<_TodayWatchLimitDialog> {
                 prefixIcon: Icon(Icons.today_outlined),
               ),
             ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: '管理密码',
-                prefixIcon: Icon(Icons.lock_outline),
+            if (!settings.settingsUnlocked) ...[
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '家长密码',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),
@@ -1109,15 +1115,17 @@ class _ScreenTimeDialogState extends State<_ScreenTimeDialog> {
                 ),
               ],
             ),
-            const SizedBox(height: AppSpacing.md),
-            TextField(
-              controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
-                labelText: '管理密码',
-                prefixIcon: Icon(Icons.lock_outline),
+            if (!widget.settings.settingsUnlocked) ...[
+              const SizedBox(height: AppSpacing.md),
+              TextField(
+                controller: _passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: '家长密码',
+                  prefixIcon: Icon(Icons.lock_outline),
+                ),
               ),
-            ),
+            ],
           ],
         ),
       ),

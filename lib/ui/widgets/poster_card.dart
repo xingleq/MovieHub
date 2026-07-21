@@ -44,6 +44,7 @@ class PosterCard extends StatelessWidget {
     }
 
     final card = Hoverable(
+      onActivate: onOpenDetail,
       builder: (context, hovered) {
         return GestureDetector(
           onTap: onOpenDetail,

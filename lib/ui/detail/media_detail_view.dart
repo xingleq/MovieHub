@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../app/library_scope.dart';
 import '../../core/media/media_item.dart';
 import '../../core/tmdb/tmdb_client.dart';
 import '../../theme/app_tokens.dart';
@@ -10,10 +9,9 @@ import '../format/formatters.dart';
 import '../widgets/cached_tmdb_image.dart';
 import '../widgets/jelly_button.dart';
 import '../widgets/poster_placeholder.dart';
-import '../widgets/shelf_row.dart';
 
 /// Cinematic detail view: full-width backdrop with gradient scrims, poster,
-/// metadata chips, actions, overview, file information, and related picks.
+/// metadata chips, actions, overview, and this file's own information.
 class MediaDetailView extends StatelessWidget {
   const MediaDetailView({
     super.key,
@@ -43,8 +41,6 @@ class MediaDetailView extends StatelessWidget {
     final tokens = AppTokens.of(context);
     final inProgress =
         item.playbackProgress > 0.01 && item.playbackProgress < 0.95;
-    final related = _relatedItems(context);
-
     return Stack(
       children: [
         SingleChildScrollView(
@@ -205,14 +201,6 @@ class MediaDetailView extends StatelessWidget {
                       item.path,
                       style: const TextStyle(fontSize: 12),
                     ),
-                    if (related.isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.xl),
-                      RelatedDetailShelf(
-                        title: '相关推荐',
-                        items: related,
-                        onTap: (_) {},
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -234,29 +222,6 @@ class MediaDetailView extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  List<MediaItem> _relatedItems(BuildContext context) {
-    final controller = LibraryScope.of(context);
-    final all = controller.items.where((i) => i.path != item.path).toList();
-    final genres = item.genres?.toSet() ?? {};
-
-    // Prefer items sharing a genre, then fall back to recently added.
-    all.sort((a, b) {
-      final aScore = _genreScore(a, genres) + _recencyScore(a);
-      final bScore = _genreScore(b, genres) + _recencyScore(b);
-      return bScore.compareTo(aScore);
-    });
-    return all.take(10).toList();
-  }
-
-  int _genreScore(MediaItem other, Set<String> genres) {
-    if (genres.isEmpty || other.genres == null) return 0;
-    return other.genres!.where(genres.contains).length * 100;
-  }
-
-  int _recencyScore(MediaItem other) {
-    return other.addedAt.difference(DateTime(2000)).inDays;
   }
 
   List<String> _chips() {
@@ -529,86 +494,6 @@ class DetailScoreBlock extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class RelatedDetailShelf extends StatelessWidget {
-  const RelatedDetailShelf({
-    super.key,
-    required this.title,
-    required this.items,
-    required this.onTap,
-  });
-
-  final String title;
-  final List<MediaItem> items;
-  final ValueChanged<MediaItem> onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return ShelfRow(
-      title: title,
-      height: 220,
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        return RelatedDetailCard(item: item, onTap: () => onTap(item));
-      },
-    );
-  }
-}
-
-class RelatedDetailCard extends StatelessWidget {
-  const RelatedDetailCard({super.key, required this.item, required this.onTap});
-
-  final MediaItem item;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-
-    return GestureDetector(
-      onTap: onTap,
-      child: SizedBox(
-        width: 120,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: ClipRRect(
-                borderRadius: const BorderRadius.all(
-                  Radius.circular(AppRadius.md),
-                ),
-                child: item.posterPath != null && item.posterPath!.isNotEmpty
-                    ? CachedTmdbImage(
-                        url: TmdbClient.posterUrl(item.posterPath!),
-                        cacheWidth: 300,
-                      )
-                    : const PosterPlaceholder(),
-              ),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              item.tmdbTitle ?? item.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-            Text(
-              [
-                ?releaseYear(item),
-                if (item.voteAverage != null && item.voteAverage! > 0)
-                  '★ ${item.voteAverage!.toStringAsFixed(1)}',
-              ].join(' · '),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: tokens.textSecondary, fontSize: 11),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

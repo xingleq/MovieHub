@@ -10,14 +10,13 @@ import '../theme/app_tokens.dart';
 import '../ui/catalog/media_category.dart';
 import '../ui/detail/media_detail_view.dart';
 import '../ui/detail/series_detail_view.dart';
-import '../ui/format/formatters.dart';
 import '../ui/pages/catalog_page.dart';
 import '../ui/pages/gacha_page.dart';
 import '../ui/pages/home_page.dart';
 import '../ui/pages/settings_page.dart';
 import '../ui/player/player_page.dart';
 import '../ui/widgets/candy_background.dart';
-import '../ui/widgets/capsule_nav.dart';
+import '../ui/widgets/immersive_top_nav.dart';
 import '../ui/widgets/manual_match_dialog.dart';
 import '../ui/widgets/window_control_buttons.dart';
 import 'app_section.dart';
@@ -49,6 +48,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Duration? _playerStartAt;
   var _playerToken = 0;
   var _playerCompact = false;
+  var _searchQuery = '';
 
   @override
   void initState() {
@@ -78,11 +78,57 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   }
 
   void _goToSection(AppSection section) {
+    if (_section == AppSection.settings && section != AppSection.settings) {
+      _settings.lockSettings();
+    }
     setState(() {
       _section = section;
       _detailPath = null;
       _detailSeriesKey = null;
     });
+  }
+
+  Future<void> _requestSection(AppSection section) async {
+    if (section != AppSection.settings) {
+      _goToSection(section);
+      return;
+    }
+    if (_settings.settingsUnlocked) {
+      _goToSection(section);
+      return;
+    }
+
+    final granted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => _settings.hasManagementPassword
+          ? _UnlockSettingsDialog(settings: _settings)
+          : _CreateSettingsPasswordDialog(settings: _settings),
+    );
+    if (granted != true || !mounted) {
+      return;
+    }
+    _goToSection(AppSection.settings);
+  }
+
+  List<MediaGroup> get _searchResults {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) {
+      return const [];
+    }
+    return _library.groups
+        .where((group) {
+          if (group.title.toLowerCase().contains(query)) {
+            return true;
+          }
+          return group.episodes.any((item) {
+            return item.title.toLowerCase().contains(query) ||
+                (item.tmdbTitle?.toLowerCase().contains(query) ?? false) ||
+                (item.seriesTitle?.toLowerCase().contains(query) ?? false) ||
+                item.path.toLowerCase().contains(query);
+          });
+        })
+        .toList(growable: false);
   }
 
   void _openEntry(MediaGroup group) {
@@ -129,7 +175,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     }
     if (!allowed) {
       final message = _settings.error;
-      if (!_settings.breakActive && message != null) {
+      if (!_settings.showBreakOverlay && message != null) {
         ScaffoldMessenger.of(context)
           ..hideCurrentSnackBar()
           ..showSnackBar(SnackBar(content: Text(message)));
@@ -264,8 +310,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-
     return LibraryScope(
       controller: _library,
       child: SettingsScope(
@@ -280,72 +324,36 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   const CandyBackground(),
                   if (_settings.backgroundImagePath.isNotEmpty)
                     _WallpaperLayer(path: _settings.backgroundImagePath),
-                  Row(
-                    children: [
-                      CapsuleNav(
-                        selectedIndex: _section.index,
-                        onSelected: (index) {
-                          _goToSection(AppSection.values[index]);
-                        },
-                        footer: _NavFooter(controller: _library),
-                        items: [
-                          const CapsuleNavItem(
-                            icon: Icons.home_outlined,
-                            selectedIcon: Icons.home_rounded,
-                            label: '首页',
-                          ),
-                          const CapsuleNavItem(
-                            icon: Icons.auto_awesome_outlined,
-                            selectedIcon: Icons.auto_awesome,
-                            label: '动画',
-                          ),
-                          const CapsuleNavItem(
-                            icon: Icons.movie_outlined,
-                            selectedIcon: Icons.movie_rounded,
-                            label: '电影',
-                          ),
-                          const CapsuleNavItem(
-                            icon: Icons.tv_outlined,
-                            selectedIcon: Icons.tv_rounded,
-                            label: '电视剧',
-                          ),
-                          const CapsuleNavItem(
-                            icon: Icons.style_outlined,
-                            selectedIcon: Icons.style_rounded,
-                            label: '抽卡',
-                          ),
-                          CapsuleNavItem(
-                            icon: Icons.favorite_outline,
-                            selectedIcon: Icons.favorite_rounded,
-                            label: '收藏',
-                            badgeCount: _library.favoriteCount,
-                          ),
-                          const CapsuleNavItem(
-                            icon: Icons.settings_outlined,
-                            selectedIcon: Icons.settings_rounded,
-                            label: '设置',
-                          ),
-                        ],
-                      ),
-                      VerticalDivider(
-                        width: 1,
-                        thickness: 1,
-                        color: tokens.cardBorder,
-                      ),
-                      Expanded(
-                        child: Column(
-                          children: [
-                            _AppTopBar(section: _section),
-                            Divider(
-                              height: 1,
-                              thickness: 1,
-                              color: tokens.cardBorder,
-                            ),
-                            Expanded(child: _buildContent()),
-                          ],
-                        ),
-                      ),
-                    ],
+                  Padding(
+                    padding:
+                        _section == AppSection.home &&
+                            _detailPath == null &&
+                            _detailSeriesKey == null
+                        ? EdgeInsets.zero
+                        : const EdgeInsets.only(top: 88),
+                    child: _buildContent(),
+                  ),
+                  Positioned(
+                    top: AppSpacing.md,
+                    left: AppSpacing.xl,
+                    right: 150,
+                    child: ImmersiveTopNav(
+                      selected: _section,
+                      onSelected: (section) {
+                        unawaited(_requestSection(section));
+                      },
+                      searchResults: _searchResults,
+                      onSearch: (query) {
+                        setState(() => _searchQuery = query);
+                      },
+                      onOpenResult: _openEntry,
+                    ),
+                  ),
+                  const Positioned(
+                    top: AppSpacing.md,
+                    right: AppSpacing.sm,
+                    height: 58,
+                    child: WindowControlButtons(),
                   ),
                   if (_playerItem case final MediaItem item)
                     _PlayerOverlay(
@@ -399,16 +407,20 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
           ),
         Expanded(
           child: AnimatedSwitcher(
-            duration: AppDurations.fade,
+            duration: const Duration(milliseconds: 320),
+            reverseDuration: const Duration(milliseconds: 180),
             switchInCurve: Curves.easeOutCubic,
+            switchOutCurve: Curves.easeInCubic,
             transitionBuilder: (child, animation) {
               return FadeTransition(
                 opacity: animation,
-                child: SlideTransition(
-                  position: Tween<Offset>(
-                    begin: const Offset(0, 0.02),
-                    end: Offset.zero,
-                  ).animate(animation),
+                child: ScaleTransition(
+                  scale: Tween<double>(begin: 0.96, end: 1).animate(
+                    CurvedAnimation(
+                      parent: animation,
+                      curve: Curves.easeOutCubic,
+                    ),
+                  ),
                   child: child,
                 ),
               );
@@ -437,8 +449,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             onPlayEpisode: (episode) => unawaited(_openPlayer(episode)),
             onToggleFavorite: (group) =>
                 unawaited(_library.toggleGroupFavorite(group)),
-            onToggleFollowing: (group) =>
-                unawaited(_library.toggleGroupFollowing(group)),
             onEditEpisode: (episode) =>
                 unawaited(_openEpisodeEditDialog(episode)),
             onMatch: _library.matchGroup,
@@ -482,11 +492,15 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     return KeyedSubtree(
       key: const ValueKey('sections'),
-      child: IndexedStack(
-        index: _section.index,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
           for (final (index, page) in _sectionPages().indexed)
-            _AnimatedSection(active: _section.index == index, child: page),
+            _AnimatedSection(
+              key: ValueKey('section:$index'),
+              active: _section.index == index,
+              child: page,
+            ),
         ],
       ),
     );
@@ -515,12 +529,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   List<Widget> _sectionPages() {
     return [
       HomePage(
-        onOpenEntry: _openEntry,
         onOpenItem: _openItem,
-        onPlayEntry: _playEntry,
         onPlayItem: (item) => unawaited(_openPlayer(item)),
         onGoToSettings: () {
-          _goToSection(AppSection.settings);
+          unawaited(_requestSection(AppSection.settings));
         },
       ),
       CatalogPage(
@@ -558,6 +570,154 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       // the settings page would freeze until a tab switch forces a rebuild.
       SettingsPage(),
     ];
+  }
+}
+
+class _CreateSettingsPasswordDialog extends StatefulWidget {
+  const _CreateSettingsPasswordDialog({required this.settings});
+
+  final SettingsController settings;
+
+  @override
+  State<_CreateSettingsPasswordDialog> createState() =>
+      _CreateSettingsPasswordDialogState();
+}
+
+class _CreateSettingsPasswordDialogState
+    extends State<_CreateSettingsPasswordDialog> {
+  final _passwordController = TextEditingController();
+  final _confirmController = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    _confirmController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    final password = _passwordController.text.trim();
+    if (password.length < 4) {
+      setState(() => _error = '密码至少需要 4 位。');
+      return;
+    }
+    if (password != _confirmController.text.trim()) {
+      setState(() => _error = '两次输入的密码不一致。');
+      return;
+    }
+    final saved = await widget.settings.saveManagementPassword(
+      password: '',
+      newPassword: password,
+    );
+    if (!saved || !mounted) {
+      setState(() => _error = widget.settings.error);
+      return;
+    }
+    widget.settings.unlockSettings(password);
+    if (mounted) {
+      Navigator.of(context).pop(true);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('创建家长密码'),
+      content: SizedBox(
+        width: 380,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('首次进入设置前，请创建家长密码。以后每次进入设置都需要验证。'),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _passwordController,
+              obscureText: true,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: '家长密码',
+                prefixIcon: Icon(Icons.lock_outline),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            TextField(
+              controller: _confirmController,
+              obscureText: true,
+              onSubmitted: (_) => _submit(),
+              decoration: InputDecoration(
+                labelText: '确认密码',
+                prefixIcon: const Icon(Icons.verified_user_outlined),
+                errorText: _error,
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('创建并进入')),
+      ],
+    );
+  }
+}
+
+class _UnlockSettingsDialog extends StatefulWidget {
+  const _UnlockSettingsDialog({required this.settings});
+
+  final SettingsController settings;
+
+  @override
+  State<_UnlockSettingsDialog> createState() => _UnlockSettingsDialogState();
+}
+
+class _UnlockSettingsDialogState extends State<_UnlockSettingsDialog> {
+  final _passwordController = TextEditingController();
+  String? _error;
+
+  @override
+  void dispose() {
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    if (!widget.settings.unlockSettings(_passwordController.text)) {
+      setState(() => _error = widget.settings.error);
+      return;
+    }
+    Navigator.of(context).pop(true);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('进入设置'),
+      content: SizedBox(
+        width: 360,
+        child: TextField(
+          controller: _passwordController,
+          obscureText: true,
+          autofocus: true,
+          onSubmitted: (_) => _submit(),
+          decoration: InputDecoration(
+            labelText: '家长密码',
+            prefixIcon: const Icon(Icons.admin_panel_settings_outlined),
+            errorText: _error,
+          ),
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('取消'),
+        ),
+        FilledButton(onPressed: _submit, child: const Text('验证并进入')),
+      ],
+    );
   }
 }
 
@@ -610,113 +770,15 @@ class _PlayerOverlay extends StatelessWidget {
   }
 }
 
-/// A dedicated title bar prevents window controls from competing with page
-/// toolbars. Its center decorations are deliberately subtle and remain
-/// non-interactive, leaving the whole content area available to each page.
-class _AppTopBar extends StatelessWidget {
-  const _AppTopBar({required this.section});
-
-  final AppSection section;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-    return SizedBox(
-      height: 62,
-      child: Padding(
-        padding: const EdgeInsets.only(
-          left: AppSpacing.xl,
-          right: AppSpacing.md,
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 34,
-              height: 34,
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: tokens.accent.withValues(alpha: 0.12),
-                borderRadius: const BorderRadius.all(
-                  Radius.circular(AppRadius.sm),
-                ),
-              ),
-              child: Icon(section.icon, size: 18, color: tokens.accent),
-            ),
-            const SizedBox(width: AppSpacing.sm),
-            Text(
-              section.title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-            ),
-            const Expanded(child: _TopBarDecorations()),
-            const WindowControlButtons(),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _TopBarDecorations extends StatelessWidget {
-  const _TopBarDecorations();
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-    return IgnorePointer(
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          if (constraints.maxWidth < 220) {
-            return const SizedBox.shrink();
-          }
-          return Stack(
-            alignment: Alignment.center,
-            children: [
-              Positioned(
-                left: constraints.maxWidth * .24,
-                child: Icon(
-                  Icons.cloud_rounded,
-                  size: 30,
-                  color: tokens.textSecondary.withValues(alpha: 0.12),
-                ),
-              ),
-              Icon(
-                Icons.public,
-                size: 34,
-                color: AppTokens.candyGradient.last.withValues(alpha: 0.18),
-              ),
-              Positioned(
-                right: constraints.maxWidth * .19,
-                top: 12,
-                child: Icon(
-                  Icons.star_rounded,
-                  size: 16,
-                  color: tokens.accent.withValues(alpha: 0.26),
-                ),
-              ),
-              Positioned(
-                right: constraints.maxWidth * .31,
-                bottom: 10,
-                child: Icon(
-                  Icons.auto_awesome,
-                  size: 13,
-                  color: AppTokens.cyanAccent.withValues(alpha: 0.22),
-                ),
-              ),
-            ],
-          );
-        },
-      ),
-    );
-  }
-}
-
 /// Replays a quick fade/slide when its section becomes the active one, so
 /// switching rail sections feels animated while IndexedStack keeps each
 /// page's state (search, sort, scroll) alive.
 class _AnimatedSection extends StatefulWidget {
-  const _AnimatedSection({required this.active, required this.child});
+  const _AnimatedSection({
+    super.key,
+    required this.active,
+    required this.child,
+  });
 
   final bool active;
   final Widget child;
@@ -735,6 +797,7 @@ class _AnimatedSectionState extends State<_AnimatedSection>
     _controller = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 320),
+      reverseDuration: const Duration(milliseconds: 180),
       value: widget.active ? 1 : 0,
     );
   }
@@ -744,6 +807,8 @@ class _AnimatedSectionState extends State<_AnimatedSection>
     super.didUpdateWidget(oldWidget);
     if (widget.active && !oldWidget.active) {
       _controller.forward(from: 0);
+    } else if (!widget.active && oldWidget.active) {
+      _controller.reverse();
     }
   }
 
@@ -757,87 +822,18 @@ class _AnimatedSectionState extends State<_AnimatedSection>
   Widget build(BuildContext context) {
     return FadeTransition(
       opacity: CurvedAnimation(parent: _controller, curve: Curves.easeOut),
-      child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.015), end: Offset.zero)
-            .animate(
-              CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
-            ),
-        child: widget.child,
-      ),
-    );
-  }
-}
-
-/// Library size summary shown at the bottom of the side navigation.
-class _NavFooter extends StatelessWidget {
-  const _NavFooter({required this.controller});
-
-  final LibraryController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-    final totalSize = controller.items.fold<int>(
-      0,
-      (sum, item) => sum + item.sizeBytes,
-    );
-    if (controller.items.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    // Visual progress against a 2TB reference so the bar looks like the design.
-    const twoTb = 2.0 * 1024 * 1024 * 1024 * 1024;
-    final progress = (totalSize / twoTb).clamp(0.02, 1.0);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.all(AppSpacing.md),
-          decoration: BoxDecoration(
-            color: tokens.surface.withValues(alpha: 0.6),
-            borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
-            border: Border.all(color: tokens.cardBorder),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    Icons.storage_outlined,
-                    size: 14,
-                    color: tokens.textSecondary,
-                  ),
-                  const SizedBox(width: AppSpacing.xs),
-                  Text(
-                    '存储空间',
-                    style: TextStyle(color: tokens.textSecondary, fontSize: 11),
-                  ),
-                ],
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              ClipRRect(
-                borderRadius: const BorderRadius.all(Radius.circular(2)),
-                child: SizedBox(
-                  height: 4,
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor: tokens.surfaceVariant,
-                    color: tokens.accent,
-                  ),
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
-              Text(
-                '${formatBytes(totalSize)} / 2.00 TB',
-                style: TextStyle(color: tokens.textSecondary, fontSize: 11),
-              ),
-            ],
+      child: ScaleTransition(
+        scale: Tween<double>(begin: 0.96, end: 1).animate(
+          CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic),
+        ),
+        child: ExcludeFocus(
+          excluding: !widget.active,
+          child: ExcludeSemantics(
+            excluding: !widget.active,
+            child: IgnorePointer(ignoring: !widget.active, child: widget.child),
           ),
         ),
-      ],
+      ),
     );
   }
 }

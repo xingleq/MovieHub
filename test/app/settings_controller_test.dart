@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moviehub/app/settings_controller.dart';
 import 'package:moviehub/core/settings/app_settings_store.dart';
 import 'package:moviehub/core/settings/holiday_calendar.dart';
+import 'package:moviehub/theme/app_theme.dart';
+import 'package:moviehub/ui/widgets/screen_time_overlay.dart';
 
 class _FakeHolidayCalendar extends HolidayCalendar {
   _FakeHolidayCalendar(this.payload);
@@ -15,6 +18,18 @@ class _FakeHolidayCalendar extends HolidayCalendar {
 
   @override
   void close() {}
+}
+
+class _MemorySettingsStore extends AppSettingsStore {
+  AppSettings settings = AppSettings.empty;
+
+  @override
+  Future<AppSettings> load() async => settings;
+
+  @override
+  Future<void> save(AppSettings settings) async {
+    this.settings = settings;
+  }
 }
 
 void main() {
@@ -172,4 +187,115 @@ void main() {
     expect(await controller.setPlaybackActive(true), isTrue);
     controller.dispose();
   });
+
+  test('设置解锁后免二次验证，离开设置后立即恢复锁定', () async {
+    final directory = await Directory.systemTemp.createTemp(
+      'moviehub-settings-gate-test-',
+    );
+    addTearDown(() => directory.delete(recursive: true));
+    final controller = SettingsController(
+      store: AppSettingsStore(storageDirectory: directory),
+      holidayCalendar: _FakeHolidayCalendar(payload),
+      now: () => DateTime(2026, 7, 20, 10),
+    );
+    await controller.load();
+    await controller.saveManagementPassword(password: '', newPassword: '1234');
+
+    expect(controller.settingsUnlocked, isFalse);
+    expect(controller.unlockSettings('0000'), isFalse);
+    expect(controller.unlockSettings('1234'), isTrue);
+    expect(controller.settingsUnlocked, isTrue);
+    expect(
+      await controller.saveScreenTimeLimits(
+        watchLimitMinutes: 30,
+        breakMinutes: 20,
+        workdayDailyWatchLimit: 2,
+        restDayDailyWatchLimit: 4,
+        password: '',
+      ),
+      isTrue,
+    );
+
+    controller.lockSettings();
+    expect(controller.settingsUnlocked, isFalse);
+    expect(
+      await controller.saveScreenTimeLimits(
+        watchLimitMinutes: 25,
+        breakMinutes: 15,
+        workdayDailyWatchLimit: 1,
+        restDayDailyWatchLimit: 3,
+        password: '',
+      ),
+      isFalse,
+    );
+    controller.dispose();
+  });
+
+  testWidgets('最后一次用完显示大弹窗但不倒计，增加次数后恢复休息倒计时', (tester) async {
+    var now = DateTime(2026, 7, 20, 10);
+    final controller = SettingsController(
+      store: _MemorySettingsStore(),
+      holidayCalendar: _FakeHolidayCalendar(payload),
+      now: () => now,
+    );
+    addTearDown(controller.dispose);
+    await tester.runAsync(() async {
+      await controller.load();
+      await controller.saveManagementPassword(
+        password: '',
+        newPassword: '1234',
+      );
+      await controller.saveScreenTimeLimits(
+        watchLimitMinutes: 1,
+        breakMinutes: 30,
+        workdayDailyWatchLimit: 1,
+        restDayDailyWatchLimit: 3,
+        password: '1234',
+      );
+      await controller.startViewingSession();
+      await controller.setPlaybackActive(true);
+      now = now.add(const Duration(minutes: 1));
+      await controller.setPlaybackActive(false);
+    });
+
+    expect(controller.dailyViewingLimitReached, isTrue);
+    expect(controller.breakActive, isTrue);
+    await tester.pumpWidget(_overlayApp(controller));
+    expect(find.text('今天的观看时间到啦！'), findsOneWidget);
+    expect(find.text('今日 1 次观看机会已全部使用完。'), findsOneWidget);
+    expect(find.text('小时'), findsNothing);
+    expect(find.text('分钟'), findsNothing);
+    expect(find.text('秒'), findsNothing);
+    expect(find.textContaining('设置'), findsNothing);
+    expect(find.textContaining('增加'), findsNothing);
+    expect(find.textContaining('临时'), findsNothing);
+    expect(find.textContaining('再次播放'), findsNothing);
+
+    await tester.runAsync(
+      () => controller.saveTodayTemporaryWatchLimit(
+        watchLimit: 2,
+        password: '1234',
+      ),
+    );
+    await tester.pumpWidget(_overlayApp(controller));
+    expect(controller.dailyViewingLimitReached, isFalse);
+    expect(find.text('时间到啦，休息一下吧！'), findsOneWidget);
+    expect(find.text('小时'), findsOneWidget);
+    expect(find.text('分钟'), findsOneWidget);
+    expect(find.text('秒'), findsOneWidget);
+  });
+}
+
+Widget _overlayApp(SettingsController controller) {
+  return MaterialApp(
+    theme: buildDarkTheme(),
+    home: Scaffold(
+      body: Stack(
+        children: [
+          const Positioned.fill(child: SizedBox()),
+          ScreenTimeOverlay(settings: controller),
+        ],
+      ),
+    ),
+  );
 }

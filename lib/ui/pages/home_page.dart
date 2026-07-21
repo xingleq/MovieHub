@@ -1,36 +1,27 @@
-import 'dart:async';
+import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 
 import '../../app/library_scope.dart';
-import '../../core/media/media_group.dart';
 import '../../core/media/media_item.dart';
+import '../../core/tmdb/tmdb_client.dart';
 import '../../theme/app_tokens.dart';
-import '../catalog/media_category.dart';
-import '../widgets/continue_watching_card.dart';
+import '../widgets/cached_tmdb_image.dart';
 import '../widgets/empty_state.dart';
-import '../widgets/entrance.dart';
-import '../widgets/hero_banner.dart';
+import '../widgets/hoverable.dart';
 import '../widgets/message_banner.dart';
-import '../widgets/poster_card.dart';
-import '../widgets/shelf_row.dart';
 
-/// Home: hero spotlight plus horizontal shelves (continue watching, anime,
-/// recently added, favorites) in a single vertical scroll view. Wall shelves
-/// render grouped entries — a series is one card.
+/// A non-scrolling, console-style media desktop. The focused poster controls
+/// the full-window artwork; metadata and playback actions live on detail pages.
 class HomePage extends StatefulWidget {
   const HomePage({
     super.key,
-    required this.onOpenEntry,
     required this.onOpenItem,
-    required this.onPlayEntry,
     required this.onPlayItem,
     required this.onGoToSettings,
   });
 
-  final ValueChanged<MediaGroup> onOpenEntry;
   final ValueChanged<MediaItem> onOpenItem;
-  final ValueChanged<MediaGroup> onPlayEntry;
   final ValueChanged<MediaItem> onPlayItem;
   final VoidCallback onGoToSettings;
 
@@ -39,52 +30,18 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  static const _heroInterval = Duration(seconds: 7);
-  static const _posterShelfCardWidth = 150.0;
-  static const _posterShelfHeight = _posterShelfCardWidth * 1.5 + 58;
-
-  Timer? _heroTimer;
-  var _heroIndex = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _startHeroTimer();
-  }
-
-  void _startHeroTimer() {
-    _heroTimer?.cancel();
-    _heroTimer = Timer.periodic(_heroInterval, (_) {
-      if (!mounted) {
-        return;
-      }
-      final count = LibraryScope.of(context).spotlightItems.length;
-      if (count <= 1) {
-        return;
-      }
-      setState(() {
-        _heroIndex = (_heroIndex + 1) % count;
-      });
-    });
-  }
-
-  @override
-  void dispose() {
-    _heroTimer?.cancel();
-    super.dispose();
-  }
+  String? _focusedPath;
 
   @override
   Widget build(BuildContext context) {
     final controller = LibraryScope.of(context);
-
     if (controller.items.isEmpty) {
       return EmptyState(
         icon: Icons.auto_awesome,
         title: '欢迎来到你的小影院 ✨',
         message: controller.roots.isEmpty
-            ? '先在设置里添加动画片文件夹，海报墙马上就出现啦。'
-            : '目录已添加，去设置中点一下"重新扫描"就好。',
+            ? '先在设置里添加媒体文件夹，沉浸式桌面马上就出现。'
+            : '目录已添加，进入设置重新扫描即可。',
         action: FilledButton.icon(
           onPressed: widget.onGoToSettings,
           icon: const Icon(Icons.settings_outlined),
@@ -93,137 +50,258 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    final spotlights = controller.spotlightItems;
-    if (_heroIndex >= spotlights.length) {
-      _heroIndex = 0;
-    }
-    final spotlight = spotlights.isEmpty ? null : spotlights[_heroIndex];
     final continueWatching = controller.continueWatchingItems;
+    final candidates = continueWatching.isNotEmpty
+        ? continueWatching
+        : controller.spotlightItems.isNotEmpty
+        ? controller.spotlightItems
+        : controller.items.take(16).toList(growable: false);
+    final selected = candidates.cast<MediaItem?>().firstWhere(
+      (item) => item?.path == _focusedPath,
+      orElse: () => candidates.first,
+    )!;
 
-    final groups = controller.groups;
-    final animeGroups = groups.where(isAnimeGroup).take(16).toList();
-    final recentGroups = [...groups]
-      ..sort((a, b) => b.addedAt.compareTo(a.addedAt));
-    final recentlyAdded = recentGroups.take(16).toList();
-    final favoriteGroups = groups.where(isFavoriteGroup).take(16).toList();
-
-    return CustomScrollView(
-      slivers: [
-        SliverPadding(
-          padding: const EdgeInsets.fromLTRB(
-            AppSpacing.xl,
-            AppSpacing.lg,
-            AppSpacing.xl,
-            AppSpacing.xl,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 420),
+          switchInCurve: Curves.easeOutCubic,
+          switchOutCurve: Curves.easeInCubic,
+          transitionBuilder: (child, animation) => FadeTransition(
+            opacity: animation,
+            child: ScaleTransition(
+              scale: Tween<double>(begin: 1.025, end: 1).animate(animation),
+              child: child,
+            ),
           ),
-          sliver: SliverList(
-            delegate: SliverChildListDelegate([
-              if (controller.error != null) ...[
-                MessageBanner(
-                  icon: Icons.error_outline,
-                  message: controller.error!,
-                  onClose: controller.clearError,
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              if (controller.skippedPaths.isNotEmpty) ...[
-                MessageBanner(
-                  icon: Icons.warning_amber,
-                  message: '有 ${controller.skippedPaths.length} 个路径无法读取或不存在。',
-                ),
-                const SizedBox(height: AppSpacing.md),
-              ],
-              if (spotlight != null) ...[
-                LayoutBuilder(
-                  builder: (context, constraints) {
-                    final bannerWidth = constraints.maxWidth.clamp(
-                      720.0,
-                      1240.0,
-                    );
-                    final bannerHeight = (bannerWidth * 0.36).clamp(
-                      300.0,
-                      420.0,
-                    );
-                    return Align(
-                      alignment: Alignment.center,
-                      child: ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: bannerWidth),
-                        child: Entrance(
-                          child: HeroBanner(
-                            item: spotlight,
-                            key: ValueKey(spotlight.path),
-                            height: bannerHeight,
-                            activeIndex: _heroIndex,
-                            itemCount: spotlights.length,
-                            onDotSelected: (index) {
-                              setState(() {
-                                _heroIndex = index;
-                              });
-                              _startHeroTimer();
-                            },
-                            onPlay: () => widget.onPlayItem(spotlight),
-                            onOpenDetail: () => widget.onOpenItem(spotlight),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: AppSpacing.xl),
-              ],
-              if (continueWatching.isNotEmpty) ...[
-                ShelfRow(
-                  title: '继续观看',
-                  height: 170,
-                  itemCount: continueWatching.length,
-                  itemBuilder: (context, index) {
-                    final item = continueWatching[index];
-                    return Entrance(
-                      delayMs: index.clamp(0, 8) * 40,
-                      child: ContinueWatchingCard(
-                        item: item,
-                        onOpenDetail: () => widget.onOpenItem(item),
-                        onPlay: () => widget.onPlayItem(item),
-                      ),
-                    );
-                  },
-                ),
-                const SizedBox(height: AppSpacing.xl),
-              ],
-              if (animeGroups.isNotEmpty) ...[
-                _groupShelf('新番速递 ✨', animeGroups),
-                const SizedBox(height: AppSpacing.xl),
-              ],
-              _groupShelf('最近添加', recentlyAdded),
-              if (favoriteGroups.isNotEmpty) ...[
-                const SizedBox(height: AppSpacing.xl),
-                _groupShelf('我的收藏', favoriteGroups),
-              ],
-              const SizedBox(height: AppSpacing.xl),
-            ]),
+          child: _ImmersiveBackdrop(
+            key: ValueKey(selected.path),
+            item: selected,
+          ),
+        ),
+        if (controller.error != null)
+          Positioned(
+            left: AppSpacing.xl,
+            right: AppSpacing.xl,
+            top: 96,
+            child: MessageBanner(
+              icon: Icons.error_outline,
+              message: controller.error!,
+              onClose: controller.clearError,
+            ),
+          ),
+        if (controller.skippedPaths.isNotEmpty)
+          Positioned(
+            left: AppSpacing.xl,
+            right: AppSpacing.xl,
+            top: controller.error == null ? 96 : 154,
+            child: MessageBanner(
+              icon: Icons.warning_amber,
+              message: '有 ${controller.skippedPaths.length} 个路径无法读取或不存在。',
+            ),
+          ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: AppSpacing.lg,
+          height: 304,
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xl,
+              AppSpacing.md,
+              AppSpacing.xl,
+              AppSpacing.sm,
+            ),
+            scrollDirection: Axis.horizontal,
+            itemCount: candidates.length,
+            separatorBuilder: (_, _) => const SizedBox(width: AppSpacing.md),
+            itemBuilder: (context, index) {
+              final item = candidates[index];
+              return _FocusPoster(
+                item: item,
+                onFocused: () {
+                  if (_focusedPath != item.path) {
+                    setState(() => _focusedPath = item.path);
+                  }
+                },
+                onOpen: () => widget.onOpenItem(item),
+                onPlay: () => widget.onPlayItem(item),
+              );
+            },
           ),
         ),
       ],
     );
   }
+}
 
-  Widget _groupShelf(String title, List<MediaGroup> groups) {
-    return ShelfRow(
-      title: title,
-      height: _posterShelfHeight,
-      itemCount: groups.length,
-      itemBuilder: (context, index) {
-        final group = groups[index];
-        return Entrance(
-          delayMs: index.clamp(0, 8) * 40,
-          child: PosterCard(
-            group: group,
-            width: _posterShelfCardWidth,
-            onOpenDetail: () => widget.onOpenEntry(group),
-            onPlay: () => widget.onPlayEntry(group),
+class _ImmersiveBackdrop extends StatelessWidget {
+  const _ImmersiveBackdrop({super.key, required this.item});
+
+  final MediaItem item;
+
+  @override
+  Widget build(BuildContext context) {
+    final backdropPath = item.backdropPath;
+    final posterPath = item.posterPath;
+    Widget artwork;
+    if (backdropPath != null && backdropPath.isNotEmpty) {
+      artwork = CachedTmdbImage(
+        url: TmdbClient.backdropUrl(backdropPath),
+        cacheWidth: 1920,
+      );
+    } else if (posterPath != null && posterPath.isNotEmpty) {
+      artwork = Transform.scale(
+        scale: 1.22,
+        child: ImageFiltered(
+          imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
+          child: CachedTmdbImage(
+            url: TmdbClient.posterUrl(posterPath),
+            cacheWidth: 900,
           ),
-        );
-      },
+        ),
+      );
+    } else {
+      artwork = const DecoratedBox(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF251B46), Color(0xFF101526)],
+          ),
+        ),
+      );
+    }
+
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        artwork,
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0x58000000), Color(0x08000000), Color(0xD9000000)],
+              stops: [0, 0.48, 1],
+            ),
+          ),
+        ),
+        const DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.centerLeft,
+              end: Alignment.centerRight,
+              colors: [Color(0x30000000), Colors.transparent],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _FocusPoster extends StatelessWidget {
+  const _FocusPoster({
+    required this.item,
+    required this.onFocused,
+    required this.onOpen,
+    required this.onPlay,
+  });
+
+  final MediaItem item;
+  final VoidCallback onFocused;
+  final VoidCallback onOpen;
+  final VoidCallback onPlay;
+
+  @override
+  Widget build(BuildContext context) {
+    final posterPath = item.posterPath;
+    return SizedBox(
+      width: 168,
+      child: Hoverable(
+        onActivate: onOpen,
+        onHighlightChanged: (highlighted) {
+          if (highlighted) {
+            onFocused();
+          }
+        },
+        builder: (context, highlighted) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  key: ValueKey('home-poster:${item.path}'),
+                  behavior: HitTestBehavior.opaque,
+                  onTap: onOpen,
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.all(
+                      Radius.circular(AppRadius.md),
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        CachedTmdbImage(
+                          url: posterPath == null || posterPath.isEmpty
+                              ? null
+                              : TmdbClient.posterUrl(posterPath),
+                          cacheWidth: 320,
+                        ),
+                        AnimatedOpacity(
+                          opacity: highlighted ? 1 : 0,
+                          duration: AppDurations.hover,
+                          child: ExcludeFocus(
+                            excluding: !highlighted,
+                            child: IgnorePointer(
+                              ignoring: !highlighted,
+                              child: ColoredBox(
+                                color: Colors.black.withValues(alpha: 0.32),
+                                child: Center(
+                                  child: IconButton.filled(
+                                    key: ValueKey('home-play:${item.path}'),
+                                    tooltip: '播放',
+                                    onPressed: onPlay,
+                                    style: IconButton.styleFrom(
+                                      backgroundColor: Colors.white,
+                                      foregroundColor: Colors.black,
+                                      minimumSize: const Size.square(52),
+                                    ),
+                                    icon: const Icon(
+                                      Icons.play_arrow_rounded,
+                                      size: 30,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.sm),
+              AnimatedOpacity(
+                opacity: highlighted ? 1 : 0,
+                duration: AppDurations.hover,
+                child: Text(
+                  item.tmdbTitle ?? item.seriesTitle ?? item.title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                    shadows: [Shadow(color: Colors.black, blurRadius: 8)],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }

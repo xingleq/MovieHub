@@ -197,6 +197,7 @@ class _NavEntry extends StatelessWidget {
         return Transform.scale(scale: scale, child: child);
       },
       child: Hoverable(
+        onActivate: onTap,
         builder: (context, hovered) {
           return GestureDetector(
             onTap: onTap,

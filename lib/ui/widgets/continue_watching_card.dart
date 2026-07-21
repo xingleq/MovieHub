@@ -36,6 +36,7 @@ class ContinueWatchingCard extends StatelessWidget {
     return SizedBox(
       width: width,
       child: Hoverable(
+        onActivate: onOpenDetail,
         builder: (context, hovered) {
           return GestureDetector(
             onTap: onOpenDetail,

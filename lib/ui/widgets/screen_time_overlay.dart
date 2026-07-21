@@ -20,6 +20,7 @@ class ScreenTimeOverlay extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final dailyLimitReached = settings.dailyViewingLimitReached;
     final remaining = settings.breakRemaining;
     final hours = remaining.inHours.toString().padLeft(2, '0');
     final minutes = remaining.inMinutes
@@ -74,6 +75,8 @@ class ScreenTimeOverlay extends StatelessWidget {
                           ),
                         ),
                         _BreakCard(
+                          dailyLimitReached: dailyLimitReached,
+                          dailyLimit: settings.todayDailyWatchLimit,
                           hours: hours,
                           minutes: minutes,
                           seconds: seconds,
@@ -82,8 +85,10 @@ class ScreenTimeOverlay extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: AppSpacing.lg),
-                    const Text(
-                      '自律一点，才能更好地遇见喜欢的世界哦！✨',
+                    Text(
+                      dailyLimitReached
+                          ? '今天先好好休息，明天再继续探索吧！✨'
+                          : '自律一点，才能更好地遇见喜欢的世界哦！✨',
                       style: TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w600,
@@ -103,12 +108,16 @@ class ScreenTimeOverlay extends StatelessWidget {
 
 class _BreakCard extends StatelessWidget {
   const _BreakCard({
+    required this.dailyLimitReached,
+    required this.dailyLimit,
     required this.hours,
     required this.minutes,
     required this.seconds,
     required this.onClose,
   });
 
+  final bool dailyLimitReached;
+  final int dailyLimit;
   final String hours;
   final String minutes;
   final String seconds;
@@ -117,7 +126,7 @@ class _BreakCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 440,
+      width: 520,
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       padding: const EdgeInsets.fromLTRB(40, 44, 40, 32),
       decoration: BoxDecoration(
@@ -149,15 +158,15 @@ class _BreakCard extends StatelessWidget {
               borderRadius: const BorderRadius.all(Radius.circular(26)),
               border: Border.all(color: Colors.white, width: 3),
             ),
-            child: const Icon(
-              Icons.alarm_rounded,
+            child: Icon(
+              dailyLimitReached ? Icons.bedtime_rounded : Icons.alarm_rounded,
               color: Color(0xFFA06BFF),
               size: 40,
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          const Text(
-            '时间到啦，休息一下吧！',
+          Text(
+            dailyLimitReached ? '今天的观看时间到啦！' : '时间到啦，休息一下吧！',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 22,
@@ -166,23 +175,27 @@ class _BreakCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
-          const Text(
-            '本轮观看时间已达上限，请稍作休息哦～',
+          Text(
+            dailyLimitReached
+                ? '今日 $dailyLimit 次观看机会已全部使用完。'
+                : '本轮观看时间已达上限，请稍作休息哦～',
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 14, color: Color(0xFF8C82A6)),
           ),
-          const SizedBox(height: AppSpacing.xl),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _TimePart(value: hours, label: '小时'),
-              const _TimeSeparator(),
-              _TimePart(value: minutes, label: '分钟'),
-              const _TimeSeparator(),
-              _TimePart(value: seconds, label: '秒'),
-            ],
-          ),
+          if (!dailyLimitReached) ...[
+            const SizedBox(height: AppSpacing.xl),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _TimePart(value: hours, label: '小时'),
+                const _TimeSeparator(),
+                _TimePart(value: minutes, label: '分钟'),
+                const _TimeSeparator(),
+                _TimePart(value: seconds, label: '秒'),
+              ],
+            ),
+          ],
           const SizedBox(height: AppSpacing.xl),
           Container(
             padding: const EdgeInsets.symmetric(
@@ -193,14 +206,18 @@ class _BreakCard extends StatelessWidget {
               color: Color(0xFFE9DDFF),
               borderRadius: BorderRadius.all(Radius.circular(AppRadius.pill)),
             ),
-            child: const Row(
+            child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.lock_outline, size: 16, color: Color(0xFF8F66F2)),
-                SizedBox(width: AppSpacing.xs),
+                const Icon(
+                  Icons.lock_outline,
+                  size: 16,
+                  color: Color(0xFF8F66F2),
+                ),
+                const SizedBox(width: AppSpacing.xs),
                 Text(
-                  '休息结束后自动解锁',
-                  style: TextStyle(
+                  dailyLimitReached ? '今日观看已结束' : '休息结束后自动解锁',
+                  style: const TextStyle(
                     fontSize: 13,
                     color: Color(0xFF8F66F2),
                     fontWeight: FontWeight.w700,
@@ -213,13 +230,7 @@ class _BreakCard extends StatelessWidget {
           TextButton.icon(
             onPressed: onClose,
             icon: const Icon(Icons.close_rounded),
-            label: const Text('关闭提示并进入设置'),
-          ),
-          const SizedBox(height: AppSpacing.xs),
-          const Text(
-            '休息期间再次播放时，会重新显示此倒计时',
-            textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 12, color: Color(0xFF8C82A6)),
+            label: const Text('关闭提示'),
           ),
         ],
       ),

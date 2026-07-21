@@ -20,6 +20,7 @@ class JellyButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Hoverable(
+      onActivate: onPressed,
       builder: (context, hovered) {
         return AnimatedScale(
           scale: hovered ? 1.06 : 1.0,

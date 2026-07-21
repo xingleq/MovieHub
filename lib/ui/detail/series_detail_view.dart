@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../app/library_scope.dart';
 import '../../core/media/media_group.dart';
 import '../../core/media/media_item.dart';
 import '../../core/tmdb/tmdb_client.dart';
@@ -11,14 +10,9 @@ import '../widgets/cached_tmdb_image.dart';
 import '../widgets/jelly_button.dart';
 import '../widgets/poster_placeholder.dart';
 import 'media_detail_view.dart'
-    show
-        DetailActionButton,
-        DetailMetadataChip,
-        DetailScoreBlock,
-        RelatedDetailShelf;
+    show DetailActionButton, DetailMetadataChip, DetailScoreBlock;
 
-/// Cinematic series detail: backdrop header, season-grouped episode list,
-/// and related recommendations.
+/// Cinematic series detail for this series and its season-grouped episodes.
 class SeriesDetailView extends StatelessWidget {
   const SeriesDetailView({
     super.key,
@@ -27,7 +21,6 @@ class SeriesDetailView extends StatelessWidget {
     required this.onBack,
     required this.onPlayEpisode,
     required this.onToggleFavorite,
-    required this.onToggleFollowing,
     required this.onEditEpisode,
     required this.onMatch,
     required this.onManualMatch,
@@ -39,7 +32,6 @@ class SeriesDetailView extends StatelessWidget {
   final VoidCallback onBack;
   final ValueChanged<MediaItem> onPlayEpisode;
   final ValueChanged<MediaGroup> onToggleFavorite;
-  final ValueChanged<MediaGroup> onToggleFollowing;
   final ValueChanged<MediaItem> onEditEpisode;
   final ValueChanged<MediaGroup> onMatch;
   final ValueChanged<MediaGroup> onManualMatch;
@@ -52,8 +44,6 @@ class SeriesDetailView extends StatelessWidget {
     final tokens = AppTokens.of(context);
     final rep = group.representative;
     final next = group.nextUnwatched;
-    final related = _relatedItems(context);
-
     final seasons = <int, List<MediaItem>>{};
     for (final episode in group.episodes) {
       seasons.putIfAbsent(episode.seasonNumber ?? 0, () => []).add(episode);
@@ -146,13 +136,6 @@ class SeriesDetailView extends StatelessWidget {
                                     onPressed: () => onToggleFavorite(group),
                                   ),
                                   DetailActionButton(
-                                    icon: group.anyFollowing
-                                        ? Icons.bookmark
-                                        : Icons.bookmark_add_outlined,
-                                    label: group.anyFollowing ? '已追番' : '追番',
-                                    onPressed: () => onToggleFollowing(group),
-                                  ),
-                                  DetailActionButton(
                                     icon: loadingMetadata
                                         ? Icons.hourglass_empty
                                         : Icons.cloud_sync_outlined,
@@ -208,13 +191,6 @@ class SeriesDetailView extends StatelessWidget {
                       onPlayEpisode: onPlayEpisode,
                       onEditEpisode: onEditEpisode,
                     ),
-                    if (related.isNotEmpty) ...[
-                      RelatedDetailShelf(
-                        title: '相关推荐',
-                        items: related,
-                        onTap: (_) {},
-                      ),
-                    ],
                   ],
                 ),
               ),
@@ -236,31 +212,6 @@ class SeriesDetailView extends StatelessWidget {
         ),
       ],
     );
-  }
-
-  List<MediaItem> _relatedItems(BuildContext context) {
-    final controller = LibraryScope.of(context);
-    final rep = group.representative;
-    final all = controller.items
-        .where((i) => !group.paths.contains(i.path))
-        .toList();
-    final genres = rep.genres?.toSet() ?? {};
-
-    all.sort((a, b) {
-      final aScore = _genreScore(a, genres) + _recencyScore(a);
-      final bScore = _genreScore(b, genres) + _recencyScore(b);
-      return bScore.compareTo(aScore);
-    });
-    return all.take(10).toList();
-  }
-
-  int _genreScore(MediaItem other, Set<String> genres) {
-    if (genres.isEmpty || other.genres == null) return 0;
-    return other.genres!.where(genres.contains).length * 100;
-  }
-
-  int _recencyScore(MediaItem other) {
-    return other.addedAt.difference(DateTime(2000)).inDays;
   }
 
   List<String> _chips() {

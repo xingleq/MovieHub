@@ -161,7 +161,7 @@ class _PlayerPageState extends State<PlayerPage> {
       return;
     }
     await _player.pause();
-    if (!mounted || widget.settings.breakActive) {
+    if (!mounted || widget.settings.showBreakOverlay) {
       return;
     }
     final message = widget.settings.error;

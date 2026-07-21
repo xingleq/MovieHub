@@ -36,6 +36,7 @@ class SettingsController extends ChangeNotifier {
   var _watchLimitMinutes = 45;
   var _breakMinutes = 10;
   var _screenTimePasswordHash = '';
+  var _settingsUnlocked = false;
   DateTime? _breakUntil;
   var _showBreakOverlay = true;
   var _watchElapsedMilliseconds = 0;
@@ -68,6 +69,7 @@ class SettingsController extends ChangeNotifier {
   int get breakMinutes => _breakMinutes;
   bool get hasScreenTimePassword => _screenTimePasswordHash.isNotEmpty;
   bool get hasManagementPassword => _screenTimePasswordHash.isNotEmpty;
+  bool get settingsUnlocked => _settingsUnlocked;
   int get workdayDailyWatchLimit => _workdayDailyWatchLimit;
   int get restDayDailyWatchLimit => _restDayDailyWatchLimit;
   bool get hasTodayTemporaryWatchLimit {
@@ -94,6 +96,8 @@ class SettingsController extends ChangeNotifier {
     );
   }
 
+  bool get dailyViewingLimitReached => todayRemainingViewings == 0;
+
   String get todayDayTypeLabel {
     final now = _now();
     final holiday = _holidayDates[localDateKey(now)];
@@ -113,7 +117,8 @@ class SettingsController extends ChangeNotifier {
     return breakUntil != null && _now().isBefore(breakUntil);
   }
 
-  bool get showBreakOverlay => breakActive && _showBreakOverlay;
+  bool get showBreakOverlay =>
+      _showBreakOverlay && (breakActive || dailyViewingLimitReached);
 
   Duration get breakRemaining {
     final breakUntil = _breakUntil;
@@ -135,7 +140,7 @@ class SettingsController extends ChangeNotifier {
   }
 
   void requestBreakOverlay() {
-    if (!breakActive || _showBreakOverlay) {
+    if ((!breakActive && !dailyViewingLimitReached) || _showBreakOverlay) {
       return;
     }
     _showBreakOverlay = true;
@@ -171,6 +176,27 @@ class SettingsController extends ChangeNotifier {
       return;
     }
     _error = null;
+    notifyListeners();
+  }
+
+  bool unlockSettings(String password) {
+    if (_screenTimePasswordHash.isEmpty ||
+        _screenTimePasswordHash != _hashPassword(password.trim())) {
+      _error = _screenTimePasswordHash.isEmpty ? '请先设置管理密码。' : '管理密码不正确。';
+      notifyListeners();
+      return false;
+    }
+    _settingsUnlocked = true;
+    _error = null;
+    notifyListeners();
+    return true;
+  }
+
+  void lockSettings() {
+    if (!_settingsUnlocked) {
+      return;
+    }
+    _settingsUnlocked = false;
     notifyListeners();
   }
 
@@ -307,7 +333,8 @@ class SettingsController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    if (_screenTimePasswordHash != _hashPassword(trimmedPassword)) {
+    if (!_settingsUnlocked &&
+        _screenTimePasswordHash != _hashPassword(trimmedPassword)) {
       _error = '管理密码不正确，无法修改观看时长。';
       notifyListeners();
       return false;
@@ -335,7 +362,8 @@ class SettingsController extends ChangeNotifier {
       notifyListeners();
       return false;
     }
-    if (_screenTimePasswordHash != _hashPassword(password.trim())) {
+    if (!_settingsUnlocked &&
+        _screenTimePasswordHash != _hashPassword(password.trim())) {
       _error = '管理密码不正确，无法修改今日临时次数。';
       notifyListeners();
       return false;
@@ -355,6 +383,10 @@ class SettingsController extends ChangeNotifier {
   }
 
   bool verifyManagementPassword(String password) {
+    if (_settingsUnlocked) {
+      _error = null;
+      return true;
+    }
     if (_screenTimePasswordHash.isEmpty) {
       _error = '请先设置管理密码。';
       notifyListeners();
@@ -382,6 +414,7 @@ class SettingsController extends ChangeNotifier {
       return false;
     }
     if (_screenTimePasswordHash.isNotEmpty &&
+        !_settingsUnlocked &&
         _screenTimePasswordHash != _hashPassword(trimmedPassword)) {
       _error = '当前管理密码不正确。';
       notifyListeners();
@@ -406,6 +439,7 @@ class SettingsController extends ChangeNotifier {
     final dailyLimit = _dailyLimitFor(now);
     if (_dailyViewingCount >= dailyLimit) {
       _error = '今日观看次数已用完（$todayDayTypeLabel每天 $dailyLimit 次）。';
+      requestBreakOverlay();
       notifyListeners();
       return false;
     }
@@ -436,6 +470,7 @@ class SettingsController extends ChangeNotifier {
       } else if (!breakActive) {
         final dailyLimit = _dailyLimitFor(now);
         _error = '今日观看次数已用完（$todayDayTypeLabel每天 $dailyLimit 次）。';
+        requestBreakOverlay();
       } else {
         requestBreakOverlay();
       }
@@ -528,7 +563,9 @@ class SettingsController extends ChangeNotifier {
       return false;
     }
     _breakUntil = null;
-    _showBreakOverlay = false;
+    // A visible final-quota message stays visible until explicitly closed;
+    // an ordinary break countdown disappears when the break finishes.
+    _showBreakOverlay = _showBreakOverlay && dailyViewingLimitReached;
     await _store.save(_current);
     return true;
   }

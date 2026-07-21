@@ -356,16 +356,6 @@ class LibraryController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> toggleGroupFollowing(MediaGroup group) async {
-    final following = !group.anyFollowing;
-    await _applyItemUpdates([
-      for (final episode in group.episodes)
-        if (itemByPath(episode.path) case final current?)
-          current.copyWith(following: following),
-    ]);
-    notifyListeners();
-  }
-
   Future<void> updateEpisodeInfo(
     MediaItem item, {
     required int seasonNumber,

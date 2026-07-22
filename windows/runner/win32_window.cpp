@@ -136,8 +136,8 @@ bool Win32Window::Create(const std::wstring& title,
   GetMonitorInfo(monitor, &monitor_info);
   const RECT monitor_rect = monitor_info.rcMonitor;
 
-  HWND window = CreateWindow(
-      window_class, title.c_str(), WS_POPUP,
+  HWND window = CreateWindowEx(
+      WS_EX_APPWINDOW, window_class, title.c_str(), WS_POPUP,
       monitor_rect.left, monitor_rect.top,
       monitor_rect.right - monitor_rect.left,
       monitor_rect.bottom - monitor_rect.top,
@@ -146,6 +146,15 @@ bool Win32Window::Create(const std::wstring& title,
   if (!window) {
     return false;
   }
+
+  // The Flutter shell used to be created as an overlapped window. Enforce
+  // frameless chrome even when Windows restores stale placement/style data;
+  // MovieHub draws its own minimize, maximize and close controls.
+  SetWindowLongPtr(window, GWL_STYLE, WS_POPUP);
+  SetWindowLongPtr(window, GWL_EXSTYLE, WS_EX_APPWINDOW);
+  SetWindowPos(window, nullptr, 0, 0, 0, 0,
+               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE |
+                   SWP_FRAMECHANGED);
 
   UpdateTheme(window);
 

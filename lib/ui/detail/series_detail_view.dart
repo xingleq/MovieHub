@@ -10,7 +10,11 @@ import '../widgets/cached_tmdb_image.dart';
 import '../widgets/jelly_button.dart';
 import '../widgets/poster_placeholder.dart';
 import 'media_detail_view.dart'
-    show DetailActionButton, DetailMetadataChip, DetailScoreBlock;
+    show
+        DetailActionButton,
+        DetailBackdropLayer,
+        DetailMetadataChip,
+        DetailScoreBlock;
 
 /// Cinematic series detail for this series and its season-grouped episodes.
 class SeriesDetailView extends StatelessWidget {
@@ -40,8 +44,6 @@ class SeriesDetailView extends StatelessWidget {
   /// "打开位置" action hides itself.
   final ValueChanged<MediaItem>? onOpenLocation;
 
-  static const _backdropHeight = 340.0;
-
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
@@ -53,156 +55,146 @@ class SeriesDetailView extends StatelessWidget {
     }
 
     return Stack(
+      fit: StackFit.expand,
       children: [
+        Positioned.fill(child: DetailBackdropLayer(item: rep)),
         SingleChildScrollView(
-          child: Stack(
-            children: [
-              Column(
-                children: [
-                  SizedBox(
-                    height: _backdropHeight,
-                    width: double.infinity,
-                    child: _Backdrop(item: rep),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.xxl,
-                  200,
-                  AppSpacing.xxl,
-                  AppSpacing.xxl,
-                ),
-                child: Column(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xxl,
+              200,
+              AppSpacing.xxl,
+              AppSpacing.xxl,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _Poster(item: rep),
-                        const SizedBox(width: AppSpacing.xl),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                    _Poster(item: rep),
+                    const SizedBox(width: AppSpacing.xl),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: AppSpacing.xl),
+                          Text(
+                            group.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.headlineLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  shadows: const [
+                                    Shadow(
+                                      blurRadius: 12,
+                                      color: Colors.black87,
+                                    ),
+                                  ],
+                                ),
+                          ),
+                          const SizedBox(height: AppSpacing.md),
+                          if (rep.voteAverage != null &&
+                              rep.voteAverage! > 0) ...[
+                            DetailScoreBlock(score: rep.voteAverage!),
+                            const SizedBox(height: AppSpacing.md),
+                          ],
+                          Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.sm,
                             children: [
-                              const SizedBox(height: AppSpacing.xl),
-                              Text(
-                                group.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.headlineLarge
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      shadows: const [
-                                        Shadow(
-                                          blurRadius: 12,
-                                          color: Colors.black87,
-                                        ),
-                                      ],
-                                    ),
-                              ),
-                              const SizedBox(height: AppSpacing.md),
-                              if (rep.voteAverage != null &&
-                                  rep.voteAverage! > 0) ...[
-                                DetailScoreBlock(score: rep.voteAverage!),
-                                const SizedBox(height: AppSpacing.md),
-                              ],
-                              Wrap(
-                                spacing: AppSpacing.sm,
-                                runSpacing: AppSpacing.sm,
-                                children: [
-                                  for (final chip in _chips())
-                                    DetailMetadataChip(label: chip),
-                                ],
-                              ),
-                              const SizedBox(height: AppSpacing.lg),
-                              Wrap(
-                                spacing: AppSpacing.md,
-                                runSpacing: AppSpacing.md,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  JellyButton(
-                                    icon: Icons.play_arrow,
-                                    label: next == null
-                                        ? '再看一遍'
-                                        : group.watchedCount == 0
-                                        ? '开始观看'
-                                        : '继续看 ${next.episodeLabel ?? ''}',
-                                    onPressed: () =>
-                                        onPlayEpisode(group.playTarget),
-                                  ),
-                                  DetailActionButton(
-                                    icon: group.anyFavorite
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    label: group.anyFavorite ? '已收藏' : '收藏',
-                                    onPressed: () => onToggleFavorite(group),
-                                  ),
-                                  DetailActionButton(
-                                    icon: loadingMetadata
-                                        ? Icons.hourglass_empty
-                                        : Icons.cloud_sync_outlined,
-                                    label: rep.tmdbId == null ? '匹配剧集' : '重新匹配',
-                                    onPressed: loadingMetadata
-                                        ? null
-                                        : () => onMatch(group),
-                                  ),
-                                  DetailActionButton(
-                                    icon: Icons.search,
-                                    label: '手动匹配',
-                                    onPressed: loadingMetadata
-                                        ? null
-                                        : () => onManualMatch(group),
-                                  ),
-                                  if (onOpenLocation case final onOpenLocation?)
-                                    DetailActionButton(
-                                      icon: Icons.folder_open,
-                                      label: '打开位置',
-                                      onPressed: () =>
-                                          onOpenLocation(group.episodes.first),
-                                    ),
-                                ],
-                              ),
+                              for (final chip in _chips())
+                                DetailMetadataChip(label: chip),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                    if ((rep.overview ?? '').trim().isNotEmpty) ...[
-                      const SizedBox(height: AppSpacing.xl),
-                      Text(
-                        '简介',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 760),
-                        child: Text(
-                          rep.overview!,
-                          style: TextStyle(
-                            color: tokens.textSecondary,
-                            height: 1.6,
+                          const SizedBox(height: AppSpacing.lg),
+                          Wrap(
+                            spacing: AppSpacing.md,
+                            runSpacing: AppSpacing.md,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              JellyButton(
+                                icon: Icons.play_arrow,
+                                label: next == null
+                                    ? '再看一遍'
+                                    : group.watchedCount == 0
+                                    ? '开始观看'
+                                    : '继续看 ${next.episodeLabel ?? ''}',
+                                onPressed: () =>
+                                    onPlayEpisode(group.playTarget),
+                              ),
+                              DetailActionButton(
+                                icon: group.anyFavorite
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                label: group.anyFavorite ? '已收藏' : '收藏',
+                                onPressed: () => onToggleFavorite(group),
+                              ),
+                              DetailActionButton(
+                                icon: loadingMetadata
+                                    ? Icons.hourglass_empty
+                                    : Icons.cloud_sync_outlined,
+                                label: rep.tmdbId == null ? '匹配剧集' : '重新匹配',
+                                onPressed: loadingMetadata
+                                    ? null
+                                    : () => onMatch(group),
+                              ),
+                              DetailActionButton(
+                                icon: Icons.search,
+                                label: '手动匹配',
+                                onPressed: loadingMetadata
+                                    ? null
+                                    : () => onManualMatch(group),
+                              ),
+                              if (onOpenLocation case final onOpenLocation?)
+                                DetailActionButton(
+                                  icon: Icons.folder_open,
+                                  label: '打开位置',
+                                  onPressed: () =>
+                                      onOpenLocation(group.episodes.first),
+                                ),
+                            ],
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                    const SizedBox(height: AppSpacing.xl),
-                    _SeasonEpisodeList(
-                      key: ValueKey(group.key),
-                      seasons: seasons,
-                      suggestedSeason: next?.seasonNumber,
-                      onPlayEpisode: onPlayEpisode,
-                      onEditEpisode: onEditEpisode,
                     ),
                   ],
                 ),
-              ),
-            ],
+                if ((rep.overview ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xl),
+                  Text(
+                    '简介',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: Text(
+                      rep.overview!,
+                      style: TextStyle(
+                        color: tokens.textSecondary,
+                        height: 1.6,
+                      ),
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.xl),
+                _SeasonEpisodeList(
+                  key: ValueKey(group.key),
+                  seasons: seasons,
+                  suggestedSeason: next?.seasonNumber,
+                  onPlayEpisode: onPlayEpisode,
+                  onEditEpisode: onEditEpisode,
+                ),
+              ],
+            ),
           ),
         ),
         Positioned(
-          top: AppSpacing.lg,
+          top: 88 + AppSpacing.lg,
           left: AppSpacing.lg,
           child: IconButton.filledTonal(
             tooltip: '返回',
@@ -461,55 +453,6 @@ class _Poster extends StatelessWidget {
               : const PosterPlaceholder(iconSize: 56),
         ),
       ),
-    );
-  }
-}
-
-class _Backdrop extends StatelessWidget {
-  const _Backdrop({required this.item});
-
-  final MediaItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-    final backdropPath = item.backdropPath;
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        if (backdropPath != null && backdropPath.isNotEmpty)
-          CachedTmdbImage(
-            url: TmdbClient.backdropUrlLarge(backdropPath),
-            alignment: Alignment.topCenter,
-          )
-        else
-          ColoredBox(color: tokens.surfaceVariant),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.centerLeft,
-              end: Alignment.centerRight,
-              colors: [Colors.black.withValues(alpha: 0.6), Colors.transparent],
-              stops: const [0, 0.7],
-            ),
-          ),
-        ),
-        DecoratedBox(
-          decoration: BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                Colors.transparent,
-                tokens.background.withValues(alpha: 0.55),
-                tokens.background,
-              ],
-              stops: const [0.3, 0.75, 1],
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

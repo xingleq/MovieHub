@@ -19,7 +19,6 @@ class PlayerPage extends StatefulWidget {
     this.previousEpisodeOf,
     this.nextEpisodeOf,
     this.onClose,
-    this.onCompactChanged,
     required this.playbackUriOf,
     this.subtitlePreference = 'zh-hans',
     this.audioPreference = 'zh',
@@ -39,7 +38,6 @@ class PlayerPage extends StatefulWidget {
   final MediaItem? Function(MediaItem item)? nextEpisodeOf;
 
   final VoidCallback? onClose;
-  final ValueChanged<bool>? onCompactChanged;
 
   /// What the player actually opens for an item — resolved by the item's
   /// media source (local items play by file path; remote sources return
@@ -81,8 +79,6 @@ class _PlayerPageState extends State<PlayerPage> {
   var _lastDuration = Duration.zero;
   String? _autoTracksAppliedFor;
   var _switchingEpisode = false;
-  var _compact = false;
-  var _hasStartedPlaying = false;
 
   /// Progress is also checkpointed while playing (a crash or force-close
   /// otherwise loses the whole session); each save writes a single row.
@@ -103,17 +99,6 @@ class _PlayerPageState extends State<PlayerPage> {
     _tracksSubscription = _player.stream.tracks.listen(_applyPreferredTracks);
     _playingSubscription = _player.stream.playing.listen((playing) {
       unawaited(_handlePlaybackStateChanged(playing));
-      if (playing) {
-        _hasStartedPlaying = true;
-      }
-      final compact = _hasStartedPlaying && !playing;
-      if (_compact == compact) {
-        return;
-      }
-      setState(() {
-        _compact = compact;
-      });
-      widget.onCompactChanged?.call(compact);
     });
     _completedSubscription = _player.stream.completed.listen((completed) {
       if (completed) {
@@ -339,10 +324,6 @@ class _PlayerPageState extends State<PlayerPage> {
       _autoTracksAppliedFor = null;
       _lastPosition = Duration.zero;
       _lastDuration = Duration.zero;
-      _compact = false;
-      _hasStartedPlaying = false;
-      widget.onCompactChanged?.call(false);
-
       final resume =
           next.playbackPositionMs > 5000 && next.playbackProgress < 0.95
           ? Duration(milliseconds: next.playbackPositionMs)
@@ -385,108 +366,129 @@ class _PlayerPageState extends State<PlayerPage> {
     }
   }
 
+  void _closePlayer() {
+    final onClose = widget.onClose;
+    if (onClose != null) {
+      onClose();
+    } else {
+      unawaited(Navigator.of(context).maybePop());
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
 
     final controlsTheme = MaterialDesktopVideoControlsThemeData(
+      visibleOnMount: true,
+      playAndPauseOnTap: true,
+      controlsHoverDuration: const Duration(seconds: 6),
       seekBarPositionColor: tokens.accent,
       seekBarThumbColor: tokens.accent,
+      topButtonBar: [
+        Expanded(
+          child: Text(
+            _currentItem.tmdbTitle ?? _currentItem.title,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        _PlayerCloseButton(
+          key: const ValueKey('player-close'),
+          onClose: _closePlayer,
+        ),
+      ],
       bottomButtonBar: [
-        const MaterialDesktopPlayOrPauseButton(),
-        const MaterialDesktopVolumeButton(),
-        const MaterialDesktopPositionIndicator(),
-        const Spacer(),
-        if (_previousEpisode != null)
-          MaterialDesktopCustomButton(
-            onPressed: () => unawaited(_playPreviousManually()),
-            icon: const Icon(Icons.skip_previous),
+        const Expanded(child: SizedBox.shrink()),
+        Expanded(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _EpisodeNavigationButton(
+                key: const ValueKey('player-previous'),
+                tooltip: _previousEpisode == null ? '没有上一集' : '上一集',
+                icon: Icons.skip_previous_rounded,
+                onPressed: _previousEpisode == null
+                    ? null
+                    : () => unawaited(_playPreviousManually()),
+              ),
+              const MaterialDesktopPlayOrPauseButton(
+                key: ValueKey('player-play-pause'),
+                iconSize: 36,
+              ),
+              _EpisodeNavigationButton(
+                key: const ValueKey('player-next'),
+                tooltip: _nextEpisode == null ? '没有下一集' : '下一集',
+                icon: Icons.skip_next_rounded,
+                onPressed: _nextEpisode == null
+                    ? null
+                    : () => unawaited(_playNextManually()),
+              ),
+            ],
           ),
-        if (_nextEpisode != null)
-          MaterialDesktopCustomButton(
-            onPressed: () => unawaited(_playNextManually()),
-            icon: const Icon(Icons.skip_next),
-          ),
-        _RateButton(player: _player),
-        _TrackMenuButton(
-          tooltip: '字幕',
-          icon: Icons.subtitles_outlined,
-          loadTracks: () => [
-            (SubtitleTrack.no(), '关闭字幕'),
-            for (final (index, track)
-                in _player.state.tracks.subtitle
-                    .where((track) => track.id != 'auto' && track.id != 'no')
-                    .indexed)
-              (track, _trackLabel(track.title, track.language, index)),
-          ],
-          isSelected: (track) =>
-              _player.state.track.subtitle.id == (track as SubtitleTrack).id,
-          onSelected: (track) =>
-              unawaited(_player.setSubtitleTrack(track as SubtitleTrack)),
         ),
-        _TrackMenuButton(
-          tooltip: '音轨',
-          icon: Icons.graphic_eq,
-          loadTracks: () => [
-            for (final (index, track)
-                in _player.state.tracks.audio
-                    .where((track) => track.id != 'auto' && track.id != 'no')
-                    .indexed)
-              (track, _trackLabel(track.title, track.language, index)),
-          ],
-          isSelected: (track) =>
-              _player.state.track.audio.id == (track as AudioTrack).id,
-          onSelected: (track) =>
-              unawaited(_player.setAudioTrack(track as AudioTrack)),
-        ),
-        if (PlatformServices.instance.paths.supportsScreenshots)
-          MaterialDesktopCustomButton(
-            onPressed: () => unawaited(_takeScreenshot()),
-            icon: const Icon(Icons.photo_camera_outlined),
+        Expanded(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              const MaterialDesktopVolumeButton(),
+              _RateButton(player: _player),
+              _TrackMenuButton(
+                tooltip: '字幕',
+                icon: Icons.subtitles_outlined,
+                loadTracks: () => [
+                  (SubtitleTrack.no(), '关闭字幕'),
+                  for (final (index, track)
+                      in _player.state.tracks.subtitle
+                          .where(
+                            (track) => track.id != 'auto' && track.id != 'no',
+                          )
+                          .indexed)
+                    (track, _trackLabel(track.title, track.language, index)),
+                ],
+                isSelected: (track) =>
+                    _player.state.track.subtitle.id ==
+                    (track as SubtitleTrack).id,
+                onSelected: (track) =>
+                    unawaited(_player.setSubtitleTrack(track as SubtitleTrack)),
+              ),
+              _TrackMenuButton(
+                tooltip: '音轨',
+                icon: Icons.graphic_eq,
+                loadTracks: () => [
+                  for (final (index, track)
+                      in _player.state.tracks.audio
+                          .where(
+                            (track) => track.id != 'auto' && track.id != 'no',
+                          )
+                          .indexed)
+                    (track, _trackLabel(track.title, track.language, index)),
+                ],
+                isSelected: (track) =>
+                    _player.state.track.audio.id == (track as AudioTrack).id,
+                onSelected: (track) =>
+                    unawaited(_player.setAudioTrack(track as AudioTrack)),
+              ),
+              if (PlatformServices.instance.paths.supportsScreenshots)
+                MaterialDesktopCustomButton(
+                  key: const ValueKey('player-screenshot'),
+                  onPressed: () => unawaited(_takeScreenshot()),
+                  icon: const Icon(Icons.photo_camera_outlined),
+                ),
+              const MaterialDesktopFullscreenButton(),
+            ],
           ),
-        const MaterialDesktopFullscreenButton(),
+        ),
       ],
     );
 
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(
-        backgroundColor: Colors.black,
-        foregroundColor: Colors.white,
-        leading: IconButton(
-          tooltip: '关闭播放器',
-          onPressed: widget.onClose ?? () => Navigator.of(context).maybePop(),
-          icon: const Icon(Icons.close),
-        ),
-        title: Text(
-          _currentItem.tmdbTitle ?? _currentItem.title,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
-          IconButton(
-            tooltip: _previousEpisode == null ? '没有上一集' : '上一集',
-            onPressed: _previousEpisode == null
-                ? null
-                : () => unawaited(_playPreviousManually()),
-            icon: const Icon(Icons.skip_previous),
-          ),
-          IconButton(
-            tooltip: _nextEpisode == null ? '没有下一集' : '下一集',
-            onPressed: _nextEpisode == null
-                ? null
-                : () => unawaited(_playNextManually()),
-            icon: const Icon(Icons.skip_next),
-          ),
-          if (_compact)
-            IconButton(
-              tooltip: '恢复播放',
-              onPressed: () => unawaited(_player.play()),
-              icon: const Icon(Icons.open_in_full),
-            ),
-          const SizedBox(width: 8),
-        ],
-      ),
       body: MaterialDesktopVideoControlsTheme(
         normal: controlsTheme,
         fullscreen: controlsTheme,
@@ -507,6 +509,58 @@ class _PlayerPageState extends State<PlayerPage> {
       return '轨道 ${index + 1}';
     }
     return parts.join(' · ');
+  }
+}
+
+class _EpisodeNavigationButton extends StatelessWidget {
+  const _EpisodeNavigationButton({
+    super.key,
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onPressed,
+      color: Colors.white,
+      disabledColor: Colors.white38,
+      iconSize: 32,
+      icon: Icon(icon),
+    );
+  }
+}
+
+class _PlayerCloseButton extends StatelessWidget {
+  const _PlayerCloseButton({super.key, required this.onClose});
+
+  final VoidCallback onClose;
+
+  Future<void> _close(BuildContext context) async {
+    if (isFullscreen(context)) {
+      await exitFullscreen(context);
+    }
+    if (context.mounted) {
+      onClose();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: '关闭播放器',
+      child: MaterialDesktopCustomButton(
+        onPressed: () => unawaited(_close(context)),
+        icon: const Icon(Icons.close_rounded),
+        iconSize: 30,
+      ),
+    );
   }
 }
 

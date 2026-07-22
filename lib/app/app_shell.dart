@@ -48,7 +48,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   MediaItem? _playerItem;
   Duration? _playerStartAt;
   var _playerToken = 0;
-  var _playerCompact = false;
   var _searchQuery = '';
 
   @override
@@ -197,7 +196,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     setState(() {
       _playerItem = item;
       _playerStartAt = startAt;
-      _playerCompact = false;
       _playerToken++;
     });
   }
@@ -206,7 +204,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     setState(() {
       _playerItem = null;
       _playerStartAt = null;
-      _playerCompact = false;
       _playerToken++;
     });
   }
@@ -329,9 +326,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     _WallpaperLayer(path: _settings.backgroundImagePath),
                   Padding(
                     padding:
-                        _section == AppSection.home &&
-                            _detailIdentity == null &&
-                            _detailSeriesKey == null
+                        _section == AppSection.home ||
+                            _detailIdentity != null ||
+                            _detailSeriesKey != null
                         ? EdgeInsets.zero
                         : const EdgeInsets.only(top: 88),
                     child: _buildContent(),
@@ -365,7 +362,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                       key: ValueKey(
                         'player:$_playerToken:${item.sourceId}:${item.path}',
                       ),
-                      compact: _playerCompact,
                       child: PlayerPage(
                         item: item,
                         startAt: _playerStartAt,
@@ -376,14 +372,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                         audioPreference: _settings.audioPreference,
                         settings: _settings,
                         onClose: _closePlayer,
-                        onCompactChanged: (compact) {
-                          if (!mounted || _playerCompact == compact) {
-                            return;
-                          }
-                          setState(() {
-                            _playerCompact = compact;
-                          });
-                        },
                         onProgressChanged: _library.savePlaybackProgress,
                       ),
                     ),
@@ -738,49 +726,16 @@ class _UnlockSettingsDialogState extends State<_UnlockSettingsDialog> {
 }
 
 class _PlayerOverlay extends StatelessWidget {
-  const _PlayerOverlay({super.key, required this.compact, required this.child});
+  const _PlayerOverlay({super.key, required this.child});
 
-  final bool compact;
   final Widget child;
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-    if (!compact) {
-      return Positioned.fill(
-        child: DecoratedBox(
-          decoration: const BoxDecoration(color: Colors.black),
-          child: child,
-        ),
-      );
-    }
-
-    final windowSize = MediaQuery.sizeOf(context);
-    final width = (windowSize.width - AppSpacing.xl * 2).clamp(360.0, 720.0);
-    final height = (width * 9 / 16 + 72).clamp(280.0, 430.0);
-
-    return Positioned(
-      right: AppSpacing.xl,
-      bottom: AppSpacing.xl,
-      width: width,
-      height: height,
+    return Positioned.fill(
       child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: Colors.black,
-          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
-          border: Border.all(color: tokens.cardBorder),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.28),
-              blurRadius: 28,
-              offset: const Offset(0, 14),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
-          child: child,
-        ),
+        decoration: const BoxDecoration(color: Colors.black),
+        child: child,
       ),
     );
   }

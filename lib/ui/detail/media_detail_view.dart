@@ -37,182 +37,165 @@ class MediaDetailView extends StatelessWidget {
   /// "打开位置" action hides itself.
   final ValueChanged<MediaItem>? onOpenLocation;
 
-  static const _backdropHeight = 340.0;
-
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
     final inProgress =
         item.playbackProgress > 0.01 && item.playbackProgress < 0.95;
     return Stack(
+      fit: StackFit.expand,
       children: [
+        Positioned.fill(child: DetailBackdropLayer(item: item)),
         SingleChildScrollView(
-          child: Stack(
-            children: [
-              Column(
-                children: [
-                  SizedBox(
-                    height: _backdropHeight,
-                    width: double.infinity,
-                    child: _DetailBackdrop(item: item),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(
-                  AppSpacing.xxl,
-                  200,
-                  AppSpacing.xxl,
-                  AppSpacing.xxl,
-                ),
-                child: Column(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.xxl,
+              200,
+              AppSpacing.xxl,
+              AppSpacing.xxl,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        _DetailPoster(item: item),
-                        const SizedBox(width: AppSpacing.xl),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const SizedBox(height: AppSpacing.xl),
-                              Text(
-                                item.tmdbTitle ?? item.title,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                                style: Theme.of(context).textTheme.headlineLarge
-                                    ?.copyWith(
-                                      fontWeight: FontWeight.w800,
-                                      shadows: const [
-                                        Shadow(
-                                          blurRadius: 12,
-                                          color: Colors.black87,
-                                        ),
-                                      ],
+                    _DetailPoster(item: item),
+                    const SizedBox(width: AppSpacing.xl),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: AppSpacing.xl),
+                          Text(
+                            item.tmdbTitle ?? item.title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.headlineLarge
+                                ?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  shadows: const [
+                                    Shadow(
+                                      blurRadius: 12,
+                                      color: Colors.black87,
                                     ),
-                              ),
-                              if (item.tmdbTitle != null &&
-                                  item.tmdbTitle != item.title) ...[
-                                const SizedBox(height: AppSpacing.xs),
-                                Text(
-                                  item.title,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(color: tokens.textSecondary),
+                                  ],
                                 ),
-                              ],
-                              const SizedBox(height: AppSpacing.md),
-                              if (item.voteAverage != null &&
-                                  item.voteAverage! > 0) ...[
-                                DetailScoreBlock(score: item.voteAverage!),
-                                const SizedBox(height: AppSpacing.md),
-                              ],
-                              Wrap(
-                                spacing: AppSpacing.sm,
-                                runSpacing: AppSpacing.sm,
-                                children: [
-                                  for (final chip in _chips())
-                                    DetailMetadataChip(label: chip),
-                                ],
-                              ),
-                              const SizedBox(height: AppSpacing.lg),
-                              Wrap(
-                                spacing: AppSpacing.md,
-                                runSpacing: AppSpacing.md,
-                                crossAxisAlignment: WrapCrossAlignment.center,
-                                children: [
-                                  JellyButton(
-                                    icon: Icons.play_arrow,
-                                    label: inProgress ? '继续播放' : '播放',
-                                    onPressed: () => onPlay(item),
-                                  ),
-                                  DetailActionButton(
-                                    icon: item.favorite
-                                        ? Icons.favorite
-                                        : Icons.favorite_border,
-                                    label: item.favorite ? '已收藏' : '收藏',
-                                    onPressed: () => onToggleFavorite(item),
-                                  ),
-                                  if (onOpenLocation case final onOpenLocation?)
-                                    DetailActionButton(
-                                      icon: Icons.folder_open,
-                                      label: '打开位置',
-                                      onPressed: () => onOpenLocation(item),
-                                    ),
-                                  DetailActionButton(
-                                    icon: loadingMetadata
-                                        ? Icons.hourglass_empty
-                                        : Icons.cloud_sync_outlined,
-                                    label: item.tmdbId == null
-                                        ? '匹配 TMDB'
-                                        : '重新匹配',
-                                    onPressed: loadingMetadata
-                                        ? null
-                                        : () => onMatchTmdb(item),
-                                  ),
-                                  DetailActionButton(
-                                    icon: Icons.search,
-                                    label: '手动匹配',
-                                    onPressed: loadingMetadata
-                                        ? null
-                                        : () => onManualMatch(item),
-                                  ),
-                                ],
-                              ),
-                              if (inProgress) ...[
-                                const SizedBox(height: AppSpacing.lg),
-                                _ProgressSummary(item: item, tokens: tokens),
-                              ],
+                          ),
+                          if (item.tmdbTitle != null &&
+                              item.tmdbTitle != item.title) ...[
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              item.title,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(color: tokens.textSecondary),
+                            ),
+                          ],
+                          const SizedBox(height: AppSpacing.md),
+                          if (item.voteAverage != null &&
+                              item.voteAverage! > 0) ...[
+                            DetailScoreBlock(score: item.voteAverage!),
+                            const SizedBox(height: AppSpacing.md),
+                          ],
+                          Wrap(
+                            spacing: AppSpacing.sm,
+                            runSpacing: AppSpacing.sm,
+                            children: [
+                              for (final chip in _chips())
+                                DetailMetadataChip(label: chip),
                             ],
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.xl),
-                    if ((item.overview ?? '').trim().isNotEmpty) ...[
-                      Text(
-                        '简介',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: AppSpacing.sm),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 760),
-                        child: Text(
-                          item.overview!,
-                          style: TextStyle(
-                            color: tokens.textSecondary,
-                            height: 1.6,
+                          const SizedBox(height: AppSpacing.lg),
+                          Wrap(
+                            spacing: AppSpacing.md,
+                            runSpacing: AppSpacing.md,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: [
+                              JellyButton(
+                                icon: Icons.play_arrow,
+                                label: inProgress ? '继续播放' : '播放',
+                                onPressed: () => onPlay(item),
+                              ),
+                              DetailActionButton(
+                                icon: item.favorite
+                                    ? Icons.favorite
+                                    : Icons.favorite_border,
+                                label: item.favorite ? '已收藏' : '收藏',
+                                onPressed: () => onToggleFavorite(item),
+                              ),
+                              if (onOpenLocation case final onOpenLocation?)
+                                DetailActionButton(
+                                  icon: Icons.folder_open,
+                                  label: '打开位置',
+                                  onPressed: () => onOpenLocation(item),
+                                ),
+                              DetailActionButton(
+                                icon: loadingMetadata
+                                    ? Icons.hourglass_empty
+                                    : Icons.cloud_sync_outlined,
+                                label: item.tmdbId == null ? '匹配 TMDB' : '重新匹配',
+                                onPressed: loadingMetadata
+                                    ? null
+                                    : () => onMatchTmdb(item),
+                              ),
+                              DetailActionButton(
+                                icon: Icons.search,
+                                label: '手动匹配',
+                                onPressed: loadingMetadata
+                                    ? null
+                                    : () => onManualMatch(item),
+                              ),
+                            ],
                           ),
-                        ),
+                          if (inProgress) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            _ProgressSummary(item: item, tokens: tokens),
+                          ],
+                        ],
                       ),
-                      const SizedBox(height: AppSpacing.xl),
-                    ],
-                    Text(
-                      '详细信息',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.sm),
-                    ..._infoRows(context),
-                    const SizedBox(height: AppSpacing.sm),
-                    Text('文件路径', style: TextStyle(color: tokens.textSecondary)),
-                    const SizedBox(height: AppSpacing.xs),
-                    SelectableText(
-                      item.path,
-                      style: const TextStyle(fontSize: 12),
                     ),
                   ],
                 ),
-              ),
-            ],
+                const SizedBox(height: AppSpacing.xl),
+                if ((item.overview ?? '').trim().isNotEmpty) ...[
+                  Text(
+                    '简介',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.sm),
+                  ConstrainedBox(
+                    constraints: const BoxConstraints(maxWidth: 760),
+                    child: Text(
+                      item.overview!,
+                      style: TextStyle(
+                        color: tokens.textSecondary,
+                        height: 1.6,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                ],
+                Text(
+                  '详细信息',
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                ..._infoRows(context),
+                const SizedBox(height: AppSpacing.sm),
+                Text('文件路径', style: TextStyle(color: tokens.textSecondary)),
+                const SizedBox(height: AppSpacing.xs),
+                SelectableText(item.path, style: const TextStyle(fontSize: 12)),
+              ],
+            ),
           ),
         ),
         Positioned(
-          top: AppSpacing.lg,
+          top: 88 + AppSpacing.lg,
           left: AppSpacing.lg,
           child: IconButton.filledTonal(
             tooltip: '返回',
@@ -350,8 +333,8 @@ class _DetailPoster extends StatelessWidget {
   }
 }
 
-class _DetailBackdrop extends StatelessWidget {
-  const _DetailBackdrop({required this.item});
+class DetailBackdropLayer extends StatelessWidget {
+  const DetailBackdropLayer({super.key, required this.item});
 
   final MediaItem item;
 
@@ -386,11 +369,12 @@ class _DetailBackdrop extends StatelessWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.transparent,
-                tokens.background.withValues(alpha: 0.55),
-                tokens.background,
+                Colors.black.withValues(alpha: 0.08),
+                tokens.background.withValues(alpha: 0.38),
+                tokens.background.withValues(alpha: 0.82),
+                tokens.background.withValues(alpha: 0.94),
               ],
-              stops: const [0.3, 0.75, 1],
+              stops: const [0, 0.38, 0.72, 1],
             ),
           ),
         ),

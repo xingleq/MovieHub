@@ -77,7 +77,7 @@ ThemeData _buildTheme(AppTokens tokens, Brightness brightness) {
       shadowColor: tokens.accent.withValues(alpha: 0.18),
       clipBehavior: Clip.antiAlias,
       shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xl)),
         side: BorderSide(color: tokens.cardBorder, width: 1.5),
       ),
     ),
@@ -105,7 +105,7 @@ ThemeData _buildTheme(AppTokens tokens, Brightness brightness) {
       ),
       focusedBorder: OutlineInputBorder(
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
-        borderSide: BorderSide(color: tokens.brickYellow, width: 3),
+        borderSide: BorderSide(color: tokens.accent, width: 3),
       ),
     ),
     textTheme: base.textTheme
@@ -188,7 +188,7 @@ ThemeData _buildTheme(AppTokens tokens, Brightness brightness) {
       elevation: 12,
       shadowColor: tokens.hardShadow,
       shape: RoundedRectangleBorder(
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xl)),
         side: BorderSide(color: tokens.cardBorder, width: 2),
       ),
       titleTextStyle: TextStyle(

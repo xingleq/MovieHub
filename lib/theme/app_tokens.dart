@@ -9,6 +9,8 @@ abstract final class AppSpacing {
   static const double lg = 16;
   static const double xl = 24;
   static const double xxl = 32;
+  static const double xxxl = 48;
+  static const double huge = 64;
 }
 
 /// Blocky corner-radius scale. Small radii keep controls friendly without
@@ -108,6 +110,15 @@ class AppTokens extends ThemeExtension<AppTokens> {
     Color(0xFF2D78FF),
     Color(0xFF28BFD6),
   ];
+
+  /// 积木黄渐变：规范 §13.2 播放、奖励、抽卡等页面最强操作专用。
+  static const List<Color> sunnyGradient = [
+    Color(0xFFFFC629),
+    Color(0xFFFFA43D),
+  ];
+
+  /// 浅色积木底（积木黄/天空青）上的深色高对比前景。
+  static const Color onLightBrick = Color(0xFF1E2A3A);
 
   /// Warm yellow highlight for ratings, stars and small achievements.
   static const Color cyanAccent = Color(0xFF28BFD6);

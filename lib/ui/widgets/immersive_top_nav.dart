@@ -292,7 +292,12 @@ class _MovieHubWordmark extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
     final sections = AppSection.values;
+    final shadow = Shadow(
+      color: tokens.hardShadow.withValues(alpha: 0.35),
+      offset: const Offset(1, 1),
+    );
     return Text.rich(
       key: const ValueKey('moviehub-wordmark'),
       TextSpan(
@@ -306,6 +311,7 @@ class _MovieHubWordmark extends StatelessWidget {
                             ? index
                             : sections.length - 1]
                         .color,
+                shadows: [shadow],
               ),
             ),
         ],
@@ -377,7 +383,14 @@ class _NavigationItemState extends State<_NavigationItem> {
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
     final sectionColor = widget.section.color;
-    final foreground = widget.selected ? Colors.white : sectionColor;
+    // 规范 §9.3：默认态 = 深灰文字 + 彩色小图标；选中态 = 彩色积木底 +
+    // 高对比前景（积木黄/天空青等浅底自动切换深色文字）。
+    final foreground = widget.selected
+        ? widget.section.foreground
+        : tokens.textPrimary;
+    final iconColor = widget.selected
+        ? widget.section.foreground
+        : sectionColor;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) {
@@ -447,7 +460,7 @@ class _NavigationItemState extends State<_NavigationItem> {
             icon: BlockIcon(
               _sectionAsset(widget.section),
               size: 26,
-              color: foreground,
+              color: iconColor,
             ),
             label: Text(
               _navLabel(widget.section),

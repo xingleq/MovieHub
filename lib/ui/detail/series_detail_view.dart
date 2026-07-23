@@ -123,6 +123,7 @@ class SeriesDetailView extends StatelessWidget {
                                     : group.watchedCount == 0
                                     ? '开始观看'
                                     : '继续看 ${next.episodeLabel ?? ''}',
+                                tone: JellyTone.sunny,
                                 onPressed: () =>
                                     onPlayEpisode(group.playTarget),
                               ),

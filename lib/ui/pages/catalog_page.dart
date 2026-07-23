@@ -69,6 +69,7 @@ class _CatalogPageState extends State<CatalogPage> {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
     final controller = LibraryScope.of(context);
     final query = _searchController.text.trim().toLowerCase();
 
@@ -85,6 +86,13 @@ class _CatalogPageState extends State<CatalogPage> {
       '电视剧' => AppAssets.tv,
       _ => AppAssets.favorite,
     };
+    // 规范 §4.3：动画=草地绿、电影=魔法紫、电视剧=天空青、收藏=珊瑚红。
+    final blockColor = switch (widget.title) {
+      '动画' || '动画乐园' => tokens.brickGreen,
+      '电影' => tokens.brickPurple,
+      '电视剧' => AppTokens.cyanAccent,
+      _ => tokens.brickRed,
+    };
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -98,11 +106,28 @@ class _CatalogPageState extends State<CatalogPage> {
         children: [
           Row(
             children: [
-              BlockIcon(titleAsset, size: 48),
+              _TitleBlock(asset: titleAsset, color: blockColor),
               const SizedBox(width: AppSpacing.md),
-              Text(
-                widget.title,
-                style: Theme.of(context).textTheme.headlineMedium,
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.title,
+                      style: Theme.of(context).textTheme.headlineMedium,
+                    ),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      query.isEmpty
+                          ? '共 ${visibleGroups.length} 部影片'
+                          : '找到 ${visibleGroups.length} 部影片',
+                      style: TextStyle(
+                        color: tokens.textSecondary,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -135,6 +160,41 @@ class _CatalogPageState extends State<CatalogPage> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// 页面标题前的彩色积木方块：品牌色底 + 高亮描边 + 底部硬阴影，
+/// 统一各目录页的视觉锚点（规范 §6/§12）。
+class _TitleBlock extends StatelessWidget {
+  const _TitleBlock({required this.asset, required this.color});
+
+  final String asset;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return Container(
+      width: 52,
+      height: 52,
+      alignment: Alignment.center,
+      decoration: BoxDecoration(
+        color: color,
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
+        border: Border.all(
+          color: tokens.brickHighlight.withValues(alpha: 0.66),
+          width: 2,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: tokens.hardShadow,
+            blurRadius: 0,
+            offset: const Offset(4, 4),
+          ),
+        ],
+      ),
+      child: BlockIcon(asset, size: 34),
     );
   }
 }

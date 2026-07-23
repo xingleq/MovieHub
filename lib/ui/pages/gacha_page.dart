@@ -247,55 +247,107 @@ class _DrawPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpacing.xxl),
       decoration: BoxDecoration(
-        color: tokens.surface.withValues(alpha: 0.78),
-        border: Border.all(color: tokens.cardBorder),
+        // 梦幻渐变：表面色打底，两端透出魔法紫光晕。
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            tokens.brickPurple.withValues(alpha: 0.16),
+            tokens.surface.withValues(alpha: 0.82),
+            tokens.brickPurple.withValues(alpha: 0.10),
+          ],
+          stops: const [0.0, 0.45, 1.0],
+        ),
+        border: Border.all(color: tokens.brickPurple, width: 2),
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
         boxShadow: [
           BoxShadow(
-            color: tokens.accent.withValues(alpha: 0.08),
+            color: tokens.brickPurple.withValues(alpha: 0.18),
             blurRadius: 26,
             offset: const Offset(0, 14),
           ),
         ],
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final compact = constraints.maxWidth < 780;
-          final card = Center(
-            child: _FlipCard(
-              result: result,
-              flipAnimation: flipAnimation,
-              shineAnimation: shineAnimation,
-            ),
-          );
-          final info = _DrawInfo(
-            status: status,
-            drawnToday: drawnToday,
-            bonusDraws: bonusDraws,
-            remainingToSsr: remainingToSsr,
-            canDraw: canDraw,
-            drawing: drawing,
-            result: result,
-            onDraw: onDraw,
-          );
-          if (compact) {
-            return Column(
-              children: [
-                card,
-                const SizedBox(height: AppSpacing.xl),
-                info,
-              ],
-            );
-          }
-          return Row(
-            children: [
-              Expanded(child: card),
-              const SizedBox(width: AppSpacing.xxl),
-              Expanded(child: info),
-            ],
-          );
-        },
+      child: Stack(
+        children: [
+          // 积木凸点装饰：右上角一排魔法紫圆钉。
+          const Positioned(top: 0, right: 0, child: _BrickStuds()),
+          LayoutBuilder(
+            builder: (context, constraints) {
+              final compact = constraints.maxWidth < 780;
+              final card = Center(
+                child: _FlipCard(
+                  result: result,
+                  flipAnimation: flipAnimation,
+                  shineAnimation: shineAnimation,
+                ),
+              );
+              final info = _DrawInfo(
+                status: status,
+                drawnToday: drawnToday,
+                bonusDraws: bonusDraws,
+                remainingToSsr: remainingToSsr,
+                canDraw: canDraw,
+                drawing: drawing,
+                result: result,
+                onDraw: onDraw,
+              );
+              if (compact) {
+                return Column(
+                  children: [
+                    card,
+                    const SizedBox(height: AppSpacing.xl),
+                    info,
+                  ],
+                );
+              }
+              return Row(
+                children: [
+                  Expanded(child: card),
+                  const SizedBox(width: AppSpacing.xxl),
+                  Expanded(child: info),
+                ],
+              );
+            },
+          ),
+        ],
       ),
+    );
+  }
+}
+
+/// 面板角落的积木凸点：四枚魔法紫圆钉，带顶部高光描边。
+class _BrickStuds extends StatelessWidget {
+  const _BrickStuds();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < 4; i++)
+          Container(
+            width: 16,
+            height: 16,
+            margin: const EdgeInsets.only(left: AppSpacing.xs),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: tokens.brickPurple.withValues(alpha: 0.75),
+              border: Border.all(
+                color: tokens.brickHighlight.withValues(alpha: 0.6),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: tokens.hardShadow.withValues(alpha: 0.35),
+                  blurRadius: 0,
+                  offset: const Offset(1.5, 1.5),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 }
@@ -365,6 +417,7 @@ class _DrawInfo extends StatelessWidget {
               : !canDraw
               ? '明天再抽'
               : '抽一张',
+          tone: JellyTone.sunny,
           onPressed: !canDraw || drawing ? () {} : onDraw,
         ),
       ],

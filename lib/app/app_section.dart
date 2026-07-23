@@ -24,13 +24,21 @@ extension AppSectionPresentation on AppSection {
     AppSection.settings => Icons.settings_rounded,
   };
 
+  /// 积木世界规范 §4.1 调色板：每个分区固定一种品牌色。
   Color get color => switch (this) {
-    AppSection.home => const Color(0xFF4A90E2),      // 蓝色
-    AppSection.anime => const Color(0xFFFF6B9D),     // 粉色
-    AppSection.movies => const Color(0xFFF5A623),    // 橙色
-    AppSection.tv => const Color(0xFF50E3C2),        // 青色
-    AppSection.gacha => const Color(0xFFBD10E0),     // 紫色
-    AppSection.favorites => const Color(0xFFFF4757), // 红色
-    AppSection.settings => const Color(0xFF7ED321),  // 绿色
+    AppSection.home => const Color(0xFFFFC629),      // 积木黄
+    AppSection.anime => const Color(0xFF2DBE60),     // 草地绿
+    AppSection.movies => const Color(0xFF8454E8),    // 魔法紫
+    AppSection.tv => const Color(0xFF28BFD6),        // 天空青
+    AppSection.gacha => const Color(0xFF8454E8),     // 魔法紫（稀有内容）
+    AppSection.favorites => const Color(0xFFFF5A4F), // 珊瑚红
+    AppSection.settings => const Color(0xFF2D78FF),  // 冒险蓝
+  };
+
+  /// 选中态前景色：浅色积木底（积木黄/天空青）配深色文字，其余配白字，
+  /// 保证规范 §9.3「白色或深色高对比文字」的对比要求。
+  Color get foreground => switch (this) {
+    AppSection.home || AppSection.tv => const Color(0xFF1E2A3A),
+    _ => const Color(0xFFFFFFFF),
   };
 }

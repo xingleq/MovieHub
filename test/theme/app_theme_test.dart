@@ -33,11 +33,11 @@ void main() {
 
     final cardShape = theme.cardTheme.shape! as RoundedRectangleBorder;
     expect(cardShape.side.width, 1.5);
-    expect(cardShape.borderRadius, BorderRadius.circular(AppRadius.lg));
+    expect(cardShape.borderRadius, BorderRadius.circular(AppRadius.xl));
 
     final dialogShape = theme.dialogTheme.shape! as RoundedRectangleBorder;
     expect(dialogShape.side.width, 2);
-    expect(dialogShape.borderRadius, BorderRadius.circular(AppRadius.lg));
+    expect(dialogShape.borderRadius, BorderRadius.circular(AppRadius.xl));
 
     final focusedOverlay = theme.textButtonTheme.style!.overlayColor!.resolve({
       WidgetState.focused,

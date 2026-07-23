@@ -26,6 +26,7 @@ class _SettingsPageState extends State<SettingsPage> {
   final _tokenController = TextEditingController();
   final _proxyController = TextEditingController();
   var _fieldsInitialized = false;
+  var _category = _SettingsCategory.library;
 
   @override
   void didChangeDependencies() {
@@ -89,15 +90,271 @@ class _SettingsPageState extends State<SettingsPage> {
           Expanded(
             child: FocusTraversalGroup(
               policy: ReadingOrderTraversalPolicy(),
-              child: _SettingsDashboard(
-                controller: controller,
-                settings: settings,
-                proxyController: _proxyController,
-                tokenController: _tokenController,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _SettingsCategoryNav(
+                    selected: _category,
+                    onSelected: (category) {
+                      setState(() => _category = category);
+                    },
+                  ),
+                  const SizedBox(width: AppSpacing.lg),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: AppDurations.fade,
+                      switchInCurve: Curves.easeOutCubic,
+                      switchOutCurve: Curves.easeInCubic,
+                      child: SingleChildScrollView(
+                        key: ValueKey(_category),
+                        padding: const EdgeInsets.only(
+                          bottom: AppSpacing.xxl,
+                        ),
+                        child: _buildCategoryContent(controller, settings),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryContent(
+    LibraryController controller,
+    SettingsController settings,
+  ) {
+    return switch (_category) {
+      _SettingsCategory.library => _LibraryTab(
+        controller: controller,
+        settings: settings,
+        embedded: true,
+      ),
+      _SettingsCategory.scraper => _ScraperTab(
+        controller: controller,
+        settings: settings,
+        proxyController: _proxyController,
+        tokenController: _tokenController,
+        embedded: true,
+      ),
+      _SettingsCategory.playback => _PlaybackTab(
+        controller: controller,
+        settings: settings,
+        embedded: true,
+      ),
+      _SettingsCategory.appearance => _AppearanceTab(
+        settings: settings,
+        embedded: true,
+      ),
+      _SettingsCategory.about => const _AboutTab(embedded: true),
+    };
+  }
+}
+
+/// 设置页分类（规范 §16.1）：左侧积木导航的五个固定入口。
+enum _SettingsCategory {
+  library('媒体库', '管理本地目录、扫描状态和系统数据。', AppAssets.mediaLibrary),
+  scraper('刮削与信息', '配置 TMDB 连接和影视资料匹配。', AppAssets.scrape),
+  playback('播放与家长控制', '调整轨道偏好、观看限制和额外抽卡次数。', AppAssets.parentalControl),
+  appearance('外观', '调整主题、背景和视觉风格。', AppAssets.appearance),
+  about('关于', '查看版本和项目使用的核心能力。', AppAssets.dinosaur);
+
+  const _SettingsCategory(this.title, this.subtitle, this.icon);
+
+  final String title;
+  final String subtitle;
+  final String icon;
+
+  /// 规范 §4.3 分区色：媒体库=积木黄、刮削=冒险蓝、家长=草地绿、
+  /// 外观=魔法紫、关于=天空青。
+  Color blockColor(AppTokens tokens) {
+    return switch (this) {
+      _SettingsCategory.library => tokens.brickYellow,
+      _SettingsCategory.scraper => tokens.accent,
+      _SettingsCategory.playback => tokens.brickGreen,
+      _SettingsCategory.appearance => tokens.brickPurple,
+      _SettingsCategory.about => AppTokens.cyanAccent,
+    };
+  }
+}
+
+/// 左侧积木分类导航：白色积木按钮，选中时变为该分类的品牌色积木块。
+class _SettingsCategoryNav extends StatelessWidget {
+  const _SettingsCategoryNav({
+    required this.selected,
+    required this.onSelected,
+  });
+
+  final _SettingsCategory selected;
+  final ValueChanged<_SettingsCategory> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 216,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          for (final category in _SettingsCategory.values)
+            Padding(
+              padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+              child: _SettingsNavItem(
+                category: category,
+                selected: category == selected,
+                onPressed: () => onSelected(category),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SettingsNavItem extends StatefulWidget {
+  const _SettingsNavItem({
+    required this.category,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final _SettingsCategory category;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  State<_SettingsNavItem> createState() => _SettingsNavItemState();
+}
+
+class _SettingsNavItemState extends State<_SettingsNavItem> {
+  final _focusNode = FocusNode();
+  var _focused = false;
+  var _hovered = false;
+  var _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(() {
+      setState(() => _focused = _focusNode.hasFocus);
+    });
+  }
+
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  /// 浅色积木底（积木黄/天空青）配深色文字，其余配白字。
+  static Color _foregroundOn(Color color) {
+    return color.computeLuminance() > 0.55
+        ? AppTokens.onLightBrick
+        : Colors.white;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    final color = widget.category.blockColor(tokens);
+    final selected = widget.selected;
+    final highlighted = _hovered || _focused;
+    final foreground = selected
+        ? _foregroundOn(color)
+        : tokens.textPrimary;
+
+    return Tooltip(
+      message: widget.category.subtitle,
+      waitDuration: const Duration(milliseconds: 500),
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() {
+          _hovered = false;
+          _pressed = false;
+        }),
+      child: Listener(
+        onPointerDown: (_) => setState(() => _pressed = true),
+        onPointerUp: (_) => setState(() => _pressed = false),
+        onPointerCancel: (_) => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed
+              ? 0.97
+              : highlighted && !selected
+              ? 1.03
+              : 1,
+          duration: AppDurations.hover,
+          curve: Curves.easeOutBack,
+          child: AnimatedContainer(
+            duration: AppDurations.hover,
+            decoration: BoxDecoration(
+              color: selected
+                  ? color
+                  : highlighted
+                  ? color.withValues(alpha: 0.14)
+                  : tokens.surface.withValues(alpha: 0.78),
+              borderRadius: const BorderRadius.all(
+                Radius.circular(AppRadius.md),
+              ),
+              border: Border.all(
+                color: _focused
+                    ? tokens.accent
+                    : selected
+                    ? color
+                    : tokens.cardBorder,
+                width: _focused ? 3 : 2,
+              ),
+              boxShadow: selected
+                  ? [
+                      BoxShadow(
+                        color: tokens.hardShadow,
+                        blurRadius: 0,
+                        offset: const Offset(4, 4),
+                      ),
+                    ]
+                  : const [],
+            ),
+            child: InkWell(
+              focusNode: _focusNode,
+              borderRadius: const BorderRadius.all(
+                Radius.circular(AppRadius.md),
+              ),
+              onTap: widget.onPressed,
+              // 分类的一句话说明，悬停可见。
+              enableFeedback: true,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.md,
+                  vertical: AppSpacing.md,
+                ),
+                child: Row(
+                  children: [
+                    BlockIcon(
+                      widget.category.icon,
+                      size: 26,
+                      color: selected ? foreground : color,
+                    ),
+                    const SizedBox(width: AppSpacing.sm),
+                    Expanded(
+                      child: Text(
+                        widget.category.title,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: foreground,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
       ),
     );
   }
@@ -206,158 +463,6 @@ class _MetricPill extends StatelessWidget {
         ],
       ),
     );
-  }
-}
-
-class _SettingsDashboard extends StatelessWidget {
-  const _SettingsDashboard({
-    required this.controller,
-    required this.settings,
-    required this.proxyController,
-    required this.tokenController,
-  });
-
-  final LibraryController controller;
-  final SettingsController settings;
-  final TextEditingController proxyController;
-  final TextEditingController tokenController;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      key: const ValueKey('settings-card-flow'),
-      padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
-      children: [
-        _SettingsSectionHeading(
-          icon: AppAssets.mediaLibrary,
-          title: '媒体库',
-          subtitle: '管理本地目录、扫描状态和系统数据。',
-        ),
-        _LibraryTab(controller: controller, settings: settings, embedded: true),
-        const _SettingsSectionGap(),
-        const _SettingsSectionHeading(
-          icon: AppAssets.scrape,
-          title: '刮削与信息',
-          subtitle: '配置 TMDB 连接和影视资料匹配。',
-        ),
-        _ScraperTab(
-          controller: controller,
-          settings: settings,
-          proxyController: proxyController,
-          tokenController: tokenController,
-          embedded: true,
-        ),
-        const _SettingsSectionGap(),
-        const _SettingsSectionHeading(
-          icon: AppAssets.parentalControl,
-          title: '播放与家长控制',
-          subtitle: '调整轨道偏好、观看限制和额外抽卡次数。',
-        ),
-        _PlaybackTab(
-          controller: controller,
-          settings: settings,
-          embedded: true,
-        ),
-        const _SettingsSectionGap(),
-        const _SettingsSectionHeading(
-          icon: AppAssets.appearance,
-          title: '外观',
-          subtitle: '调整主题、背景和视觉风格。',
-        ),
-        _AppearanceTab(settings: settings, embedded: true),
-        const _SettingsSectionGap(),
-        const _SettingsSectionHeading(
-          icon: AppAssets.dinosaur,
-          title: '关于',
-          subtitle: '查看版本和项目使用的核心能力。',
-        ),
-        const _AboutTab(embedded: true),
-      ],
-    );
-  }
-}
-
-class _SettingsSectionHeading extends StatelessWidget {
-  const _SettingsSectionHeading({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-
-  final String icon;
-  final String title;
-  final String subtitle;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-    final blockColor = switch (icon) {
-      AppAssets.mediaLibrary => tokens.brickYellow,
-      AppAssets.scrape => tokens.accent,
-      AppAssets.parentalControl => tokens.brickGreen,
-      AppAssets.appearance => tokens.brickPurple,
-      _ => tokens.brickGreen,
-    };
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(
-        AppSpacing.xs,
-        AppSpacing.md,
-        AppSpacing.xs,
-        AppSpacing.md,
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 44,
-            height: 44,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: blockColor,
-              borderRadius: const BorderRadius.all(
-                Radius.circular(AppRadius.md),
-              ),
-              border: Border.all(
-                color: tokens.brickHighlight.withValues(alpha: 0.66),
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: tokens.hardShadow,
-                  blurRadius: 0,
-                  offset: const Offset(5, 5),
-                ),
-              ],
-            ),
-            child: BlockIcon(icon, size: 34),
-          ),
-          const SizedBox(width: AppSpacing.md),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: AppSpacing.xs),
-                Text(subtitle, style: TextStyle(color: tokens.textSecondary)),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SettingsSectionGap extends StatelessWidget {
-  const _SettingsSectionGap();
-
-  @override
-  Widget build(BuildContext context) {
-    return const SizedBox(height: AppSpacing.lg);
   }
 }
 
@@ -1469,6 +1574,7 @@ class _SettingsScrollView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
+      key: const ValueKey('settings-card-flow'),
       builder: (context, constraints) {
         final twoColumns = constraints.maxWidth >= 980;
         final content = twoColumns

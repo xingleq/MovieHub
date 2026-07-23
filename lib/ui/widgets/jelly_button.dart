@@ -4,6 +4,10 @@ import '../../theme/app_tokens.dart';
 import 'block_asset.dart';
 import 'hoverable.dart';
 
+/// 主操作色调：candy 为冒险蓝渐变（默认）；sunny 为积木黄渐变，
+/// 用于规范 §4.3/§13.2 规定的播放、奖励、抽卡等页面最强操作。
+enum JellyTone { candy, sunny }
+
 /// Chunky primary brick button with a springy focus/hover response.
 class JellyButton extends StatelessWidget {
   const JellyButton({
@@ -11,14 +15,21 @@ class JellyButton extends StatelessWidget {
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.tone = JellyTone.candy,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
+  final JellyTone tone;
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    final sunny = tone == JellyTone.sunny;
+    final gradient = sunny ? AppTokens.sunnyGradient : AppTokens.candyGradient;
+    // 积木黄底配深色文字（规范：白色或深色高对比文字）。
+    final foreground = sunny ? AppTokens.onLightBrick : tokens.brickHighlight;
     return Hoverable(
       onActivate: onPressed,
       builder: (context, hovered) {
@@ -29,19 +40,19 @@ class JellyButton extends StatelessWidget {
           child: AnimatedContainer(
             duration: AppDurations.hover,
             decoration: BoxDecoration(
-              gradient: const LinearGradient(colors: AppTokens.candyGradient),
+              gradient: LinearGradient(colors: gradient),
               borderRadius: const BorderRadius.all(
                 Radius.circular(AppRadius.md),
               ),
               border: Border.all(
-                color: AppTokens.of(
-                  context,
-                ).brickHighlight.withValues(alpha: 0.5),
+                color: sunny
+                    ? tokens.brickHighlight.withValues(alpha: 0.72)
+                    : tokens.brickHighlight.withValues(alpha: 0.5),
                 width: 2,
               ),
               boxShadow: [
                 BoxShadow(
-                  color: AppTokens.of(context).hardShadow,
+                  color: tokens.hardShadow,
                   blurRadius: 0,
                   offset: Offset(hovered ? 7 : 5, hovered ? 7 : 5),
                 ),
@@ -62,12 +73,16 @@ class JellyButton extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      BlockIcon.fromMaterial(icon, size: 28),
+                      BlockIcon.fromMaterial(
+                        icon,
+                        size: 28,
+                        color: foreground,
+                      ),
                       const SizedBox(width: AppSpacing.sm),
                       Text(
                         label,
                         style: TextStyle(
-                          color: AppTokens.of(context).brickHighlight,
+                          color: foreground,
                           fontWeight: FontWeight.w700,
                         ),
                       ),

@@ -117,6 +117,7 @@ class MediaDetailView extends StatelessWidget {
                               JellyButton(
                                 icon: Icons.play_arrow,
                                 label: inProgress ? '继续播放' : '播放',
+                                tone: JellyTone.sunny,
                                 onPressed: () => onPlay(item),
                               ),
                               DetailActionButton(

@@ -74,7 +74,7 @@ void main() {
       ValueKey('home-play:${item.sourceId}:${item.path}'),
     );
     expect(poster, findsOneWidget);
-    expect(tester.getSize(poster).width, 150);
+    expect(tester.getSize(poster).width, 180);
 
     await tester.tap(poster);
     expect(detailOpens, 1);
@@ -84,6 +84,7 @@ void main() {
     addTearDown(mouse.removePointer);
     await mouse.addPointer(location: Offset.zero);
     await mouse.moveTo(tester.getCenter(poster));
+    await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
     expect(playButton, findsOneWidget);
 

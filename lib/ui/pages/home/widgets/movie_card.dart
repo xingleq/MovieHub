@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/media/media_item.dart';
 import '../../../../core/tmdb/tmdb_client.dart';
+import '../../../../theme/app_assets.dart';
 import '../../../../theme/app_tokens.dart';
 import '../../../widgets/cached_tmdb_image.dart';
 import 'focus_scale.dart';
 
-class MovieCard extends StatelessWidget {
+class MovieCard extends StatefulWidget {
   const MovieCard({
     super.key,
     required this.item,
@@ -28,17 +29,24 @@ class MovieCard extends StatelessWidget {
   final bool autofocus;
 
   @override
+  State<MovieCard> createState() => _MovieCardState();
+}
+
+class _MovieCardState extends State<MovieCard> {
+  bool _hovering = false;
+
+  @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
     return SizedBox(
       width: 200,
       height: 300,
       child: FocusScale(
-        autofocus: autofocus,
-        onActivate: onOpenDetails,
+        autofocus: widget.autofocus,
+        onActivate: widget.onOpenDetails,
         onHighlightChanged: (highlighted) {
           if (highlighted) {
-            onFocused();
+            widget.onFocused();
           }
         },
         builder: (context, status) {
@@ -49,68 +57,107 @@ class MovieCard extends StatelessWidget {
             children: [
               Positioned(
                 top: 0,
-                child: Container(
-                  key: ValueKey('home-poster:${item.sourceId}:${item.path}'),
-                  width: posterWidth,
-                  height: posterHeight,
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.25),
-                    borderRadius: const BorderRadius.all(
-                      Radius.circular(AppRadius.lg),
-                    ),
-                    border: Border.all(
-                      color: highlighted
-                          ? tokens.accent
-                          : tokens.accent.withValues(alpha: 0.3),
-                      width: highlighted ? 6 : 5,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: highlighted
-                            ? tokens.accent.withValues(alpha: 0.9)
-                            : tokens.accent.withValues(alpha: 0.2),
-                        blurRadius: highlighted ? 40 : 20,
-                        spreadRadius: highlighted ? 4 : 0,
-                        offset: const Offset(0, 8),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.all(
-                      Radius.circular(AppRadius.sm),
-                    ),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        CachedTmdbImage(
-                          url:
-                              item.posterPath == null ||
-                                  item.posterPath!.isEmpty
-                              ? null
-                              : TmdbClient.posterUrl(item.posterPath!),
-                          cacheWidth: 360,
+                child: MouseRegion(
+                  onEnter: (_) => setState(() => _hovering = true),
+                  onExit: (_) => setState(() => _hovering = false),
+                  child: GestureDetector(
+                    onTap: widget.onOpenDetails,
+                    child: Container(
+                      key: ValueKey('home-poster:${widget.item.sourceId}:${widget.item.path}'),
+                      width: MovieCard.posterWidth,
+                      height: MovieCard.posterHeight,
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.25),
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(AppRadius.lg),
                         ),
-                        if (item.playbackProgress > 0)
-                          Align(
-                            alignment: Alignment.bottomCenter,
-                            child: Padding(
-                              padding: const EdgeInsets.all(5),
-                              child: ClipRRect(
-                                borderRadius: const BorderRadius.all(
-                                  Radius.circular(AppRadius.sm),
-                                ),
-                                child: LinearProgressIndicator(
-                                  value: item.playbackProgress,
-                                  minHeight: 6,
-                                  color: tokens.accent,
-                                  backgroundColor: tokens.brickHighlight
-                                      .withValues(alpha: 0.72),
+                        border: Border.all(
+                          color: highlighted
+                              ? tokens.accent
+                              : tokens.accent.withValues(alpha: 0.3),
+                          width: highlighted ? 6 : 5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: highlighted
+                                ? tokens.accent.withValues(alpha: 0.9)
+                                : tokens.accent.withValues(alpha: 0.2),
+                            blurRadius: highlighted ? 40 : 20,
+                            spreadRadius: highlighted ? 4 : 0,
+                            offset: const Offset(0, 8),
+                          ),
+                        ],
+                      ),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(AppRadius.sm),
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            CachedTmdbImage(
+                              url:
+                                  widget.item.posterPath == null ||
+                                      widget.item.posterPath!.isEmpty
+                                  ? null
+                                  : TmdbClient.posterUrl(widget.item.posterPath!),
+                              cacheWidth: 360,
+                            ),
+                            if (widget.item.playbackProgress > 0)
+                              Align(
+                                alignment: Alignment.bottomCenter,
+                                child: Padding(
+                                  padding: const EdgeInsets.all(5),
+                                  child: ClipRRect(
+                                    borderRadius: const BorderRadius.all(
+                                      Radius.circular(AppRadius.sm),
+                                    ),
+                                    child: LinearProgressIndicator(
+                                      value: widget.item.playbackProgress,
+                                      minHeight: 6,
+                                      color: tokens.accent,
+                                      backgroundColor: tokens.brickHighlight
+                                          .withValues(alpha: 0.72),
+                                    ),
+                                  ),
                                 ),
                               ),
-                            ),
-                          ),
-                      ],
+                            if (_hovering)
+                              Container(
+                                color: Colors.black.withValues(alpha: 0.5),
+                                child: Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      IconButton(
+                                        key: ValueKey('home-play:${widget.item.sourceId}:${widget.item.path}'),
+                                        icon: Icon(
+                                          Icons.play_circle_outline,
+                                          color: tokens.brickHighlight,
+                                          size: 48,
+                                        ),
+                                        iconSize: 48,
+                                        onPressed: widget.onPlay,
+                                      ),
+                                      const SizedBox(height: AppSpacing.md),
+                                      IconButton(
+                                        icon: Icon(
+                                          widget.item.favorite
+                                              ? Icons.favorite
+                                              : Icons.favorite_border,
+                                          color: tokens.brickHighlight,
+                                        ),
+                                        tooltip: '收藏',
+                                        onPressed: widget.onToggleFavorite,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -123,7 +170,7 @@ class MovieCard extends StatelessWidget {
                   opacity: highlighted ? 1 : 0.88,
                   duration: AppDurations.hover,
                   child: Text(
-                    item.tmdbTitle ?? item.seriesTitle ?? item.title,
+                    widget.item.tmdbTitle ?? widget.item.seriesTitle ?? widget.item.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,

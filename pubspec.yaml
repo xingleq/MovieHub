@@ -41,6 +41,7 @@ dependencies:
   sqlite3: ^2.4.6
   sqlite3_flutter_libs: ^0.5.24
   lottie: ^3.3.1
+  flutter_svg: ^2.3.0
 
 dev_dependencies:
   flutter_test:
@@ -71,9 +72,19 @@ flutter:
     - assets/cards/images/c/
     - assets/cards/images/s/
     - assets/cards/images/ssr/
-    - assets/images/backgrounds/
-    - assets/images/branding/moviehub-mascot.png
-    - assets/images/decorations/
+    - assets/icons/
+    - assets/decoration/
+
+  fonts:
+    - family: ArkPixel
+      fonts:
+        - asset: assets/fonts/ark-pixel.ttf
+    - family: PressStart2P
+      fonts:
+        - asset: assets/fonts/PressStart2P.ttf
+    - family: Zpix
+      fonts:
+        - asset: assets/fonts/zpix.ttf
 
   # To add assets to your application, add an assets section, like this:
   # assets:

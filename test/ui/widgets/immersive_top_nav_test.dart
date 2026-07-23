@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:moviehub/app/app_section.dart';
 import 'package:moviehub/theme/app_theme.dart';
+import 'package:moviehub/theme/app_tokens.dart';
 import 'package:moviehub/ui/widgets/immersive_top_nav.dart';
 
 void main() {
@@ -30,7 +31,34 @@ void main() {
     );
 
     expect(find.text('首页'), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.search_rounded).first);
+    final wordmark = tester.widget<Text>(
+      find.byKey(const ValueKey('moviehub-wordmark')),
+    );
+    final wordmarkSpan = wordmark.textSpan! as TextSpan;
+    final letterSpans = wordmarkSpan.children!.cast<TextSpan>();
+    expect(letterSpans.map((span) => span.text).join(), 'MOVIEHUB');
+    expect(letterSpans.map((span) => span.style!.color), [
+      AppSection.home.color,
+      AppSection.anime.color,
+      AppSection.movies.color,
+      AppSection.tv.color,
+      AppSection.gacha.color,
+      AppSection.favorites.color,
+      AppSection.settings.color,
+      AppSection.settings.color,
+    ]);
+    final animationButton = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, '动画'),
+    );
+    final focusedOverlay = animationButton.style!.overlayColor!.resolve({
+      WidgetState.focused,
+    });
+    expect(
+      focusedOverlay,
+      AppTokens.dark.brickHighlight.withValues(alpha: 0.1),
+    );
+
+    await tester.tap(find.byTooltip('搜索（Ctrl+K）'));
     await tester.pumpAndSettle();
 
     expect(find.byType(TextField), findsOneWidget);

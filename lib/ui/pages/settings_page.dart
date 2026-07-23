@@ -9,7 +9,9 @@ import '../../app/settings_controller.dart';
 import '../../app/settings_scope.dart';
 import '../../core/gacha/gacha_store.dart';
 import '../../core/system/platform_services.dart';
+import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
+import '../widgets/block_asset.dart';
 import '../format/formatters.dart';
 import '../widgets/message_banner.dart';
 
@@ -20,18 +22,10 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
-class _SettingsPageState extends State<SettingsPage>
-    with TickerProviderStateMixin {
+class _SettingsPageState extends State<SettingsPage> {
   final _tokenController = TextEditingController();
   final _proxyController = TextEditingController();
-  late final TabController _tabController;
   var _fieldsInitialized = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 5, vsync: this);
-  }
 
   @override
   void didChangeDependencies() {
@@ -47,7 +41,6 @@ class _SettingsPageState extends State<SettingsPage>
 
   @override
   void dispose() {
-    _tabController.dispose();
     _tokenController.dispose();
     _proxyController.dispose();
     super.dispose();
@@ -57,7 +50,6 @@ class _SettingsPageState extends State<SettingsPage>
   Widget build(BuildContext context) {
     final controller = LibraryScope.of(context);
     final settings = SettingsScope.of(context);
-    final tokens = AppTokens.of(context);
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -94,31 +86,14 @@ class _SettingsPageState extends State<SettingsPage>
             ),
             const SizedBox(height: AppSpacing.md),
           ],
-          _SettingsTabBar(controller: _tabController),
-          const SizedBox(height: AppSpacing.lg),
           Expanded(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                color: tokens.surface.withValues(alpha: 0.18),
-                borderRadius: const BorderRadius.all(
-                  Radius.circular(AppRadius.lg),
-                ),
-                border: Border.all(color: tokens.cardBorder),
-              ),
-              child: TabBarView(
-                controller: _tabController,
-                children: [
-                  _LibraryTab(controller: controller, settings: settings),
-                  _ScraperTab(
-                    controller: controller,
-                    settings: settings,
-                    proxyController: _proxyController,
-                    tokenController: _tokenController,
-                  ),
-                  _PlaybackTab(controller: controller, settings: settings),
-                  _AppearanceTab(settings: settings),
-                  const _AboutTab(),
-                ],
+            child: FocusTraversalGroup(
+              policy: ReadingOrderTraversalPolicy(),
+              child: _SettingsDashboard(
+                controller: controller,
+                settings: settings,
+                proxyController: _proxyController,
+                tokenController: _tokenController,
               ),
             ),
           ),
@@ -141,20 +116,16 @@ class _Header extends StatelessWidget {
       (sum, item) => sum + item.sizeBytes,
     );
 
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.end,
+    final title = Row(
       children: [
+        const BlockIllustration.mascot(size: 96),
+        const SizedBox(width: AppSpacing.lg),
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                '设置',
-                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
-              const SizedBox(height: AppSpacing.xs),
+              Text('家长设置中心', style: Theme.of(context).textTheme.headlineMedium),
+              const SizedBox(height: AppSpacing.sm),
               Text(
                 '管理媒体目录、TMDB、播放偏好和本机外观。',
                 style: TextStyle(color: tokens.textSecondary),
@@ -162,21 +133,47 @@ class _Header extends StatelessWidget {
             ],
           ),
         ),
-        _MetricPill(
-          icon: Icons.folder_outlined,
-          label: '${controller.roots.length} 个目录',
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        _MetricPill(
-          icon: Icons.movie_outlined,
-          label: '${controller.items.length} 个视频',
-        ),
-        const SizedBox(width: AppSpacing.sm),
-        _MetricPill(
-          icon: Icons.storage_outlined,
-          label: formatBytes(totalSize),
-        ),
       ],
+    );
+    final metrics = <Widget>[
+      _MetricPill(
+        icon: Icons.folder_outlined,
+        label: '${controller.roots.length} 个目录',
+      ),
+      _MetricPill(
+        icon: Icons.movie_outlined,
+        label: '${controller.items.length} 个视频',
+      ),
+      _MetricPill(icon: Icons.storage_outlined, label: formatBytes(totalSize)),
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 820) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              title,
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: AppSpacing.sm,
+                runSpacing: AppSpacing.sm,
+                children: metrics,
+              ),
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Expanded(child: title),
+            for (final (index, metric) in metrics.indexed) ...[
+              if (index > 0) const SizedBox(width: AppSpacing.sm),
+              metric,
+            ],
+          ],
+        );
+      },
     );
   }
 }
@@ -198,7 +195,7 @@ class _MetricPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: tokens.surface.withValues(alpha: 0.62),
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
-        border: Border.all(color: tokens.cardBorder),
+        border: Border.all(color: tokens.cardBorder, width: 2),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -212,74 +209,168 @@ class _MetricPill extends StatelessWidget {
   }
 }
 
-class _SettingsTabBar extends StatelessWidget {
-  const _SettingsTabBar({required this.controller});
+class _SettingsDashboard extends StatelessWidget {
+  const _SettingsDashboard({
+    required this.controller,
+    required this.settings,
+    required this.proxyController,
+    required this.tokenController,
+  });
 
-  final TabController controller;
+  final LibraryController controller;
+  final SettingsController settings;
+  final TextEditingController proxyController;
+  final TextEditingController tokenController;
 
-  static const _tabs = [
-    (Icons.folder_outlined, '媒体库'),
-    (Icons.cloud_sync_outlined, '刮削'),
-    (Icons.play_circle_outline, '播放'),
-    (Icons.palette_outlined, '外观'),
-    (Icons.info_outline, '关于'),
-  ];
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      key: const ValueKey('settings-card-flow'),
+      padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
+      children: [
+        _SettingsSectionHeading(
+          icon: AppAssets.mediaLibrary,
+          title: '媒体库',
+          subtitle: '管理本地目录、扫描状态和系统数据。',
+        ),
+        _LibraryTab(controller: controller, settings: settings, embedded: true),
+        const _SettingsSectionGap(),
+        const _SettingsSectionHeading(
+          icon: AppAssets.scrape,
+          title: '刮削与信息',
+          subtitle: '配置 TMDB 连接和影视资料匹配。',
+        ),
+        _ScraperTab(
+          controller: controller,
+          settings: settings,
+          proxyController: proxyController,
+          tokenController: tokenController,
+          embedded: true,
+        ),
+        const _SettingsSectionGap(),
+        const _SettingsSectionHeading(
+          icon: AppAssets.parentalControl,
+          title: '播放与家长控制',
+          subtitle: '调整轨道偏好、观看限制和额外抽卡次数。',
+        ),
+        _PlaybackTab(
+          controller: controller,
+          settings: settings,
+          embedded: true,
+        ),
+        const _SettingsSectionGap(),
+        const _SettingsSectionHeading(
+          icon: AppAssets.appearance,
+          title: '外观',
+          subtitle: '调整主题、背景和视觉风格。',
+        ),
+        _AppearanceTab(settings: settings, embedded: true),
+        const _SettingsSectionGap(),
+        const _SettingsSectionHeading(
+          icon: AppAssets.dinosaur,
+          title: '关于',
+          subtitle: '查看版本和项目使用的核心能力。',
+        ),
+        const _AboutTab(embedded: true),
+      ],
+    );
+  }
+}
+
+class _SettingsSectionHeading extends StatelessWidget {
+  const _SettingsSectionHeading({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
+
+  final String icon;
+  final String title;
+  final String subtitle;
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
-
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Container(
-        padding: const EdgeInsets.all(AppSpacing.xs),
-        decoration: BoxDecoration(
-          color: tokens.surface.withValues(alpha: 0.52),
-          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
-          border: Border.all(color: tokens.cardBorder),
-        ),
-        child: TabBar(
-          controller: controller,
-          isScrollable: true,
-          tabAlignment: TabAlignment.start,
-          dividerColor: Colors.transparent,
-          splashFactory: NoSplash.splashFactory,
-          overlayColor: WidgetStateProperty.all(Colors.transparent),
-          indicatorSize: TabBarIndicatorSize.tab,
-          indicator: BoxDecoration(
-            gradient: const LinearGradient(colors: AppTokens.candyGradient),
-            borderRadius: BorderRadius.circular(AppRadius.pill),
-          ),
-          labelColor: Colors.white,
-          unselectedLabelColor: tokens.textSecondary,
-          labelStyle: const TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w700,
-          ),
-          tabs: [
-            for (final (icon, label) in _tabs)
-              Tab(
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(icon, size: 16),
-                    const SizedBox(width: AppSpacing.xs),
-                    Text(label),
-                  ],
-                ),
+    final blockColor = switch (icon) {
+      AppAssets.mediaLibrary => tokens.brickYellow,
+      AppAssets.scrape => tokens.accent,
+      AppAssets.parentalControl => tokens.brickGreen,
+      AppAssets.appearance => tokens.brickPurple,
+      _ => tokens.brickGreen,
+    };
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.xs,
+        AppSpacing.md,
+        AppSpacing.xs,
+        AppSpacing.md,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: blockColor,
+              borderRadius: const BorderRadius.all(
+                Radius.circular(AppRadius.md),
               ),
-          ],
-        ),
+              border: Border.all(
+                color: tokens.brickHighlight.withValues(alpha: 0.66),
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: tokens.hardShadow,
+                  blurRadius: 0,
+                  offset: const Offset(5, 5),
+                ),
+              ],
+            ),
+            child: BlockIcon(icon, size: 34),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(subtitle, style: TextStyle(color: tokens.textSecondary)),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
+class _SettingsSectionGap extends StatelessWidget {
+  const _SettingsSectionGap();
+
+  @override
+  Widget build(BuildContext context) {
+    return const SizedBox(height: AppSpacing.lg);
+  }
+}
+
 class _LibraryTab extends StatelessWidget {
-  const _LibraryTab({required this.controller, required this.settings});
+  const _LibraryTab({
+    required this.controller,
+    required this.settings,
+    this.embedded = false,
+  });
 
   final LibraryController controller;
   final SettingsController settings;
+  final bool embedded;
 
   /// Runs a scan and reports the outcome. The scan itself already shows
   /// progress (busy bar + button spinner); this closes the loop when done.
@@ -307,6 +398,7 @@ class _LibraryTab extends StatelessWidget {
     final tokens = AppTokens.of(context);
 
     return _SettingsScrollView(
+      embedded: embedded,
       children: [
         _SettingsCard(
           title: '影视目录',
@@ -318,6 +410,7 @@ class _LibraryTab extends StatelessWidget {
                 _EmptySettingsState(
                   icon: Icons.folder_open_outlined,
                   message: '还没有添加影视目录。',
+                  illustrationAsset: AppAssets.tree,
                 )
               else
                 for (final root in controller.roots)
@@ -331,6 +424,7 @@ class _LibraryTab extends StatelessWidget {
                 runSpacing: AppSpacing.sm,
                 children: [
                   FilledButton.icon(
+                    autofocus: true,
                     onPressed: controller.selectRoot,
                     icon: const Icon(Icons.create_new_folder_outlined),
                     label: const Text('添加目录'),
@@ -408,12 +502,14 @@ class _ScraperTab extends StatelessWidget {
     required this.settings,
     required this.proxyController,
     required this.tokenController,
+    this.embedded = false,
   });
 
   final LibraryController controller;
   final SettingsController settings;
   final TextEditingController proxyController;
   final TextEditingController tokenController;
+  final bool embedded;
 
   Future<void> _saveConnection(BuildContext context) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -434,6 +530,7 @@ class _ScraperTab extends StatelessWidget {
     final tokens = AppTokens.of(context);
 
     return _SettingsScrollView(
+      embedded: embedded,
       children: [
         _SettingsCard(
           title: 'TMDB 连接',
@@ -525,14 +622,20 @@ class _ScraperTab extends StatelessWidget {
 }
 
 class _PlaybackTab extends StatelessWidget {
-  const _PlaybackTab({required this.controller, required this.settings});
+  const _PlaybackTab({
+    required this.controller,
+    required this.settings,
+    this.embedded = false,
+  });
 
   final LibraryController controller;
   final SettingsController settings;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
     return _SettingsScrollView(
+      embedded: embedded,
       children: [
         _SettingsCard(
           title: '默认轨道',
@@ -664,41 +767,7 @@ class _PlaybackTab extends StatelessWidget {
             ],
           ),
         ),
-        _SettingsCard(
-          title: '抽卡次数',
-          subtitle: '每天免费抽一张；家长进入设置后可增加额外抽卡次数。',
-          child: FutureBuilder<GachaSnapshot>(
-            future: Future(() {
-              final store = GachaStore();
-              try {
-                return store.load();
-              } finally {
-                store.dispose();
-              }
-            }),
-            builder: (context, snapshot) {
-              final bonusDraws = snapshot.data?.bonusDraws ?? 0;
-              return Wrap(
-                spacing: AppSpacing.md,
-                runSpacing: AppSpacing.md,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  _StatusTile(
-                    icon: Icons.confirmation_num_outlined,
-                    label: '额外次数',
-                    value: '$bonusDraws 次',
-                  ),
-                  FilledButton.tonalIcon(
-                    onPressed: () =>
-                        _openAddGachaDrawsDialog(context, settings),
-                    icon: const Icon(Icons.add_card_outlined),
-                    label: const Text('增加抽卡次数'),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
+        _GachaDrawsSettingsCard(settings: settings),
         _SettingsCard(
           title: '播放记录',
           subtitle: '退出播放器时自动保存进度；未看完的视频会出现在继续观看。',
@@ -729,16 +798,6 @@ class _PlaybackTab extends StatelessWidget {
     );
   }
 
-  Future<void> _openAddGachaDrawsDialog(
-    BuildContext context,
-    SettingsController settings,
-  ) async {
-    await showDialog<void>(
-      context: context,
-      builder: (_) => _AddGachaDrawsDialog(settings: settings),
-    );
-  }
-
   Future<void> _openScreenTimeDialog(
     BuildContext context,
     SettingsController settings,
@@ -756,6 +815,72 @@ class _PlaybackTab extends StatelessWidget {
     await showDialog<void>(
       context: context,
       builder: (_) => _TodayWatchLimitDialog(settings: settings),
+    );
+  }
+}
+
+class _GachaDrawsSettingsCard extends StatefulWidget {
+  const _GachaDrawsSettingsCard({required this.settings});
+
+  final SettingsController settings;
+
+  @override
+  State<_GachaDrawsSettingsCard> createState() =>
+      _GachaDrawsSettingsCardState();
+}
+
+class _GachaDrawsSettingsCardState extends State<_GachaDrawsSettingsCard> {
+  late Future<GachaSnapshot> _snapshotFuture = _loadSnapshot();
+
+  Future<GachaSnapshot> _loadSnapshot() {
+    return Future.microtask(() {
+      final store = GachaStore();
+      try {
+        return store.load();
+      } finally {
+        store.dispose();
+      }
+    });
+  }
+
+  Future<void> _addDraws() async {
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _AddGachaDrawsDialog(settings: widget.settings),
+    );
+    if (mounted) {
+      setState(() => _snapshotFuture = _loadSnapshot());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsCard(
+      title: '抽卡次数',
+      subtitle: '每天免费抽一张；家长进入设置后可增加额外抽卡次数。',
+      child: FutureBuilder<GachaSnapshot>(
+        future: _snapshotFuture,
+        builder: (context, snapshot) {
+          final bonusDraws = snapshot.data?.bonusDraws ?? 0;
+          return Wrap(
+            spacing: AppSpacing.md,
+            runSpacing: AppSpacing.md,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              _StatusTile(
+                icon: Icons.confirmation_num_outlined,
+                label: '额外次数',
+                value: '$bonusDraws 次',
+              ),
+              FilledButton.tonalIcon(
+                onPressed: _addDraws,
+                icon: const Icon(Icons.add_card_outlined),
+                label: const Text('增加抽卡次数'),
+              ),
+            ],
+          );
+        },
+      ),
     );
   }
 }
@@ -1160,15 +1285,17 @@ class _ScreenTimeDialogState extends State<_ScreenTimeDialog> {
 }
 
 class _AppearanceTab extends StatelessWidget {
-  const _AppearanceTab({required this.settings});
+  const _AppearanceTab({required this.settings, this.embedded = false});
 
   final SettingsController settings;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
 
     return _SettingsScrollView(
+      embedded: embedded,
       children: [
         _SettingsCard(
           title: '主题',
@@ -1226,6 +1353,7 @@ class _AppearanceTab extends StatelessWidget {
                 _EmptySettingsState(
                   icon: Icons.wallpaper_outlined,
                   message: '当前使用默认浅蓝动态背景。',
+                  illustrationAsset: AppAssets.flower,
                 ),
               const SizedBox(height: AppSpacing.lg),
               Wrap(
@@ -1283,27 +1411,30 @@ class _AppearanceTab extends StatelessWidget {
 }
 
 class _AboutTab extends StatelessWidget {
-  const _AboutTab();
+  const _AboutTab({this.embedded = false});
+
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
 
     return _SettingsScrollView(
+      embedded: embedded,
       children: [
         _SettingsCard(
           title: 'MovieHub',
-          subtitle: '本地优先的 Windows 私人影视库。',
+          subtitle: '本地优先的私人影视库。',
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('当前版本：1.1.1', style: TextStyle(color: tokens.textSecondary)),
+              Text('当前版本：1.2.0', style: TextStyle(color: tokens.textSecondary)),
               const SizedBox(height: AppSpacing.md),
               Wrap(
                 spacing: AppSpacing.sm,
                 runSpacing: AppSpacing.sm,
                 children: const [
-                  _CapabilityChip(label: 'Flutter Windows'),
+                  _CapabilityChip(label: 'Flutter'),
                   _CapabilityChip(label: 'SQLite'),
                   _CapabilityChip(label: 'media_kit'),
                   _CapabilityChip(label: 'TMDB'),
@@ -1315,7 +1446,7 @@ class _AboutTab extends StatelessWidget {
                   showAboutDialog(
                     context: context,
                     applicationName: 'MovieHub',
-                    applicationVersion: '1.1.1',
+                    applicationVersion: '1.2.0',
                   );
                 },
                 icon: const Icon(Icons.info_outline),
@@ -1330,44 +1461,71 @@ class _AboutTab extends StatelessWidget {
 }
 
 class _SettingsScrollView extends StatelessWidget {
-  const _SettingsScrollView({required this.children});
+  const _SettingsScrollView({required this.children, this.embedded = false});
 
   final List<Widget> children;
+  final bool embedded;
 
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoColumns = constraints.maxWidth >= 980;
+        final content = twoColumns
+            ? KeyedSubtree(
+                key: const ValueKey('settings-two-column-grid'),
+                child: _TwoColumnSettingsGrid(children: children),
+              )
+            : KeyedSubtree(
+                key: const ValueKey('settings-single-column'),
+                child: _SettingsColumn(children: children),
+              );
+        if (embedded) {
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+            child: content,
+          );
+        }
         if (!twoColumns) {
           return ListView(
             padding: const EdgeInsets.all(AppSpacing.xl),
-            children: [
-              for (final child in children) ...[
-                child,
-                const SizedBox(height: AppSpacing.lg),
-              ],
-            ],
+            children: [content],
           );
-        }
-
-        final left = <Widget>[];
-        final right = <Widget>[];
-        for (final (index, child) in children.indexed) {
-          (index.isEven ? left : right).add(child);
         }
         return SingleChildScrollView(
           padding: const EdgeInsets.all(AppSpacing.xl),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: _SettingsColumn(children: left)),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(child: _SettingsColumn(children: right)),
-            ],
-          ),
+          child: content,
         );
       },
+    );
+  }
+}
+
+class _TwoColumnSettingsGrid extends StatelessWidget {
+  const _TwoColumnSettingsGrid({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        for (var index = 0; index < children.length; index += 2) ...[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: children[index]),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                child: index + 1 < children.length
+                    ? children[index + 1]
+                    : const SizedBox.shrink(),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+        ],
+      ],
     );
   }
 }
@@ -1391,7 +1549,7 @@ class _SettingsColumn extends StatelessWidget {
   }
 }
 
-class _SettingsCard extends StatelessWidget {
+class _SettingsCard extends StatefulWidget {
   const _SettingsCard({
     required this.title,
     required this.subtitle,
@@ -1403,41 +1561,82 @@ class _SettingsCard extends StatelessWidget {
   final Widget child;
 
   @override
+  State<_SettingsCard> createState() => _SettingsCardState();
+}
+
+class _SettingsCardState extends State<_SettingsCard> {
+  var _focused = false;
+
+  void _handleFocusChange(bool focused) {
+    if (_focused == focused) {
+      return;
+    }
+    setState(() => _focused = focused);
+    if (focused) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Scrollable.ensureVisible(
+            context,
+            alignment: 0.32,
+            duration: const Duration(milliseconds: 260),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
 
-    return Container(
-      decoration: BoxDecoration(
-        color: tokens.surface.withValues(alpha: 0.94),
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
-        border: Border.all(color: tokens.cardBorder),
-        boxShadow: [
-          BoxShadow(
-            color: tokens.accent.withValues(alpha: 0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 8),
+    return Focus(
+      canRequestFocus: false,
+      onFocusChange: _handleFocusChange,
+      child: AnimatedScale(
+        scale: _focused ? 1.04 : 1,
+        duration: AppDurations.hover,
+        curve: Curves.easeOutCubic,
+        child: AnimatedContainer(
+          duration: AppDurations.hover,
+          decoration: BoxDecoration(
+            color: _focused
+                ? tokens.surface
+                : tokens.surface.withValues(alpha: 0.94),
+            borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+            border: Border.all(
+              color: _focused ? tokens.accent : tokens.cardBorder,
+              width: _focused ? 3 : 2,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: tokens.accent.withValues(alpha: _focused ? 0.24 : 0.1),
+                blurRadius: _focused ? 28 : 18,
+                offset: Offset(0, _focused ? 10 : 6),
+              ),
+            ],
           ),
-        ],
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(AppSpacing.xl),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Text(
-              title,
-              style: Theme.of(
-                context,
-              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+          child: Padding(
+            padding: const EdgeInsets.all(AppSpacing.xl),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Text(
+                  widget.title,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.xs),
+                Text(
+                  widget.subtitle,
+                  style: TextStyle(color: tokens.textSecondary, fontSize: 12),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+                widget.child,
+              ],
             ),
-            const SizedBox(height: AppSpacing.xs),
-            Text(
-              subtitle,
-              style: TextStyle(color: tokens.textSecondary, fontSize: 12),
-            ),
-            const SizedBox(height: AppSpacing.lg),
-            child,
-          ],
+          ),
         ),
       ),
     );
@@ -1463,11 +1662,11 @@ class _PathRow extends StatelessWidget {
         decoration: BoxDecoration(
           color: tokens.surfaceVariant.withValues(alpha: 0.72),
           borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
-          border: Border.all(color: tokens.cardBorder),
+          border: Border.all(color: tokens.cardBorder, width: 2),
         ),
         child: Row(
           children: [
-            Icon(Icons.folder_outlined, color: tokens.textSecondary),
+            const BlockIcon(AppAssets.folder, size: 28),
             const SizedBox(width: AppSpacing.md),
             Expanded(
               child: Text(path, maxLines: 2, overflow: TextOverflow.ellipsis),
@@ -1504,12 +1703,30 @@ class _StatusTile extends StatelessWidget {
       decoration: BoxDecoration(
         color: tokens.surfaceVariant.withValues(alpha: 0.64),
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
-        border: Border.all(color: tokens.cardBorder),
+        border: Border.all(color: tokens.cardBorder, width: 2),
+        boxShadow: [
+          BoxShadow(
+            color: tokens.hardShadow.withValues(alpha: 0.7),
+            blurRadius: 0,
+            offset: const Offset(3, 3),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, size: 18, color: tokens.textSecondary),
+          Container(
+            width: 32,
+            height: 32,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: tokens.accent,
+              borderRadius: const BorderRadius.all(
+                Radius.circular(AppRadius.sm),
+              ),
+            ),
+            child: BlockIcon.fromMaterial(icon, size: 26),
+          ),
           const SizedBox(height: AppSpacing.sm),
           Text(
             value,
@@ -1542,8 +1759,8 @@ class _CapabilityChip extends StatelessWidget {
       ),
       decoration: BoxDecoration(
         color: tokens.surfaceVariant.withValues(alpha: 0.7),
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
-        border: Border.all(color: tokens.cardBorder),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
+        border: Border.all(color: tokens.cardBorder, width: 2),
       ),
       child: Text(label, style: const TextStyle(fontSize: 12)),
     );
@@ -1578,9 +1795,9 @@ class _SwitchRow extends StatelessWidget {
           decoration: BoxDecoration(
             color: tokens.surfaceVariant.withValues(alpha: 0.72),
             borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
-            border: Border.all(color: tokens.cardBorder),
+            border: Border.all(color: tokens.cardBorder, width: 2),
           ),
-          child: Icon(icon, size: 20, color: tokens.textSecondary),
+          child: BlockIcon.fromMaterial(icon, size: 26),
         ),
         const SizedBox(width: AppSpacing.md),
         Expanded(
@@ -1603,10 +1820,15 @@ class _SwitchRow extends StatelessWidget {
 }
 
 class _EmptySettingsState extends StatelessWidget {
-  const _EmptySettingsState({required this.icon, required this.message});
+  const _EmptySettingsState({
+    required this.icon,
+    required this.message,
+    this.illustrationAsset,
+  });
 
   final IconData icon;
   final String message;
+  final String? illustrationAsset;
 
   @override
   Widget build(BuildContext context) {
@@ -1616,11 +1838,14 @@ class _EmptySettingsState extends StatelessWidget {
       decoration: BoxDecoration(
         color: tokens.surfaceVariant.withValues(alpha: 0.46),
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
-        border: Border.all(color: tokens.cardBorder),
+        border: Border.all(color: tokens.cardBorder, width: 2),
       ),
       child: Row(
         children: [
-          Icon(icon, color: tokens.textSecondary),
+          if (illustrationAsset case final asset?)
+            BlockIllustration(asset: asset, size: 88, semanticLabel: message)
+          else
+            BlockIcon.fromMaterial(icon, size: 30),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Text(message, style: TextStyle(color: tokens.textSecondary)),

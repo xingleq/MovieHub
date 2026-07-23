@@ -80,7 +80,7 @@ class _HoverableState extends State<Hoverable> {
         onEnter: (_) => _setHovered(true),
         onExit: (_) => _setHovered(false),
         child: AnimatedScale(
-          scale: _focused ? 1.08 : 1,
+          scale: _focused ? 1.06 : 1,
           duration: AppDurations.hover,
           curve: Curves.easeOutBack,
           child: AnimatedContainer(
@@ -93,17 +93,14 @@ class _HoverableState extends State<Hoverable> {
                 Radius.circular(AppRadius.md),
               ),
               border: _focused
-                  ? Border.all(
-                      color: tokens.accent.withValues(alpha: 0.7),
-                      width: 1.5,
-                    )
+                  ? Border.all(color: tokens.accent, width: 3)
                   : null,
               boxShadow: _focused
                   ? [
                       BoxShadow(
-                        color: tokens.accent.withValues(alpha: 0.45),
-                        blurRadius: 22,
-                        spreadRadius: 2,
+                        color: tokens.accent.withValues(alpha: 0.24),
+                        blurRadius: 28,
+                        offset: const Offset(0, 10),
                       ),
                     ]
                   : const [],

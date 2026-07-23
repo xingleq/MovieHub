@@ -8,7 +8,6 @@ import 'package:media_kit_video/media_kit_video.dart';
 import '../../app/settings_controller.dart';
 import '../../core/media/media_item.dart';
 import '../../core/system/platform_services.dart';
-import '../../theme/app_tokens.dart';
 
 class PlayerPage extends StatefulWidget {
   const PlayerPage({
@@ -377,14 +376,14 @@ class _PlayerPageState extends State<PlayerPage> {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
+    final playerTheme = ThemeData.dark(useMaterial3: true);
 
     final controlsTheme = MaterialDesktopVideoControlsThemeData(
       visibleOnMount: true,
       playAndPauseOnTap: true,
       controlsHoverDuration: const Duration(seconds: 6),
-      seekBarPositionColor: tokens.accent,
-      seekBarThumbColor: tokens.accent,
+      seekBarPositionColor: playerTheme.colorScheme.primary,
+      seekBarThumbColor: playerTheme.colorScheme.primary,
       topButtonBar: [
         Expanded(
           child: Text(
@@ -487,14 +486,17 @@ class _PlayerPageState extends State<PlayerPage> {
       ],
     );
 
-    return Scaffold(
-      backgroundColor: Colors.black,
-      body: MaterialDesktopVideoControlsTheme(
-        normal: controlsTheme,
-        fullscreen: controlsTheme,
-        child: Video(
-          controller: _controller,
-          controls: MaterialDesktopVideoControls,
+    return Theme(
+      data: playerTheme,
+      child: Scaffold(
+        backgroundColor: Colors.black,
+        body: MaterialDesktopVideoControlsTheme(
+          normal: controlsTheme,
+          fullscreen: controlsTheme,
+          child: Video(
+            controller: _controller,
+            controls: MaterialDesktopVideoControls,
+          ),
         ),
       ),
     );
@@ -553,13 +555,10 @@ class _PlayerCloseButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Tooltip(
-      message: '关闭播放器',
-      child: MaterialDesktopCustomButton(
-        onPressed: () => unawaited(_close(context)),
-        icon: const Icon(Icons.close_rounded),
-        iconSize: 30,
-      ),
+    return MaterialDesktopCustomButton(
+      onPressed: () => unawaited(_close(context)),
+      icon: const Icon(Icons.close_rounded, color: Colors.white),
+      iconSize: 30,
     );
   }
 }
@@ -573,18 +572,19 @@ class _RateButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return PopupMenuButton<double>(
       tooltip: '倍速',
       initialValue: player.state.rate,
       onSelected: (rate) => player.setRate(rate),
-      color: const Color(0xE6202124),
+      color: colors.surface,
       itemBuilder: (context) => [
         for (final rate in _rates)
           PopupMenuItem(
             value: rate,
             child: Text(
               rate == 1.0 ? '正常速度' : '${rate}x',
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: colors.onSurface),
             ),
           ),
       ],
@@ -612,17 +612,21 @@ class _TrackMenuButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
     return PopupMenuButton<Object>(
       tooltip: tooltip,
       onSelected: onSelected,
-      color: const Color(0xE6202124),
+      color: colors.surface,
       itemBuilder: (context) {
         final entries = loadTracks();
         if (entries.isEmpty) {
-          return const [
+          return [
             PopupMenuItem<Object>(
               enabled: false,
-              child: Text('无可用轨道', style: TextStyle(color: Colors.white70)),
+              child: Text(
+                '无可用轨道',
+                style: TextStyle(color: colors.onSurfaceVariant),
+              ),
             ),
           ];
         }
@@ -631,7 +635,7 @@ class _TrackMenuButton extends StatelessWidget {
             CheckedPopupMenuItem<Object>(
               value: track,
               checked: isSelected(track),
-              child: Text(label, style: const TextStyle(color: Colors.white)),
+              child: Text(label, style: TextStyle(color: colors.onSurface)),
             ),
         ];
       },

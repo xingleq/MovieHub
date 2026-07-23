@@ -2,9 +2,10 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-/// Slowly breathing sky-gradient backdrop with twinkling star particles —
-/// the ambient layer of the anime-styled UI. Cheap: one repaint boundary,
-/// one animation controller.
+import '../../theme/app_tokens.dart';
+
+/// Slowly breathing pixel-brick backdrop. The grid stays subtle so posters
+/// remain the visual focus while the shell still feels constructed from blocks.
 class CandyBackground extends StatefulWidget {
   const CandyBackground({super.key});
 
@@ -15,27 +16,6 @@ class CandyBackground extends StatefulWidget {
 class _CandyBackgroundState extends State<CandyBackground>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
-
-  static const _paletteA = [
-    Color(0xFF0C1B31),
-    Color(0xFF102847),
-    Color(0xFF0C203A),
-  ];
-  static const _paletteB = [
-    Color(0xFF102442),
-    Color(0xFF15345A),
-    Color(0xFF0E294A),
-  ];
-  static const _lightPaletteA = [
-    Color(0xFFF4FAFF),
-    Color(0xFFEAF6FF),
-    Color(0xFFF7FBFF),
-  ];
-  static const _lightPaletteB = [
-    Color(0xFFF9FCFF),
-    Color(0xFFE5F3FF),
-    Color(0xFFF0F8FF),
-  ];
 
   @override
   void initState() {
@@ -58,17 +38,16 @@ class _CandyBackgroundState extends State<CandyBackground>
       child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          final isLight = Theme.of(context).brightness == Brightness.light;
+          final tokens = AppTokens.of(context);
           final t = _controller.value;
           final wave = (math.sin(t * 2 * math.pi) + 1) / 2;
-          final from = isLight ? _lightPaletteA : _paletteA;
-          final to = isLight ? _lightPaletteB : _paletteB;
           final colors = [
-            for (var i = 0; i < from.length; i++)
-              Color.lerp(from[i], to[i], wave)!,
+            Color.lerp(tokens.background, tokens.surface, wave * 0.45)!,
+            Color.lerp(tokens.surface, tokens.surfaceVariant, wave * 0.28)!,
+            tokens.background,
           ];
           return CustomPaint(
-            foregroundPainter: _StarPainter(t, light: isLight),
+            foregroundPainter: _PixelFieldPainter(t, tokens: tokens),
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
@@ -86,35 +65,46 @@ class _CandyBackgroundState extends State<CandyBackground>
   }
 }
 
-/// Deterministic star field: positions derive from the star index, so no
-/// randomness is needed and every frame is pure a function of time.
-class _StarPainter extends CustomPainter {
-  _StarPainter(this.time, {required this.light});
+class _PixelFieldPainter extends CustomPainter {
+  _PixelFieldPainter(this.time, {required this.tokens});
 
   final double time;
-  final bool light;
+  final AppTokens tokens;
 
-  static const _starCount = 26;
+  static const _blockCount = 22;
+  static const _gridSize = 32.0;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..color = Colors.white;
-    for (var i = 0; i < _starCount; i++) {
+    final gridPaint = Paint()
+      ..color = tokens.pixelGrid.withValues(alpha: 0.24)
+      ..strokeWidth = 1;
+    for (var x = 0.0; x <= size.width; x += _gridSize) {
+      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
+    }
+    for (var y = 0.0; y <= size.height; y += _gridSize) {
+      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+    }
+
+    final palette = [
+      tokens.accent,
+      tokens.brickYellow,
+      tokens.brickGreen,
+      tokens.brickPurple,
+    ];
+    final paint = Paint();
+    for (var i = 0; i < _blockCount; i++) {
       final fx = _fraction(i * 7 + 3);
       final fy = _fraction(i * 13 + 5);
       final phase = _fraction(i * 29 + 11);
       final speed = 0.5 + _fraction(i * 17 + 2);
-
-      final twinkle = (math.sin((time * speed + phase) * 2 * math.pi) + 1) / 2;
-      final opacity = light ? 0.05 + twinkle * 0.1 : 0.04 + twinkle * 0.22;
-      final radius = 0.8 + _fraction(i * 31 + 7) * 1.6;
-
-      paint.color = (light ? const Color(0xFF5AB4F6) : Colors.white).withValues(
-        alpha: opacity,
+      final pulse = (math.sin((time * speed + phase) * 2 * math.pi) + 1) / 2;
+      final blockSize = 3.0 + _fraction(i * 31 + 7) * 5;
+      paint.color = palette[i % palette.length].withValues(
+        alpha: 0.07 + pulse * 0.16,
       );
-      canvas.drawCircle(
-        Offset(fx * size.width, fy * size.height),
-        radius,
+      canvas.drawRect(
+        Rect.fromLTWH(fx * size.width, fy * size.height, blockSize, blockSize),
         paint,
       );
     }
@@ -126,7 +116,7 @@ class _StarPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(_StarPainter oldDelegate) {
-    return oldDelegate.time != time || oldDelegate.light != light;
+  bool shouldRepaint(_PixelFieldPainter oldDelegate) {
+    return oldDelegate.time != time || oldDelegate.tokens != tokens;
   }
 }

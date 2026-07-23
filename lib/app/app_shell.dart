@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/media/media_group.dart';
 import '../core/media/media_item.dart';
@@ -14,10 +15,10 @@ import '../ui/detail/series_detail_view.dart';
 import '../ui/pages/catalog_page.dart';
 import '../ui/pages/gacha_page.dart';
 import '../ui/pages/home_page.dart';
+import '../ui/pages/home/widgets/lego_nav_bar.dart';
 import '../ui/pages/settings_page.dart';
 import '../ui/player/player_page.dart';
 import '../ui/widgets/candy_background.dart';
-import '../ui/widgets/immersive_top_nav.dart';
 import '../ui/widgets/manual_match_dialog.dart';
 import '../ui/widgets/window_control_buttons.dart';
 import 'app_section.dart';
@@ -56,6 +57,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _library = widget.library;
     _settings = widget.settings;
+    unawaited(PlatformServices.instance.cursor.setPixelStyleEnabled(true));
     unawaited(_loadControllers());
   }
 
@@ -67,6 +69,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    unawaited(PlatformServices.instance.cursor.setPixelStyleEnabled(false));
     super.dispose();
   }
 
@@ -198,6 +201,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       _playerStartAt = startAt;
       _playerToken++;
     });
+    unawaited(PlatformServices.instance.cursor.setPixelStyleEnabled(false));
   }
 
   void _closePlayer() {
@@ -206,6 +210,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       _playerStartAt = null;
       _playerToken++;
     });
+    unawaited(PlatformServices.instance.cursor.setPixelStyleEnabled(true));
   }
 
   Future<void> _openManualMatch({
@@ -310,74 +315,96 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   Widget build(BuildContext context) {
     final windowControlsSupported =
         PlatformServices.instance.windowControls.isSupported;
-    return LibraryScope(
-      controller: _library,
-      child: SettingsScope(
-        controller: _settings,
-        child: Scaffold(
-          body: ListenableBuilder(
-            listenable: Listenable.merge([_library, _settings]),
-            builder: (context, _) {
-              return Stack(
-                fit: StackFit.expand,
-                children: [
-                  const CandyBackground(),
-                  if (_settings.backgroundImagePath.isNotEmpty)
-                    _WallpaperLayer(path: _settings.backgroundImagePath),
-                  Padding(
-                    padding:
-                        _section == AppSection.home ||
-                            _detailIdentity != null ||
-                            _detailSeriesKey != null
-                        ? EdgeInsets.zero
-                        : const EdgeInsets.only(top: 88),
-                    child: _buildContent(),
-                  ),
-                  Positioned(
-                    top: AppSpacing.md,
-                    left: AppSpacing.xl,
-                    // Keeps clear of the window buttons where they exist.
-                    right: windowControlsSupported ? 150 : AppSpacing.xl,
-                    child: ImmersiveTopNav(
-                      selected: _section,
-                      onSelected: (section) {
-                        unawaited(_requestSection(section));
-                      },
-                      searchResults: _searchResults,
-                      onSearch: (query) {
-                        setState(() => _searchQuery = query);
-                      },
-                      onOpenResult: _openEntry,
-                    ),
-                  ),
-                  if (windowControlsSupported)
-                    const Positioned(
-                      top: AppSpacing.md,
-                      right: AppSpacing.sm,
-                      height: 58,
-                      child: WindowControlButtons(),
-                    ),
-                  if (_playerItem case final MediaItem item)
-                    _PlayerOverlay(
-                      key: ValueKey(
-                        'player:$_playerToken:${item.sourceId}:${item.path}',
-                      ),
-                      child: PlayerPage(
-                        item: item,
-                        startAt: _playerStartAt,
-                        previousEpisodeOf: _library.previousEpisodeOf,
-                        nextEpisodeOf: _library.nextEpisodeOf,
-                        playbackUriOf: _library.playbackUriOf,
-                        subtitlePreference: _settings.subtitlePreference,
-                        audioPreference: _settings.audioPreference,
-                        settings: _settings,
-                        onClose: _closePlayer,
-                        onProgressChanged: _library.savePlaybackProgress,
-                      ),
-                    ),
-                ],
-              );
+    return Shortcuts(
+      shortcuts: const {
+        SingleActivator(LogicalKeyboardKey.goBack): _ShellBackIntent(),
+        SingleActivator(LogicalKeyboardKey.browserBack): _ShellBackIntent(),
+      },
+      child: Actions(
+        actions: {
+          _ShellBackIntent: CallbackAction<_ShellBackIntent>(
+            onInvoke: (_) {
+              if (_playerItem != null) {
+                _closePlayer();
+              } else if (_detailIdentity != null || _detailSeriesKey != null) {
+                _closeDetail();
+              } else if (_section != AppSection.home) {
+                _goToSection(AppSection.home);
+              }
+              return null;
             },
+          ),
+        },
+        child: LibraryScope(
+          controller: _library,
+          child: SettingsScope(
+            controller: _settings,
+            child: Scaffold(
+              body: ListenableBuilder(
+                listenable: Listenable.merge([_library, _settings]),
+                builder: (context, _) {
+                  return Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      const CandyBackground(),
+                      if (_settings.backgroundImagePath.isNotEmpty)
+                        _WallpaperLayer(path: _settings.backgroundImagePath),
+                      Padding(
+                        padding:
+                            _section == AppSection.home ||
+                                _detailIdentity != null ||
+                                _detailSeriesKey != null
+                            ? EdgeInsets.zero
+                            : const EdgeInsets.only(top: 88),
+                        child: _buildContent(),
+                      ),
+                      Positioned(
+                        top: AppSpacing.md,
+                        left: AppSpacing.xl,
+                        // Keeps clear of the window buttons where they exist.
+                        right: windowControlsSupported ? 150 : AppSpacing.xl,
+                        child: LegoNavBar(
+                          selected: _section,
+                          onSelected: (section) {
+                            unawaited(_requestSection(section));
+                          },
+                          searchResults: _searchResults,
+                          onSearch: (query) {
+                            setState(() => _searchQuery = query);
+                          },
+                          onOpenResult: _openEntry,
+                        ),
+                      ),
+                      if (windowControlsSupported)
+                        const Positioned(
+                          top: AppSpacing.md,
+                          right: AppSpacing.sm,
+                          height: 58,
+                          child: WindowControlButtons(),
+                        ),
+                      if (_playerItem case final MediaItem item)
+                        _PlayerOverlay(
+                          key: ValueKey(
+                            'player:$_playerToken:${item.sourceId}:${item.path}',
+                          ),
+                          child: PlayerPage(
+                            item: item,
+                            startAt: _playerStartAt,
+                            previousEpisodeOf: _library.previousEpisodeOf,
+                            nextEpisodeOf: _library.nextEpisodeOf,
+                            playbackUriOf: _library.playbackUriOf,
+                            subtitlePreference: _settings.subtitlePreference,
+                            audioPreference: _settings.audioPreference,
+                            settings: _settings,
+                            onClose: _closePlayer,
+                            onProgressChanged: _library.savePlaybackProgress,
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
           ),
         ),
       ),
@@ -535,6 +562,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       HomePage(
         onOpenItem: _openItem,
         onPlayItem: (item) => unawaited(_openPlayer(item)),
+        onToggleFavorite: (item) => unawaited(_library.toggleFavorite(item)),
         onGoToSettings: () {
           unawaited(_requestSection(AppSection.settings));
         },
@@ -575,6 +603,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       SettingsPage(),
     ];
   }
+}
+
+class _ShellBackIntent extends Intent {
+  const _ShellBackIntent();
 }
 
 class _CreateSettingsPasswordDialog extends StatefulWidget {

@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../../core/media/media_group.dart';
 import '../../core/media/media_item.dart';
 import '../../core/tmdb/tmdb_client.dart';
+import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
 import '../catalog/catalog_options.dart';
 import '../format/formatters.dart';
 import '../widgets/cached_tmdb_image.dart';
+import '../widgets/block_asset.dart';
 import '../widgets/jelly_button.dart';
 import '../widgets/poster_placeholder.dart';
 import 'media_detail_view.dart'
@@ -203,7 +205,7 @@ class SeriesDetailView extends StatelessWidget {
               foregroundColor: Colors.white,
             ),
             onPressed: onBack,
-            icon: const Icon(Icons.arrow_back),
+            icon: const BlockIcon(AppAssets.back, size: 30),
           ),
         ),
       ],
@@ -337,7 +339,10 @@ class _EpisodeRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: AppSpacing.xs),
       child: Material(
         color: tokens.surface.withValues(alpha: 0.7),
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
+          side: BorderSide(color: tokens.cardBorder, width: 2),
+        ),
         child: InkWell(
           borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
           onTap: onPlay,
@@ -428,29 +433,35 @@ class _Poster extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
     return Container(
       decoration: BoxDecoration(
+        color: tokens.surface,
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+        border: Border.all(color: tokens.brickYellow, width: 3),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+            color: tokens.accent.withValues(alpha: 0.2),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
-        child: SizedBox(
-          width: 220,
-          height: 330,
-          child: item.posterPath != null && item.posterPath!.isNotEmpty
-              ? CachedTmdbImage(
-                  url: TmdbClient.posterUrl(item.posterPath!),
-                  cacheWidth: 500,
-                  placeholderIconSize: 56,
-                )
-              : const PosterPlaceholder(iconSize: 56),
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
+          child: SizedBox(
+            width: 220,
+            height: 330,
+            child: item.posterPath != null && item.posterPath!.isNotEmpty
+                ? CachedTmdbImage(
+                    url: TmdbClient.posterUrl(item.posterPath!),
+                    cacheWidth: 500,
+                    placeholderIconSize: 56,
+                  )
+                : const PosterPlaceholder(iconSize: 56),
+          ),
         ),
       ),
     );

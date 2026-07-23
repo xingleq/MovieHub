@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:moviehub/ui/widgets/hoverable.dart';
 
 void main() {
-  testWidgets('键盘焦点放大到 1.08 并可用 Enter 激活', (tester) async {
+  testWidgets('键盘焦点放大到 1.06 并可用 Enter 激活', (tester) async {
     var activated = false;
     await tester.pumpWidget(
       MaterialApp(
@@ -29,7 +29,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final scale = tester.widget<AnimatedScale>(find.byType(AnimatedScale));
-    expect(scale.scale, 1.08);
+    expect(scale.scale, 1.06);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     expect(activated, isTrue);

@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 
 import '../../core/media/media_item.dart';
 import '../../core/tmdb/tmdb_client.dart';
+import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
 import '../catalog/catalog_options.dart';
 import '../catalog/media_category.dart';
 import '../format/formatters.dart';
 import '../widgets/cached_tmdb_image.dart';
+import '../widgets/block_asset.dart';
 import '../widgets/jelly_button.dart';
 import '../widgets/poster_placeholder.dart';
 
@@ -204,7 +206,7 @@ class MediaDetailView extends StatelessWidget {
               foregroundColor: Colors.white,
             ),
             onPressed: onBack,
-            icon: const Icon(Icons.arrow_back),
+            icon: const BlockIcon(AppAssets.back, size: 30),
           ),
         ),
       ],
@@ -287,7 +289,7 @@ class DetailActionButton extends StatelessWidget {
 
     return FilledButton.tonalIcon(
       onPressed: onPressed,
-      icon: Icon(icon),
+      icon: BlockIcon.fromMaterial(icon, size: 26),
       label: Text(label),
       style: FilledButton.styleFrom(
         backgroundColor: tokens.surface.withValues(alpha: 0.7),
@@ -304,29 +306,35 @@ class _DetailPoster extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
     return Container(
       decoration: BoxDecoration(
+        color: tokens.surface,
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+        border: Border.all(color: tokens.brickYellow, width: 3),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.5),
-            blurRadius: 24,
-            offset: const Offset(0, 8),
+            color: tokens.accent.withValues(alpha: 0.2),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
-        child: SizedBox(
-          width: 220,
-          height: 330,
-          child: item.posterPath != null && item.posterPath!.isNotEmpty
-              ? CachedTmdbImage(
-                  url: TmdbClient.posterUrl(item.posterPath!),
-                  cacheWidth: 500,
-                  placeholderIconSize: 56,
-                )
-              : const PosterPlaceholder(iconSize: 56),
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: ClipRRect(
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
+          child: SizedBox(
+            width: 220,
+            height: 330,
+            child: item.posterPath != null && item.posterPath!.isNotEmpty
+                ? CachedTmdbImage(
+                    url: TmdbClient.posterUrl(item.posterPath!),
+                    cacheWidth: 500,
+                    placeholderIconSize: 56,
+                  )
+                : const PosterPlaceholder(iconSize: 56),
+          ),
         ),
       ),
     );
@@ -390,17 +398,21 @@ class DetailMetadataChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm + 2,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
+        color: tokens.surface.withValues(alpha: 0.88),
         borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.14)),
+        border: Border.all(color: tokens.cardBorder, width: 2),
       ),
-      child: Text(label, style: const TextStyle(fontSize: 12)),
+      child: Text(
+        label,
+        style: const TextStyle(fontFamily: AppFonts.pixelLabel, fontSize: 12),
+      ),
     );
   }
 }
@@ -466,6 +478,7 @@ class DetailScoreBlock extends StatelessWidget {
           child: Text(
             score.toStringAsFixed(1),
             style: const TextStyle(
+              fontFamily: AppFonts.pixelLatin,
               fontSize: 40,
               height: 1,
               fontWeight: FontWeight.w900,

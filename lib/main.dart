@@ -74,7 +74,7 @@ class _MovieHubAppState extends State<MovieHubApp> {
     return switch (value) {
       'light' => ThemeMode.light,
       'system' => ThemeMode.system,
-      _ => ThemeMode.dark,
+      _ => ThemeMode.light,
     };
   }
 }

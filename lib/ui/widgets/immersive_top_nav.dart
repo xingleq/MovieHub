@@ -3,11 +3,14 @@ import 'dart:ui' show ImageFilter;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 
 import '../../app/app_section.dart';
 import '../../core/media/media_group.dart';
 import '../../core/tmdb/tmdb_client.dart';
+import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
+import 'block_asset.dart';
 import 'cached_tmdb_image.dart';
 
 class ImmersiveTopNav extends StatefulWidget {
@@ -82,6 +85,8 @@ class _ImmersiveTopNavState extends State<ImmersiveTopNav> {
     return Shortcuts(
       shortcuts: const {
         SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
+        SingleActivator(LogicalKeyboardKey.goBack): DismissIntent(),
+        SingleActivator(LogicalKeyboardKey.browserBack): DismissIntent(),
         SingleActivator(LogicalKeyboardKey.keyK, control: true):
             _OpenSearchIntent(),
       },
@@ -105,15 +110,15 @@ class _ImmersiveTopNavState extends State<ImmersiveTopNav> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final width = math.min(
-              constraints.maxWidth,
-              _searching ? 840.0 : 760.0,
+              constraints.maxWidth - 40,
+              _searching ? 980.0 : 900.0,
             );
             return Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 AnimatedContainer(
                   width: width,
-                  height: 58,
+                  height: 64,
                   duration: const Duration(milliseconds: 320),
                   curve: Curves.easeOutCubic,
                   child: _GlassSurface(
@@ -190,21 +195,27 @@ class _GlassSurface extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
     return ClipRRect(
-      borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+      borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xl)),
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
         child: DecoratedBox(
           decoration: BoxDecoration(
-            color: tokens.surface.withValues(alpha: 0.72),
-            borderRadius: const BorderRadius.all(
-              Radius.circular(AppRadius.pill),
+            color: tokens.surface.withValues(alpha: 0.82),
+            borderRadius: const BorderRadius.all(Radius.circular(AppRadius.xl)),
+            border: Border.all(
+              color: tokens.brickHighlight.withValues(alpha: 0.62),
+              width: 2,
             ),
-            border: Border.all(color: tokens.cardBorder),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.22),
-                blurRadius: 28,
-                offset: const Offset(0, 12),
+                color: tokens.hardShadow.withValues(alpha: 0.42),
+                blurRadius: 0,
+                offset: const Offset(0, 7),
+              ),
+              BoxShadow(
+                color: tokens.accent.withValues(alpha: 0.2),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
               ),
             ],
           ),
@@ -231,46 +242,238 @@ class _NavigationBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          IconButton(
-            tooltip: '搜索（Ctrl+K）',
-            onPressed: onSearch,
-            icon: const Icon(Icons.search_rounded),
-          ),
-          Container(
-            width: 1,
-            height: 24,
-            margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-            color: tokens.cardBorder,
-          ),
-          for (final section in AppSection.values)
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 2),
-              child: TextButton.icon(
-                onPressed: () => onSelected(section),
-                style: TextButton.styleFrom(
-                  foregroundColor: section == selected
-                      ? Colors.white
-                      : tokens.textSecondary,
-                  backgroundColor: section == selected
-                      ? tokens.accent.withValues(alpha: 0.82)
-                      : Colors.transparent,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.sm + 2,
-                    vertical: AppSpacing.sm,
-                  ),
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 48,
+              child: SvgPicture.asset(AppAssets.brickStuds, height: 28),
+            ),
+            const _MovieHubWordmark(),
+            const SizedBox(width: AppSpacing.sm),
+            IconButton(
+              tooltip: '搜索（Ctrl+K）',
+              onPressed: onSearch,
+              icon: const BlockIcon(AppAssets.search, size: 26),
+            ),
+            Container(
+              width: 1,
+              height: 24,
+              margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
+              color: tokens.cardBorder,
+            ),
+            for (final section in AppSection.values)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 2),
+                child: _NavigationItem(
+                  section: section,
+                  selected: section == selected,
+                  onPressed: () => onSelected(section),
                 ),
-                icon: Icon(section.icon, size: 17),
-                label: Text(_navLabel(section)),
+              ),
+            SizedBox(
+              width: 48,
+              child: SvgPicture.asset(AppAssets.brickStuds, height: 28),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MovieHubWordmark extends StatelessWidget {
+  const _MovieHubWordmark();
+
+  static const _letters = 'MOVIEHUB';
+
+  @override
+  Widget build(BuildContext context) {
+    final sections = AppSection.values;
+    return Text.rich(
+      key: const ValueKey('moviehub-wordmark'),
+      TextSpan(
+        children: [
+          for (var index = 0; index < _letters.length; index++)
+            TextSpan(
+              text: _letters[index],
+              style: TextStyle(
+                color:
+                    sections[index < sections.length
+                            ? index
+                            : sections.length - 1]
+                        .color,
               ),
             ),
         ],
       ),
+      style: const TextStyle(
+        fontFamily: AppFonts.pixelLatin,
+        fontSize: 10,
+        height: 1,
+      ),
     );
   }
+}
+
+class _NavigationItem extends StatefulWidget {
+  const _NavigationItem({
+    required this.section,
+    required this.selected,
+    required this.onPressed,
+  });
+
+  final AppSection section;
+  final bool selected;
+  final VoidCallback onPressed;
+
+  @override
+  State<_NavigationItem> createState() => _NavigationItemState();
+}
+
+class _NavigationItemState extends State<_NavigationItem> {
+  final _focusNode = FocusNode();
+  var _focused = false;
+  var _hovered = false;
+  var _pressed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_handleFocus);
+  }
+
+  void _handleFocus() {
+    if (_focused == _focusNode.hasFocus) {
+      return;
+    }
+    setState(() => _focused = _focusNode.hasFocus);
+    if (_focusNode.hasFocus) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          Scrollable.ensureVisible(
+            context,
+            alignment: 0.5,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOutCubic,
+          );
+        }
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _focusNode
+      ..removeListener(_handleFocus)
+      ..dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    final sectionColor = widget.section.color;
+    final foreground = widget.selected ? Colors.white : sectionColor;
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) {
+        setState(() {
+          _hovered = false;
+          _pressed = false;
+        });
+      },
+      child: Listener(
+        onPointerDown: (_) => setState(() => _pressed = true),
+        onPointerUp: (_) => setState(() => _pressed = false),
+        onPointerCancel: (_) => setState(() => _pressed = false),
+        child: AnimatedScale(
+          scale: _pressed
+              ? 0.96
+              : _focused
+              ? 1.06
+              : _hovered
+              ? 1.03
+              : 1,
+          duration: AppDurations.hover,
+          curve: Curves.easeOutBack,
+          child: TextButton.icon(
+            focusNode: _focusNode,
+            onPressed: widget.onPressed,
+            style:
+                TextButton.styleFrom(
+                  foregroundColor: foreground,
+                  backgroundColor: widget.selected
+                      ? sectionColor
+                      : _focused || _hovered
+                      ? sectionColor.withValues(alpha: 0.15)
+                      : tokens.surface.withValues(alpha: 0),
+                  shadowColor: sectionColor,
+                  elevation: _focused ? 7 : 0,
+                  shape: const RoundedRectangleBorder(
+                    borderRadius: BorderRadius.all(
+                      Radius.circular(AppRadius.md),
+                    ),
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.sm + 2,
+                    vertical: AppSpacing.sm,
+                  ),
+                ).copyWith(
+                  overlayColor: WidgetStateProperty.resolveWith((states) {
+                    if (states.contains(WidgetState.pressed)) {
+                      return tokens.brickHighlight.withValues(alpha: 0.2);
+                    }
+                    if (states.contains(WidgetState.focused) ||
+                        states.contains(WidgetState.hovered)) {
+                      return tokens.brickHighlight.withValues(alpha: 0.1);
+                    }
+                    return tokens.surface.withValues(alpha: 0);
+                  }),
+                  side: WidgetStatePropertyAll(
+                    BorderSide(
+                      color: _focused
+                          ? tokens.brickHighlight
+                          : widget.selected
+                          ? sectionColor
+                          : tokens.surface.withValues(alpha: 0),
+                      width: _focused ? 3 : 2,
+                    ),
+                  ),
+                ),
+            icon: BlockIcon(
+              _sectionAsset(widget.section),
+              size: 26,
+              color: foreground,
+            ),
+            label: Text(
+              _navLabel(widget.section),
+              style: const TextStyle(
+                fontFamily: AppFonts.pixelLabel,
+                fontWeight: FontWeight.w700,
+                fontSize: 14,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+String _sectionAsset(AppSection section) {
+  return switch (section) {
+    AppSection.home => AppAssets.home,
+    AppSection.anime => AppAssets.animation,
+    AppSection.movies => AppAssets.movie,
+    AppSection.tv => AppAssets.tv,
+    AppSection.gacha => AppAssets.draw,
+    AppSection.favorites => AppAssets.favorite,
+    AppSection.settings => AppAssets.settings,
+  };
 }
 
 class _SearchBar extends StatelessWidget {
@@ -296,7 +499,7 @@ class _SearchBar extends StatelessWidget {
           IconButton(
             tooltip: '返回',
             onPressed: onBack,
-            icon: const Icon(Icons.arrow_back_rounded),
+            icon: const BlockIcon(AppAssets.back, size: 26),
           ),
           const SizedBox(width: AppSpacing.xs),
           Expanded(
@@ -315,7 +518,7 @@ class _SearchBar extends StatelessWidget {
           const SizedBox(width: AppSpacing.sm),
           FilledButton.icon(
             onPressed: onSubmit,
-            icon: const Icon(Icons.search_rounded, size: 18),
+            icon: const BlockIcon(AppAssets.search, size: 24),
             label: const Text('确认'),
           ),
         ],
@@ -333,68 +536,69 @@ class _SearchResults extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
-    return ClipRRect(
-      borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: tokens.surface.withValues(alpha: 0.88),
-            borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
-            border: Border.all(color: tokens.cardBorder),
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: tokens.surface.withValues(alpha: 0.97),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+        border: Border.all(color: tokens.cardBorder, width: 3),
+        boxShadow: [
+          BoxShadow(
+            color: tokens.accent.withValues(alpha: 0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 6),
           ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxHeight: 390),
-            child: results.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(AppSpacing.xl),
-                    child: Center(child: Text('没有找到匹配内容')),
-                  )
-                : ListView.separated(
-                    padding: const EdgeInsets.all(AppSpacing.sm),
-                    shrinkWrap: true,
-                    itemCount: math.min(results.length, 8),
-                    separatorBuilder: (_, _) => const SizedBox(height: 4),
-                    itemBuilder: (context, index) {
-                      final group = results[index];
-                      final item = group.representative;
-                      return ListTile(
-                        onTap: () => onOpen(group),
-                        shape: const RoundedRectangleBorder(
-                          borderRadius: BorderRadius.all(
-                            Radius.circular(AppRadius.md),
-                          ),
+        ],
+      ),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 390),
+        child: results.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(AppSpacing.xl),
+                child: Center(child: Text('没有找到匹配内容')),
+              )
+            : ListView.separated(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                shrinkWrap: true,
+                itemCount: math.min(results.length, 8),
+                separatorBuilder: (_, _) => const SizedBox(height: 4),
+                itemBuilder: (context, index) {
+                  final group = results[index];
+                  final item = group.representative;
+                  return ListTile(
+                    onTap: () => onOpen(group),
+                    shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.all(
+                        Radius.circular(AppRadius.md),
+                      ),
+                    ),
+                    leading: SizedBox(
+                      width: 42,
+                      height: 54,
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.all(
+                          Radius.circular(AppRadius.sm),
                         ),
-                        leading: SizedBox(
-                          width: 42,
-                          height: 54,
-                          child: ClipRRect(
-                            borderRadius: const BorderRadius.all(
-                              Radius.circular(AppRadius.sm),
-                            ),
-                            child: CachedTmdbImage(
-                              url:
-                                  item.posterPath == null ||
-                                      item.posterPath!.isEmpty
-                                  ? null
-                                  : TmdbClient.posterUrl(item.posterPath!),
-                              cacheWidth: 100,
-                              placeholderIconSize: 20,
-                            ),
-                          ),
+                        child: CachedTmdbImage(
+                          url:
+                              item.posterPath == null ||
+                                  item.posterPath!.isEmpty
+                              ? null
+                              : TmdbClient.posterUrl(item.posterPath!),
+                          cacheWidth: 100,
+                          placeholderIconSize: 20,
                         ),
-                        title: Text(group.title),
-                        subtitle: Text(
-                          group.isSeries
-                              ? '${group.episodes.length} 集'
-                              : item.releaseDate ?? '本地影片',
-                        ),
-                        trailing: const Icon(Icons.chevron_right_rounded),
-                      );
-                    },
-                  ),
-          ),
-        ),
+                      ),
+                    ),
+                    title: Text(group.title),
+                    subtitle: Text(
+                      group.isSeries
+                          ? '${group.episodes.length} 集'
+                          : item.releaseDate ?? '本地影片',
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                  );
+                },
+              ),
       ),
     );
   }

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../core/media/media_group.dart';
 import '../../core/tmdb/tmdb_client.dart';
+import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
 import '../catalog/catalog_options.dart';
 import 'cached_tmdb_image.dart';
+import 'block_asset.dart';
 import 'hoverable.dart';
 import 'poster_placeholder.dart';
 
@@ -58,108 +60,128 @@ class PosterCard extends StatelessWidget {
                 child: AnimatedContainer(
                   duration: AppDurations.hover,
                   decoration: BoxDecoration(
+                    color: tokens.surface,
                     borderRadius: const BorderRadius.all(
                       Radius.circular(AppRadius.md),
                     ),
-                    boxShadow: hovered
-                        ? [
-                            BoxShadow(
-                              color: tokens.accent.withValues(alpha: 0.45),
-                              blurRadius: 18,
-                              spreadRadius: 1,
-                            ),
-                          ]
-                        : const [],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.all(
-                      Radius.circular(AppRadius.md),
+                    border: Border.all(
+                      color: hovered ? tokens.accent : tokens.cardBorder,
+                      width: hovered ? 3 : 2,
                     ),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        AnimatedScale(
-                          scale: hovered ? 1.06 : 1.0,
-                          duration: AppDurations.hover,
-                          curve: Curves.easeOutBack,
-                          child: _PosterImage(posterPath: rep.posterPath),
+                    boxShadow: [
+                      BoxShadow(
+                        color: tokens.accent.withValues(
+                          alpha: hovered ? 0.24 : 0.1,
                         ),
-                        AnimatedOpacity(
-                          opacity: hovered ? 1 : 0,
-                          duration: AppDurations.hover,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                                colors: [
-                                  Colors.black.withValues(alpha: 0.25),
-                                  Colors.black.withValues(alpha: 0.6),
-                                ],
-                              ),
-                            ),
-                            child: Center(
-                              child: IconButton.filled(
-                                tooltip: '播放',
-                                style: IconButton.styleFrom(
-                                  backgroundColor: tokens.accent,
-                                  foregroundColor: Colors.white,
+                        blurRadius: hovered ? 28 : 18,
+                        offset: Offset(0, hovered ? 10 : 6),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: EdgeInsets.all(hovered ? 3 : 2),
+                    child: ClipRRect(
+                      borderRadius: const BorderRadius.all(
+                        Radius.circular(AppRadius.sm),
+                      ),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          AnimatedScale(
+                            scale: hovered ? 1.04 : 1.0,
+                            duration: AppDurations.hover,
+                            curve: Curves.easeOutBack,
+                            child: _PosterImage(posterPath: rep.posterPath),
+                          ),
+                          AnimatedOpacity(
+                            opacity: hovered ? 1 : 0,
+                            duration: AppDurations.hover,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.black.withValues(alpha: 0.18),
+                                    Colors.black.withValues(alpha: 0.65),
+                                  ],
                                 ),
-                                onPressed: onPlay,
-                                icon: const Icon(Icons.play_arrow, size: 30),
+                              ),
+                              child: Center(
+                                child: IconButton.filled(
+                                  tooltip: '播放',
+                                  style: IconButton.styleFrom(
+                                    backgroundColor: tokens.accent,
+                                    foregroundColor: tokens.brickHighlight,
+                                    side: BorderSide(
+                                      color: tokens.brickYellow,
+                                      width: 3,
+                                    ),
+                                    shape: const RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.all(
+                                        Radius.circular(AppRadius.md),
+                                      ),
+                                    ),
+                                  ),
+                                  onPressed: onPlay,
+                                  icon: const BlockIcon(
+                                    AppAssets.play,
+                                    size: 34,
+                                  ),
+                                ),
                               ),
                             ),
                           ),
-                        ),
-                        if (rep.voteAverage != null && rep.voteAverage! > 0)
+                          if (rep.voteAverage != null && rep.voteAverage! > 0)
+                            Positioned(
+                              top: AppSpacing.sm,
+                              right: AppSpacing.sm,
+                              child: _RatingChip(score: rep.voteAverage!),
+                            ),
                           Positioned(
                             top: AppSpacing.sm,
-                            right: AppSpacing.sm,
-                            child: _RatingChip(score: rep.voteAverage!),
-                          ),
-                        Positioned(
-                          top: AppSpacing.sm,
-                          left: AppSpacing.sm,
-                          child: Column(
-                            children: [
-                              if (watched)
-                                const _CornerBadge(
-                                  child: Icon(
-                                    Icons.check,
-                                    size: 14,
-                                    color: Color(0xFF7CE38B),
+                            left: AppSpacing.sm,
+                            child: Column(
+                              children: [
+                                if (watched)
+                                  const _CornerBadge(
+                                    child: Icon(
+                                      Icons.check,
+                                      size: 14,
+                                      color: Color(0xFF7CE38B),
+                                    ),
                                   ),
-                                ),
-                              if (group.anyFavorite) ...[
-                                if (watched) const SizedBox(height: 4),
-                                const _CornerBadge(
-                                  child: Icon(
-                                    Icons.favorite,
-                                    size: 14,
-                                    color: Color(0xFFFF6B81),
+                                if (group.anyFavorite) ...[
+                                  if (watched) const SizedBox(height: 4),
+                                  const _CornerBadge(
+                                    child: Icon(
+                                      Icons.favorite,
+                                      size: 14,
+                                      color: Color(0xFFFF6B81),
+                                    ),
                                   ),
-                                ),
+                                ],
                               ],
-                            ],
-                          ),
-                        ),
-                        if (group.isSeries)
-                          Positioned(
-                            right: AppSpacing.sm,
-                            bottom: AppSpacing.sm + 6,
-                            child: _EpisodeCountChip(group: group),
-                          ),
-                        if (stripeValue != null)
-                          Positioned(
-                            left: 0,
-                            right: 0,
-                            bottom: 0,
-                            child: _ProgressStripe(
-                              progress: stripeValue,
-                              accent: tokens.accent,
                             ),
                           ),
-                      ],
+                          if (group.isSeries)
+                            Positioned(
+                              right: AppSpacing.sm,
+                              bottom: AppSpacing.sm + 6,
+                              child: _EpisodeCountChip(group: group),
+                            ),
+                          if (stripeValue != null)
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              bottom: 0,
+                              child: _ProgressStripe(
+                                progress: stripeValue,
+                                accent: tokens.accent,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
@@ -220,6 +242,7 @@ class _RatingChip extends StatelessWidget {
       child: Text(
         score.toStringAsFixed(1),
         style: const TextStyle(
+          fontFamily: AppFonts.pixelLatin,
           fontSize: 11,
           color: Colors.white,
           fontWeight: FontWeight.w800,

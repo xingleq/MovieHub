@@ -33,7 +33,7 @@ class _MemoryLibraryStore implements MediaLibraryStorage {
 
 void main() {
   testWidgets('首页卡片点击进详情，悬停播放按钮单独触发播放', (tester) async {
-    await tester.binding.setSurfaceSize(const Size(1280, 720));
+    await tester.binding.setSurfaceSize(const Size(1366, 768));
     addTearDown(() => tester.binding.setSurfaceSize(null));
     final item = _mediaItem();
     final settings = SettingsController();
@@ -50,6 +50,7 @@ void main() {
     await library.load();
     var detailOpens = 0;
     var plays = 0;
+    var favorites = 0;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -59,6 +60,7 @@ void main() {
           child: HomePage(
             onOpenItem: (_) => detailOpens++,
             onPlayItem: (_) => plays++,
+            onToggleFavorite: (_) => favorites++,
             onGoToSettings: () {},
           ),
         ),
@@ -72,7 +74,7 @@ void main() {
       ValueKey('home-play:${item.sourceId}:${item.path}'),
     );
     expect(poster, findsOneWidget);
-    expect(tester.getSize(poster).width, 168);
+    expect(tester.getSize(poster).width, 150);
 
     await tester.tap(poster);
     expect(detailOpens, 1);
@@ -88,6 +90,14 @@ void main() {
     await tester.tap(playButton);
     expect(detailOpens, 1);
     expect(plays, 1);
+
+    await tester.tap(find.byTooltip('收藏'));
+    expect(favorites, 1);
+    expect(detailOpens, 1);
+
+    await tester.binding.setSurfaceSize(const Size(1920, 1080));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
   });
 }
 

@@ -34,7 +34,7 @@ class SettingsController extends ChangeNotifier {
   var _backgroundImagePath = '';
   var _subtitlePreference = 'zh-hans';
   var _audioPreference = 'zh';
-  var _themeMode = 'dark';
+  var _themeMode = 'light';
   var _launchAtStartup = false;
   var _watchLimitMinutes = 45;
   var _breakMinutes = 10;

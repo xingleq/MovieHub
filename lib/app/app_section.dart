@@ -23,4 +23,14 @@ extension AppSectionPresentation on AppSection {
     AppSection.favorites => Icons.favorite_rounded,
     AppSection.settings => Icons.settings_rounded,
   };
+
+  Color get color => switch (this) {
+    AppSection.home => const Color(0xFF4A90E2),      // 蓝色
+    AppSection.anime => const Color(0xFFFF6B9D),     // 粉色
+    AppSection.movies => const Color(0xFFF5A623),    // 橙色
+    AppSection.tv => const Color(0xFF50E3C2),        // 青色
+    AppSection.gacha => const Color(0xFFBD10E0),     // 紫色
+    AppSection.favorites => const Color(0xFFFF4757), // 红色
+    AppSection.settings => const Color(0xFF7ED321),  // 绿色
+  };
 }

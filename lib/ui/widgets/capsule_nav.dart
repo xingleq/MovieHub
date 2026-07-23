@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:lottie/lottie.dart';
 
+import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
+import 'block_asset.dart';
 import 'hoverable.dart';
 
 class CapsuleNavItem {
@@ -122,22 +124,17 @@ class _Header extends StatelessWidget {
                 borderRadius: const BorderRadius.all(
                   Radius.circular(AppRadius.md),
                 ),
-                child: Image.asset(
-                  'assets/images/branding/moviehub-mascot.png',
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) =>
-                      const DecoratedBox(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: AppTokens.candyGradient,
-                          ),
-                        ),
-                        child: Icon(
-                          Icons.play_circle_fill,
-                          color: Colors.white,
-                          size: 22,
-                        ),
-                      ),
+                child: DecoratedBox(
+                  decoration: const BoxDecoration(
+                    gradient: LinearGradient(colors: AppTokens.candyGradient),
+                  ),
+                  child: Center(
+                    child: BlockIcon(
+                      AppAssets.play,
+                      size: 24,
+                      color: tokens.brickHighlight,
+                    ),
+                  ),
                 ),
               ),
             ),

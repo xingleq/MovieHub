@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'windows/windows_app_paths.dart';
+import 'windows/windows_cursor_service.dart';
 import 'windows/windows_session_events.dart';
 import 'windows/windows_shell_integration.dart';
 import 'windows/windows_startup_service.dart';
@@ -64,6 +65,17 @@ abstract interface class ShellIntegration {
   Future<void> revealInFileManager(String path);
 }
 
+/// Application-local mouse cursor styling.
+///
+/// Windows uses an application-local pixel pickaxe inside MovieHub. The player
+/// and non-client window edges remain native. TV/mobile implementations are
+/// intentionally no-op.
+abstract interface class CursorService {
+  bool get isSupported;
+
+  Future<void> setPixelStyleEnabled(bool enabled);
+}
+
 /// The platform seam: one bundle of per-OS service implementations, picked
 /// once per process. New platforms (Android/TV) add a branch in
 /// [forCurrentPlatform] with their own implementations — call sites never
@@ -75,13 +87,15 @@ class PlatformServices {
     required this.startup,
     required this.paths,
     required this.shell,
-  });
+    CursorService? cursor,
+  }) : cursor = cursor ?? const NoopCursorService();
 
   final WindowControls windowControls;
   final SessionEvents sessionEvents;
   final StartupService startup;
   final AppPaths paths;
   final ShellIntegration shell;
+  final CursorService cursor;
 
   /// Process-wide bundle, lazily created for the running OS. Tests may
   /// replace it wholesale.
@@ -95,6 +109,7 @@ class PlatformServices {
         startup: WindowsStartupService(),
         paths: WindowsAppPaths(),
         shell: WindowsShellIntegration(),
+        cursor: WindowsCursorService(),
       );
     }
     if (Platform.isMacOS) {
@@ -127,6 +142,16 @@ class PlatformServices {
       shell: shell,
     );
   }
+}
+
+class NoopCursorService implements CursorService {
+  const NoopCursorService();
+
+  @override
+  bool get isSupported => false;
+
+  @override
+  Future<void> setPixelStyleEnabled(bool enabled) async {}
 }
 
 /// Fallbacks for platforms without a dedicated implementation — the minimum

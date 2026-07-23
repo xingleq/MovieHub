@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
 import '../../core/tmdb/tmdb_client.dart';
+import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
+import 'block_asset.dart';
 import 'cached_tmdb_image.dart';
 import 'poster_placeholder.dart';
 
@@ -215,7 +217,7 @@ class _ManualMatchDialogState extends State<ManualMatchDialog> {
                         decoration: const InputDecoration(
                           hintText: '片名关键词，例如 数码宝贝 第一季 第2集',
                           isDense: true,
-                          prefixIcon: Icon(Icons.search, size: 20),
+                          prefixIcon: BlockIcon(AppAssets.search, size: 20),
                         ),
                       ),
                     ),
@@ -373,7 +375,7 @@ class _ManualMatchDialogState extends State<ManualMatchDialog> {
               _seasons = [];
             });
           },
-          icon: const Icon(Icons.arrow_back),
+          icon: const BlockIcon(AppAssets.back, size: 22),
           label: const Text('返回搜索结果'),
         ),
       ],

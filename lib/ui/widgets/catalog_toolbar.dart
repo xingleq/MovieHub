@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
 import '../catalog/catalog_options.dart';
+import 'block_asset.dart';
 
 /// Search + sort + poster-density controls above a catalog grid,
 /// styled per the design spec with rounded surfaces and candy accents.
@@ -37,13 +39,17 @@ class CatalogToolbar extends StatelessWidget {
               decoration: InputDecoration(
                 hintText: '搜索番剧、电影、演员',
                 isDense: true,
-                prefixIcon: const Icon(Icons.search, size: 20),
+                prefixIcon: const Center(
+                  widthFactor: 1,
+                  heightFactor: 1,
+                  child: BlockIcon(AppAssets.search, size: 28),
+                ),
                 suffixIcon: searchController.text.isEmpty
                     ? null
                     : IconButton(
                         tooltip: '清空搜索',
                         onPressed: onClearSearch,
-                        icon: const Icon(Icons.close, size: 18),
+                        icon: const BlockIcon(AppAssets.close, size: 24),
                       ),
               ),
             ),
@@ -66,14 +72,21 @@ class CatalogToolbar extends StatelessWidget {
             decoration: BoxDecoration(
               color: tokens.surface.withValues(alpha: 0.5),
               borderRadius: const BorderRadius.all(
-                Radius.circular(AppRadius.pill),
+                Radius.circular(AppRadius.md),
               ),
-              border: Border.all(color: tokens.cardBorder),
+              border: Border.all(color: tokens.cardBorder, width: 2),
+              boxShadow: [
+                BoxShadow(
+                  color: tokens.hardShadow,
+                  blurRadius: 0,
+                  offset: const Offset(3, 3),
+                ),
+              ],
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                Icon(Icons.sort, size: 18, color: tokens.textSecondary),
+                BlockIcon.fromMaterial(Icons.sort, size: 24),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
                   sortKey.label,
@@ -110,8 +123,8 @@ class _ViewToggle extends StatelessWidget {
       padding: const EdgeInsets.all(AppSpacing.xs),
       decoration: BoxDecoration(
         color: tokens.surface.withValues(alpha: 0.5),
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
-        border: Border.all(color: tokens.cardBorder),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
+        border: Border.all(color: tokens.cardBorder, width: 2),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -146,7 +159,6 @@ class _ViewToggleButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
-
     return GestureDetector(
       onTap: onTap,
       child: AnimatedContainer(
@@ -156,13 +168,15 @@ class _ViewToggleButton extends StatelessWidget {
           gradient: selected
               ? const LinearGradient(colors: AppTokens.candyGradient)
               : null,
-          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.pill)),
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
+          border: selected
+              ? Border.all(
+                  color: tokens.brickHighlight.withValues(alpha: 0.7),
+                  width: 2,
+                )
+              : null,
         ),
-        child: Icon(
-          icon,
-          size: 18,
-          color: selected ? Colors.white : tokens.textSecondary,
-        ),
+        child: BlockIcon.fromMaterial(icon, size: 24),
       ),
     );
   }

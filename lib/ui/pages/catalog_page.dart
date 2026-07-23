@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 
 import '../../app/library_scope.dart';
+import '../../theme/app_assets.dart';
 import '../../core/media/media_group.dart';
 import '../../theme/app_tokens.dart';
 import '../catalog/catalog_options.dart';
+import '../widgets/block_asset.dart';
 import '../widgets/catalog_toolbar.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/poster_grid.dart';
@@ -77,6 +79,12 @@ class _CatalogPageState extends State<CatalogPage> {
       sectionGroups.where((group) => _matchesQuery(group, query)).toList(),
       _sortKey,
     );
+    final titleAsset = switch (widget.title) {
+      '动画' || '动画乐园' => AppAssets.animation,
+      '电影' => AppAssets.movie,
+      '电视剧' => AppAssets.tv,
+      _ => AppAssets.favorite,
+    };
 
     return Padding(
       padding: const EdgeInsets.fromLTRB(
@@ -88,6 +96,17 @@ class _CatalogPageState extends State<CatalogPage> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Row(
+            children: [
+              BlockIcon(titleAsset, size: 48),
+              const SizedBox(width: AppSpacing.md),
+              Text(
+                widget.title,
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
           CatalogToolbar(
             searchController: _searchController,
             sortKey: _sortKey,
@@ -101,6 +120,9 @@ class _CatalogPageState extends State<CatalogPage> {
             child: visibleGroups.isEmpty
                 ? EmptyState(
                     icon: Icons.movie_filter_outlined,
+                    illustrationAsset: widget.title.contains('收藏')
+                        ? AppAssets.hat
+                        : AppAssets.mascot,
                     title: '没有影片',
                     message: query.isEmpty ? widget.emptyMessage : '换个关键词试试。',
                   )

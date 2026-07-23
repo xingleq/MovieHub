@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../core/media/media_item.dart';
 import '../../core/tmdb/tmdb_client.dart';
+import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
 import '../format/formatters.dart';
+import 'block_asset.dart';
 import 'cached_tmdb_image.dart';
 import 'hoverable.dart';
 import 'poster_placeholder.dart';
@@ -72,7 +74,7 @@ class ContinueWatchingCard extends StatelessWidget {
                           foregroundColor: Colors.white,
                         ),
                         onPressed: onPlay,
-                        icon: const Icon(Icons.play_arrow, size: 30),
+                        icon: const BlockIcon(AppAssets.play, size: 30),
                       ),
                     ),
                   ),

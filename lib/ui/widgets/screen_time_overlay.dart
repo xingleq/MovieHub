@@ -1,9 +1,9 @@
-import 'dart:ui' show ImageFilter;
-
 import 'package:flutter/material.dart';
 
 import '../../app/settings_controller.dart';
+import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
+import 'block_asset.dart';
 
 /// Full-window forced-break lock, shown above every route (mounted in
 /// MaterialApp.builder). Carries its own [Material]: at that position in the
@@ -31,73 +31,64 @@ class ScreenTimeOverlay extends StatelessWidget {
         .remainder(60)
         .toString()
         .padLeft(2, '0');
+    final tokens = AppTokens.of(context);
 
     return Positioned.fill(
       child: Material(
         type: MaterialType.transparency,
-        child: ClipRect(
-          // Frosted daylight wash over the whole app, per the design mock:
-          // the content stays visible but bright, blurred and untouchable.
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
-            child: DecoratedBox(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [Color(0xB8F3EDFF), Color(0xC2E4D9FF)],
-                ),
-              ),
-              child: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: tokens.scrim,
+            backgroundBlendMode: BlendMode.srcOver,
+          ),
+          child: Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Stack(
+                  clipBehavior: Clip.none,
+                  alignment: Alignment.topCenter,
                   children: [
-                    Stack(
-                      clipBehavior: Clip.none,
-                      alignment: Alignment.topCenter,
-                      children: [
-                        const Positioned(
-                          top: -26,
-                          right: 26,
-                          child: Icon(
-                            Icons.nightlight_round,
-                            color: Color(0xFFFFD97A),
-                            size: 44,
-                          ),
-                        ),
-                        const Positioned(
-                          top: -6,
-                          left: 10,
-                          child: Icon(
-                            Icons.auto_awesome,
-                            color: Color(0xFFB79BFF),
-                            size: 28,
-                          ),
-                        ),
-                        _BreakCard(
-                          dailyLimitReached: dailyLimitReached,
-                          dailyLimit: settings.todayDailyWatchLimit,
-                          hours: hours,
-                          minutes: minutes,
-                          seconds: seconds,
-                          onClose: settings.dismissBreakOverlay,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
-                    Text(
-                      dailyLimitReached
-                          ? '今天先好好休息，明天再继续探索吧！✨'
-                          : '自律一点，才能更好地遇见喜欢的世界哦！✨',
-                      style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Color(0xFF7A6A9E),
+                    Positioned(
+                      top: -26,
+                      right: 26,
+                      child: Icon(
+                        Icons.nightlight_round,
+                        color: tokens.brickYellow,
+                        size: 44,
                       ),
+                    ),
+                    Positioned(
+                      top: -6,
+                      left: 10,
+                      child: Icon(
+                        Icons.auto_awesome,
+                        color: tokens.brickPurple,
+                        size: 28,
+                      ),
+                    ),
+                    _BreakCard(
+                      dailyLimitReached: dailyLimitReached,
+                      dailyLimit: settings.todayDailyWatchLimit,
+                      hours: hours,
+                      minutes: minutes,
+                      seconds: seconds,
+                      onClose: settings.dismissBreakOverlay,
                     ),
                   ],
                 ),
-              ),
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  dailyLimitReached
+                      ? '今天先好好休息，明天再继续探索吧！✨'
+                      : '自律一点，才能更好地遇见喜欢的世界哦！✨',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w800,
+                    color: tokens.textPrimary,
+                  ),
+                ),
+              ],
             ),
           ),
         ),
@@ -125,53 +116,70 @@ class _BreakCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
     return Container(
       width: 520,
       margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xl),
       padding: const EdgeInsets.fromLTRB(40, 44, 40, 32),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
-          colors: [Color(0xFFFFFFFF), Color(0xFFF4EDFF)],
+          colors: [tokens.surfaceVariant, tokens.surface],
         ),
-        borderRadius: const BorderRadius.all(Radius.circular(36)),
-        border: Border.all(color: Colors.white, width: 2),
+        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
+        border: Border.all(color: tokens.brickYellow, width: 4),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF9B7BFF).withValues(alpha: 0.35),
-            blurRadius: 40,
-            spreadRadius: 2,
-            offset: const Offset(0, 16),
+            color: tokens.accent.withValues(alpha: 0.24),
+            blurRadius: 28,
+            offset: const Offset(0, 10),
           ),
         ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Container(
-            width: 72,
-            height: 72,
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              color: const Color(0xFFEAD8FF),
-              borderRadius: const BorderRadius.all(Radius.circular(26)),
-              border: Border.all(color: Colors.white, width: 3),
-            ),
-            child: Icon(
-              dailyLimitReached ? Icons.bedtime_rounded : Icons.alarm_rounded,
-              color: Color(0xFFA06BFF),
-              size: 40,
-            ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const BlockIllustration(
+                asset: AppAssets.blockCloud,
+                size: 96,
+                semanticLabel: '休息云朵',
+              ),
+              const SizedBox(width: AppSpacing.lg),
+              Container(
+                width: 72,
+                height: 72,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: tokens.brickPurple,
+                  borderRadius: const BorderRadius.all(
+                    Radius.circular(AppRadius.md),
+                  ),
+                  border: Border.all(color: tokens.brickHighlight, width: 3),
+                  boxShadow: [
+                    BoxShadow(
+                      color: tokens.hardShadow,
+                      blurRadius: 0,
+                      offset: const Offset(5, 5),
+                    ),
+                  ],
+                ),
+                child: const BlockIcon(AppAssets.rest, size: 52),
+              ),
+            ],
           ),
           const SizedBox(height: AppSpacing.lg),
           Text(
             dailyLimitReached ? '今天的观看时间到啦！' : '时间到啦，休息一下吧！',
             textAlign: TextAlign.center,
             style: TextStyle(
+              fontFamily: AppFonts.pixelChinese,
               fontSize: 22,
               fontWeight: FontWeight.w900,
-              color: Color(0xFF7D5BE8),
+              color: tokens.textPrimary,
             ),
           ),
           const SizedBox(height: AppSpacing.sm),
@@ -180,7 +188,7 @@ class _BreakCard extends StatelessWidget {
                 ? '今日 $dailyLimit 次观看机会已全部使用完。'
                 : '本轮观看时间已达上限，请稍作休息哦～',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: Color(0xFF8C82A6)),
+            style: TextStyle(fontSize: 14, color: tokens.textSecondary),
           ),
           if (!dailyLimitReached) ...[
             const SizedBox(height: AppSpacing.xl),
@@ -202,24 +210,23 @@ class _BreakCard extends StatelessWidget {
               horizontal: AppSpacing.xl,
               vertical: AppSpacing.sm + 2,
             ),
-            decoration: const BoxDecoration(
-              color: Color(0xFFE9DDFF),
-              borderRadius: BorderRadius.all(Radius.circular(AppRadius.pill)),
+            decoration: BoxDecoration(
+              color: tokens.surfaceVariant,
+              borderRadius: const BorderRadius.all(
+                Radius.circular(AppRadius.md),
+              ),
+              border: Border.all(color: tokens.cardBorder, width: 2),
             ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Icon(
-                  Icons.lock_outline,
-                  size: 16,
-                  color: Color(0xFF8F66F2),
-                ),
+                const BlockIcon(AppAssets.lock, size: 24),
                 const SizedBox(width: AppSpacing.xs),
                 Text(
                   dailyLimitReached ? '今日观看已结束' : '休息结束后自动解锁',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 13,
-                    color: Color(0xFF8F66F2),
+                    color: tokens.textPrimary,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -229,7 +236,7 @@ class _BreakCard extends StatelessWidget {
           const SizedBox(height: AppSpacing.md),
           TextButton.icon(
             onPressed: onClose,
-            icon: const Icon(Icons.close_rounded),
+            icon: const BlockIcon(AppAssets.close, size: 26),
             label: const Text('关闭提示'),
           ),
         ],
@@ -246,24 +253,29 @@ class _TimePart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
     return Column(
       children: [
         Text(
           value,
-          style: const TextStyle(
+          style: TextStyle(
+            fontFamily: AppFonts.pixelLatin,
             fontSize: 44,
             height: 1,
             fontWeight: FontWeight.w900,
-            color: Color(0xFF9A73FF),
+            color: tokens.brickYellow,
+            shadows: [
+              Shadow(color: tokens.hardShadow, offset: const Offset(3, 3)),
+            ],
           ),
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(
           label,
-          style: const TextStyle(
+          style: TextStyle(
             fontSize: 12,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF9A73FF),
+            color: tokens.textSecondary,
           ),
         ),
       ],
@@ -276,15 +288,15 @@ class _TimeSeparator extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.symmetric(horizontal: 14),
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 14),
       child: Text(
         ':',
         style: TextStyle(
           fontSize: 40,
           height: 1.1,
           fontWeight: FontWeight.w900,
-          color: Color(0xFFB18EFF),
+          color: AppTokens.of(context).brickYellow,
         ),
       ),
     );

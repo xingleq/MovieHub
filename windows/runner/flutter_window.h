@@ -24,6 +24,11 @@ class FlutterWindow : public Win32Window {
                          LPARAM const lparam) noexcept override;
 
  private:
+  static LRESULT CALLBACK FlutterViewWindowProc(HWND window, UINT message,
+                                                WPARAM wparam,
+                                                LPARAM lparam) noexcept;
+  bool ApplyPixelCursor(LPARAM const lparam) noexcept;
+
   // The project to run.
   flutter::DartProject project_;
 
@@ -34,6 +39,17 @@ class FlutterWindow : public Win32Window {
   // can pause when the screen locks.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
       session_channel_;
+
+  // App-local pixel cursors. These never replace the user's system cursors.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      cursor_channel_;
+  HCURSOR pixel_pickaxe_cursor_ = nullptr;
+  bool pixel_cursor_enabled_ = false;
+
+  // Flutter's render view is a child HWND and owns its cursor messages. Keep a
+  // narrow subclass hook so the app cursor is applied after Flutter's handler.
+  HWND flutter_view_window_ = nullptr;
+  WNDPROC original_flutter_view_proc_ = nullptr;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

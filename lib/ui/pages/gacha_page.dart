@@ -6,7 +6,9 @@ import 'package:flutter/material.dart';
 import '../../core/gacha/gacha_card.dart';
 import '../../core/gacha/gacha_catalog.dart';
 import '../../core/gacha/gacha_store.dart';
+import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
+import '../widgets/block_asset.dart';
 import '../widgets/jelly_button.dart';
 import '../widgets/section_header.dart';
 
@@ -326,11 +328,12 @@ class _DrawInfo extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          '今日抽卡',
-          style: Theme.of(
-            context,
-          ).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w800),
+        Row(
+          children: [
+            const BlockIcon(AppAssets.draw, size: 52),
+            const SizedBox(width: AppSpacing.md),
+            Text('今日抽卡', style: Theme.of(context).textTheme.headlineMedium),
+          ],
         ),
         const SizedBox(height: AppSpacing.sm),
         Text(status, style: TextStyle(color: tokens.textSecondary)),
@@ -339,12 +342,9 @@ class _DrawInfo extends StatelessWidget {
           spacing: AppSpacing.sm,
           runSpacing: AppSpacing.sm,
           children: [
+            _MiniBadge(icon: AppAssets.reward, label: '额外次数 $bonusDraws'),
             _MiniBadge(
-              icon: Icons.confirmation_num_outlined,
-              label: '额外次数 $bonusDraws',
-            ),
-            _MiniBadge(
-              icon: Icons.workspace_premium_outlined,
+              icon: AppAssets.star,
               label: '距 SSR 保底 $remainingToSsr 抽',
             ),
           ],
@@ -474,6 +474,7 @@ class _QuestionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
     return Container(
       width: 260,
       height: 360,
@@ -492,14 +493,24 @@ class _QuestionCard extends StatelessWidget {
           ),
         ],
       ),
-      child: const Center(
-        child: Text(
-          '?',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 112,
-            fontWeight: FontWeight.w900,
-          ),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const BlockIcon(AppAssets.treasure, size: 156),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              '?',
+              style: TextStyle(
+                color: tokens.brickHighlight,
+                fontFamily: AppFonts.pixelLatin,
+                fontSize: 48,
+                shadows: [
+                  Shadow(color: tokens.hardShadow, offset: const Offset(3, 3)),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -719,11 +730,17 @@ class _EmptyPack extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(Icons.style_outlined, color: tokens.accent),
-          const SizedBox(width: AppSpacing.md),
-          Text(
-            '还没有卡片，点击上方问号卡开始抽取。',
-            style: TextStyle(color: tokens.textSecondary),
+          const BlockIllustration(
+            asset: AppAssets.treasureBox,
+            size: 120,
+            semanticLabel: '积木宝箱',
+          ),
+          const SizedBox(width: AppSpacing.lg),
+          Expanded(
+            child: Text(
+              '还没有卡片，点击上方问号卡开始抽取。',
+              style: TextStyle(color: tokens.textSecondary),
+            ),
           ),
         ],
       ),
@@ -750,7 +767,7 @@ class _StatusBanner extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 18, color: tokens.accent),
+          BlockIcon.fromMaterial(icon, size: 26),
           const SizedBox(width: AppSpacing.sm),
           Flexible(
             child: Text(message, style: TextStyle(color: tokens.textPrimary)),
@@ -764,7 +781,7 @@ class _StatusBanner extends StatelessWidget {
 class _MiniBadge extends StatelessWidget {
   const _MiniBadge({required this.icon, required this.label});
 
-  final IconData icon;
+  final String icon;
   final String label;
 
   @override
@@ -783,7 +800,7 @@ class _MiniBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 14, color: tokens.accent),
+          BlockIcon(icon, size: 22),
           const SizedBox(width: AppSpacing.xs),
           Text(
             label,

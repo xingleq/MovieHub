@@ -11,13 +11,14 @@ abstract final class AppSpacing {
   static const double xxl = 32;
 }
 
-/// Invariant corner-radius scale, per the design spec (12 小 / 16 中 / 24 大).
+/// Blocky corner-radius scale. Small radii keep controls friendly without
+/// losing the hard-edged pixel-brick silhouette.
 abstract final class AppRadius {
   static const double sm = 8;
   static const double md = 12;
-  static const double lg = 16;
-  static const double xl = 24;
-  static const double pill = 999;
+  static const double lg = 18;
+  static const double xl = 26;
+  static const double pill = 12;
 }
 
 /// Invariant animation durations.
@@ -40,6 +41,13 @@ class AppTokens extends ThemeExtension<AppTokens> {
     required this.textSecondary,
     required this.scrim,
     required this.cardBorder,
+    required this.brickRed,
+    required this.brickYellow,
+    required this.brickGreen,
+    required this.brickPurple,
+    required this.brickHighlight,
+    required this.hardShadow,
+    required this.pixelGrid,
   });
 
   final Color background;
@@ -50,39 +58,59 @@ class AppTokens extends ThemeExtension<AppTokens> {
   final Color textSecondary;
   final Color scrim;
   final Color cardBorder;
+  final Color brickRed;
+  final Color brickYellow;
+  final Color brickGreen;
+  final Color brickPurple;
+  final Color brickHighlight;
+  final Color hardShadow;
+  final Color pixelGrid;
 
-  /// Sky-blue palette for the young adventure theme: bright blue actions,
-  /// warm yellow highlights and calm blue-grey surfaces.
+  /// Night variant of the same toy-brick system.
   static const AppTokens dark = AppTokens(
-    background: Color(0xFF0B1628),
-    surface: Color(0xFF12223B),
-    surfaceVariant: Color(0xFF193154),
-    accent: Color(0xFF48A8FF),
-    textPrimary: Color(0xFFF3F8FF),
-    textSecondary: Color(0xFFA9C4E8),
-    scrim: Color(0xCC07101F),
-    cardBorder: Color(0xFF27466F),
+    background: Color(0xFF14243A),
+    surface: Color(0xFF1E2F48),
+    surfaceVariant: Color(0xFF2A4261),
+    accent: Color(0xFF2D78FF),
+    textPrimary: Color(0xFFFFFFFF),
+    textSecondary: Color(0xFFC8CFD8),
+    scrim: Color(0xD914243A),
+    cardBorder: Color(0xFF54749A),
+    brickRed: Color(0xFFFF5A4F),
+    brickYellow: Color(0xFFFFC629),
+    brickGreen: Color(0xFF2DBE60),
+    brickPurple: Color(0xFF8454E8),
+    brickHighlight: Color(0xFFFFFFFF),
+    hardShadow: Color(0xFF0C315F),
+    pixelGrid: Color(0xFF294665),
   );
 
   static const AppTokens light = AppTokens(
-    background: Color(0xFFF3F9FF),
+    background: Color(0xFFEFF7FF),
     surface: Color(0xFFFFFFFF),
-    surfaceVariant: Color(0xFFE8F4FF),
-    accent: Color(0xFF318CE7),
-    textPrimary: Color(0xFF17324F),
-    textSecondary: Color(0xFF66809C),
-    scrim: Color(0xCCF3F9FF),
-    cardBorder: Color(0xFFCFE4F7),
+    surfaceVariant: Color(0xFFF4F9FF),
+    accent: Color(0xFF2D78FF),
+    textPrimary: Color(0xFF1E2A3A),
+    textSecondary: Color(0xFF6B7280),
+    scrim: Color(0x991E2A3A),
+    cardBorder: Color(0xFFD8E8F8),
+    brickRed: Color(0xFFFF5A4F),
+    brickYellow: Color(0xFFFFC629),
+    brickGreen: Color(0xFF2DBE60),
+    brickPurple: Color(0xFF8454E8),
+    brickHighlight: Color(0xFFFFFFFF),
+    hardShadow: Color(0xFF174A8B),
+    pixelGrid: Color(0xFFDDEBFA),
   );
 
-  /// Signature sky gradient for buttons, selected tabs and navigation.
+  /// Signature blue brick gradient for primary actions.
   static const List<Color> candyGradient = [
-    Color(0xFF57C7FF),
-    Color(0xFF3975E8),
+    Color(0xFF2D78FF),
+    Color(0xFF28BFD6),
   ];
 
   /// Warm yellow highlight for ratings, stars and small achievements.
-  static const Color cyanAccent = Color(0xFFFFC44D);
+  static const Color cyanAccent = Color(0xFF28BFD6);
 
   /// Reads the tokens from [context], falling back to [dark] so a missing
   /// extension can never null-crash.
@@ -100,6 +128,13 @@ class AppTokens extends ThemeExtension<AppTokens> {
     Color? textSecondary,
     Color? scrim,
     Color? cardBorder,
+    Color? brickRed,
+    Color? brickYellow,
+    Color? brickGreen,
+    Color? brickPurple,
+    Color? brickHighlight,
+    Color? hardShadow,
+    Color? pixelGrid,
   }) {
     return AppTokens(
       background: background ?? this.background,
@@ -110,6 +145,13 @@ class AppTokens extends ThemeExtension<AppTokens> {
       textSecondary: textSecondary ?? this.textSecondary,
       scrim: scrim ?? this.scrim,
       cardBorder: cardBorder ?? this.cardBorder,
+      brickRed: brickRed ?? this.brickRed,
+      brickYellow: brickYellow ?? this.brickYellow,
+      brickGreen: brickGreen ?? this.brickGreen,
+      brickPurple: brickPurple ?? this.brickPurple,
+      brickHighlight: brickHighlight ?? this.brickHighlight,
+      hardShadow: hardShadow ?? this.hardShadow,
+      pixelGrid: pixelGrid ?? this.pixelGrid,
     );
   }
 
@@ -127,6 +169,13 @@ class AppTokens extends ThemeExtension<AppTokens> {
       textSecondary: Color.lerp(textSecondary, other.textSecondary, t)!,
       scrim: Color.lerp(scrim, other.scrim, t)!,
       cardBorder: Color.lerp(cardBorder, other.cardBorder, t)!,
+      brickRed: Color.lerp(brickRed, other.brickRed, t)!,
+      brickYellow: Color.lerp(brickYellow, other.brickYellow, t)!,
+      brickGreen: Color.lerp(brickGreen, other.brickGreen, t)!,
+      brickPurple: Color.lerp(brickPurple, other.brickPurple, t)!,
+      brickHighlight: Color.lerp(brickHighlight, other.brickHighlight, t)!,
+      hardShadow: Color.lerp(hardShadow, other.hardShadow, t)!,
+      pixelGrid: Color.lerp(pixelGrid, other.pixelGrid, t)!,
     );
   }
 }

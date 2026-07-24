@@ -562,7 +562,6 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       HomePage(
         onOpenItem: _openItem,
         onPlayItem: (item) => unawaited(_openPlayer(item)),
-        onToggleFavorite: (item) => unawaited(_library.toggleFavorite(item)),
         onGoToSettings: () {
           unawaited(_requestSection(AppSection.settings));
         },

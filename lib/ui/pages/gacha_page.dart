@@ -158,11 +158,20 @@ class _GachaPageState extends State<GachaPage> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
-    final owned = [
-      for (final card in localGachaCatalog)
-        if ((_ownedCounts[card.id] ?? 0) > 0)
-          OwnedGachaCard(card: card, count: _ownedCounts[card.id]!),
-    ];
+    final owned =
+        [
+          for (final card in localGachaCatalog)
+            if ((_ownedCounts[card.id] ?? 0) > 0)
+              OwnedGachaCard(card: card, count: _ownedCounts[card.id]!),
+        ]..sort((left, right) {
+          final rarityOrder = right.card.rarity.index.compareTo(
+            left.card.rarity.index,
+          );
+          if (rarityOrder != 0) {
+            return rarityOrder;
+          }
+          return left.card.name.compareTo(right.card.name);
+        });
 
     return CustomScrollView(
       slivers: [
@@ -578,6 +587,7 @@ class _CardFace extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
     final actual = card ?? localGachaCatalog.first;
     final rarityColor = _rarityColor(actual.rarity);
     return InkWell(
@@ -586,21 +596,50 @@ class _CardFace extends StatelessWidget {
       child: Container(
         width: compact ? 170 : 260,
         height: compact ? 236 : 360,
+        clipBehavior: Clip.antiAlias,
+        padding: EdgeInsets.all(compact ? 5 : 7),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.5),
-          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
-          border: Border.all(color: rarityColor, width: compact ? 2 : 3),
+          color: tokens.surface,
+          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
+          border: Border.all(color: rarityColor, width: compact ? 3 : 4),
           boxShadow: [
             BoxShadow(
-              color: rarityColor.withValues(alpha: 0.22),
-              blurRadius: compact ? 12 : 24,
-              offset: Offset(0, compact ? 6 : 14),
+              color: tokens.hardShadow.withValues(alpha: 0.7),
+              blurRadius: 0,
+              offset: Offset(0, compact ? 5 : 8),
             ),
           ],
         ),
-        child: ClipRRect(
-          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
-          child: _CardArtwork(card: actual, rarityColor: rarityColor),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            ClipRRect(
+              borderRadius: const BorderRadius.all(
+                Radius.circular(AppRadius.sm),
+              ),
+              child: _CardArtwork(card: actual, rarityColor: rarityColor),
+            ),
+            _PixelStud(
+              alignment: Alignment.topLeft,
+              color: tokens.brickHighlight,
+              compact: compact,
+            ),
+            _PixelStud(
+              alignment: Alignment.topRight,
+              color: tokens.brickHighlight,
+              compact: compact,
+            ),
+            _PixelStud(
+              alignment: Alignment.bottomLeft,
+              color: rarityColor,
+              compact: compact,
+            ),
+            _PixelStud(
+              alignment: Alignment.bottomRight,
+              color: rarityColor,
+              compact: compact,
+            ),
+          ],
         ),
       ),
     );
@@ -675,6 +714,37 @@ class _CardArtwork extends StatelessWidget {
               errorBuilder: (context, error, stackTrace) =>
                   _FallbackArtwork(card: card),
             ),
+    );
+  }
+}
+
+class _PixelStud extends StatelessWidget {
+  const _PixelStud({
+    required this.alignment,
+    required this.color,
+    required this.compact,
+  });
+
+  final Alignment alignment;
+  final Color color;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = compact ? 8.0 : 12.0;
+    final tokens = AppTokens.of(context);
+    return Align(
+      alignment: alignment,
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          color: color,
+          border: Border.all(
+            color: tokens.brickHighlight.withValues(alpha: 0.75),
+          ),
+        ),
+      ),
     );
   }
 }

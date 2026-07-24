@@ -71,6 +71,13 @@ void main() {
       find.widgetWithText(FilledButton, '添加目录'),
     );
     expect(firstAction.autofocus, isTrue);
+    final libraryTop = tester.getTopLeft(find.text('影视目录')).dy;
+
+    await tester.tap(find.text('关于'));
+    await tester.pumpAndSettle();
+
+    final aboutTop = tester.getTopLeft(find.text('MovieHub')).dy;
+    expect(aboutTop, closeTo(libraryTop, 1));
 
     await pumpAt(const Size(760, 900));
 

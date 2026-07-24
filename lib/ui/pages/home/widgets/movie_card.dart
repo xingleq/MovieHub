@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 
 import '../../../../core/media/media_item.dart';
 import '../../../../core/tmdb/tmdb_client.dart';
-import '../../../../theme/app_assets.dart';
 import '../../../../theme/app_tokens.dart';
 import '../../../widgets/cached_tmdb_image.dart';
+import '../../../widgets/poster_play_button.dart';
 import 'focus_scale.dart';
 
 class MovieCard extends StatefulWidget {
@@ -14,7 +14,6 @@ class MovieCard extends StatefulWidget {
     required this.onFocused,
     required this.onPlay,
     required this.onOpenDetails,
-    required this.onToggleFavorite,
     this.autofocus = false,
   });
 
@@ -25,7 +24,6 @@ class MovieCard extends StatefulWidget {
   final VoidCallback onFocused;
   final VoidCallback onPlay;
   final VoidCallback onOpenDetails;
-  final VoidCallback onToggleFavorite;
   final bool autofocus;
 
   @override
@@ -63,7 +61,9 @@ class _MovieCardState extends State<MovieCard> {
                   child: GestureDetector(
                     onTap: widget.onOpenDetails,
                     child: Container(
-                      key: ValueKey('home-poster:${widget.item.sourceId}:${widget.item.path}'),
+                      key: ValueKey(
+                        'home-poster:${widget.item.sourceId}:${widget.item.path}',
+                      ),
                       width: MovieCard.posterWidth,
                       height: MovieCard.posterHeight,
                       padding: const EdgeInsets.all(6),
@@ -101,7 +101,9 @@ class _MovieCardState extends State<MovieCard> {
                                   widget.item.posterPath == null ||
                                       widget.item.posterPath!.isEmpty
                                   ? null
-                                  : TmdbClient.posterUrl(widget.item.posterPath!),
+                                  : TmdbClient.posterUrl(
+                                      widget.item.posterPath!,
+                                    ),
                               cacheWidth: 360,
                             ),
                             if (widget.item.playbackProgress > 0)
@@ -127,31 +129,11 @@ class _MovieCardState extends State<MovieCard> {
                               Container(
                                 color: Colors.black.withValues(alpha: 0.5),
                                 child: Center(
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        key: ValueKey('home-play:${widget.item.sourceId}:${widget.item.path}'),
-                                        icon: Icon(
-                                          Icons.play_circle_outline,
-                                          color: tokens.brickHighlight,
-                                          size: 48,
-                                        ),
-                                        iconSize: 48,
-                                        onPressed: widget.onPlay,
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      IconButton(
-                                        icon: Icon(
-                                          widget.item.favorite
-                                              ? Icons.favorite
-                                              : Icons.favorite_border,
-                                          color: tokens.brickHighlight,
-                                        ),
-                                        tooltip: '收藏',
-                                        onPressed: widget.onToggleFavorite,
-                                      ),
-                                    ],
+                                  child: PosterPlayButton(
+                                    key: ValueKey(
+                                      'home-play:${widget.item.sourceId}:${widget.item.path}',
+                                    ),
+                                    onPressed: widget.onPlay,
                                   ),
                                 ),
                               ),
@@ -170,7 +152,9 @@ class _MovieCardState extends State<MovieCard> {
                   opacity: highlighted ? 1 : 0.88,
                   duration: AppDurations.hover,
                   child: Text(
-                    widget.item.tmdbTitle ?? widget.item.seriesTitle ?? widget.item.title,
+                    widget.item.tmdbTitle ??
+                        widget.item.seriesTitle ??
+                        widget.item.title,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     textAlign: TextAlign.center,

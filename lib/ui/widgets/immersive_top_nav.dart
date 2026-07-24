@@ -306,11 +306,7 @@ class _MovieHubWordmark extends StatelessWidget {
             TextSpan(
               text: _letters[index],
               style: TextStyle(
-                color:
-                    sections[index < sections.length
-                            ? index
-                            : sections.length - 1]
-                        .color,
+                color: sections[index % sections.length].color,
                 shadows: [shadow],
               ),
             ),

@@ -17,7 +17,11 @@ ThemeData _buildTheme(AppTokens tokens, Brightness brightness) {
     brightness: brightness,
   ).copyWith(surface: tokens.surface);
 
-  final base = ThemeData(useMaterial3: true, brightness: brightness);
+  final base = ThemeData(
+    useMaterial3: true,
+    brightness: brightness,
+    fontFamily: AppFonts.pixelChinese,
+  );
   final blockShape = RoundedRectangleBorder(
     borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
   );
@@ -109,7 +113,11 @@ ThemeData _buildTheme(AppTokens tokens, Brightness brightness) {
       ),
     ),
     textTheme: base.textTheme
-        .apply(bodyColor: tokens.textPrimary, displayColor: tokens.textPrimary)
+        .apply(
+          fontFamily: AppFonts.pixelChinese,
+          bodyColor: tokens.textPrimary,
+          displayColor: tokens.textPrimary,
+        )
         .copyWith(
           displaySmall: base.textTheme.displaySmall?.copyWith(
             color: tokens.textPrimary,

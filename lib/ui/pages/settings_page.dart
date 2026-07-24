@@ -105,6 +105,16 @@ class _SettingsPageState extends State<SettingsPage> {
                       duration: AppDurations.fade,
                       switchInCurve: Curves.easeOutCubic,
                       switchOutCurve: Curves.easeInCubic,
+                      layoutBuilder: (currentChild, previousChildren) {
+                        return Stack(
+                          fit: StackFit.expand,
+                          alignment: Alignment.topCenter,
+                          children: [
+                            ...previousChildren,
+                            if (currentChild != null) currentChild,
+                          ],
+                        );
+                      },
                       child: SingleChildScrollView(
                         key: ValueKey(_category),
                         padding: const EdgeInsets.only(
@@ -554,24 +564,28 @@ class _LibraryTab extends StatelessWidget {
         _SettingsCard(
           title: '扫描状态',
           subtitle: '扫描会保留已刮削信息、收藏和播放进度。',
-          child: Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
+          child: _StatusTileGrid(
             children: [
               _StatusTile(
                 icon: Icons.video_library_outlined,
                 label: '视频文件',
                 value: '${controller.items.length}',
+                tone: _StatusTileTone.blue,
+                width: double.infinity,
               ),
               _StatusTile(
                 icon: Icons.favorite_outline,
                 label: '收藏',
                 value: '${controller.favoriteCount}',
+                tone: _StatusTileTone.red,
+                width: double.infinity,
               ),
               _StatusTile(
                 icon: Icons.warning_amber_outlined,
                 label: '跳过路径',
                 value: '${controller.skippedPaths.length}',
+                tone: _StatusTileTone.yellow,
+                width: double.infinity,
               ),
             ],
           ),
@@ -801,6 +815,7 @@ class _PlaybackTab extends StatelessWidget {
                     : Icons.lock_open_outlined,
                 label: '密码状态',
                 value: settings.hasManagementPassword ? '已设置' : '未设置',
+                tone: _StatusTileTone.purple,
               ),
               FilledButton.tonalIcon(
                 onPressed: () =>
@@ -817,30 +832,36 @@ class _PlaybackTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Wrap(
-                spacing: AppSpacing.md,
-                runSpacing: AppSpacing.md,
+              _StatusTileGrid(
                 children: [
                   _StatusTile(
                     icon: Icons.timer_outlined,
                     label: '单次观看',
                     value: '${settings.watchLimitMinutes} 分钟',
+                    tone: _StatusTileTone.blue,
+                    width: double.infinity,
                   ),
                   _StatusTile(
                     icon: Icons.self_improvement,
                     label: '休息时长',
                     value: '${settings.breakMinutes} 分钟',
+                    tone: _StatusTileTone.green,
+                    width: double.infinity,
                   ),
                   _StatusTile(
                     icon: Icons.event_available_outlined,
                     label: '今日已完成',
                     value:
                         '${settings.todayViewingCount}/${settings.todayDailyWatchLimit} · ${settings.todayDayTypeLabel}${settings.hasTodayTemporaryWatchLimit ? ' · 临时' : ''}',
+                    tone: _StatusTileTone.yellow,
+                    width: double.infinity,
                   ),
                   _StatusTile(
                     icon: Icons.timelapse_outlined,
                     label: '本轮已观看',
                     value: formatDuration(settings.currentViewingElapsed),
+                    tone: _StatusTileTone.cyan,
+                    width: double.infinity,
                   ),
                   _StatusTile(
                     icon: settings.hasManagementPassword
@@ -848,6 +869,8 @@ class _PlaybackTab extends StatelessWidget {
                         : Icons.lock_open_outlined,
                     label: '家长密码',
                     value: settings.hasManagementPassword ? '已设置' : '未设置',
+                    tone: _StatusTileTone.purple,
+                    width: double.infinity,
                   ),
                 ],
               ),
@@ -876,16 +899,22 @@ class _PlaybackTab extends StatelessWidget {
         _SettingsCard(
           title: '播放记录',
           subtitle: '退出播放器时自动保存进度；未看完的视频会出现在继续观看。',
-          child: Wrap(
-            spacing: AppSpacing.md,
-            runSpacing: AppSpacing.md,
+          child: _StatusTileGrid(
             children: [
               _StatusTile(
                 icon: Icons.playlist_play,
                 label: '继续观看',
                 value: '${controller.continueWatchingItems.length}',
+                tone: _StatusTileTone.blue,
+                width: double.infinity,
               ),
-              _StatusTile(icon: Icons.skip_next, label: '自动下一集', value: '已开启'),
+              _StatusTile(
+                icon: Icons.skip_next,
+                label: '自动下一集',
+                value: '已开启',
+                tone: _StatusTileTone.green,
+                width: double.infinity,
+              ),
             ],
           ),
         ),
@@ -976,6 +1005,7 @@ class _GachaDrawsSettingsCardState extends State<_GachaDrawsSettingsCard> {
                 icon: Icons.confirmation_num_outlined,
                 label: '额外次数',
                 value: '$bonusDraws 次',
+                tone: _StatusTileTone.yellow,
               ),
               FilledButton.tonalIcon(
                 onPressed: _addDraws,
@@ -1614,23 +1644,18 @@ class _TwoColumnSettingsGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    final left = <Widget>[];
+    final right = <Widget>[];
+    for (var index = 0; index < children.length; index++) {
+      (index.isEven ? left : right).add(children[index]);
+    }
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var index = 0; index < children.length; index += 2) ...[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(child: children[index]),
-              const SizedBox(width: AppSpacing.lg),
-              Expanded(
-                child: index + 1 < children.length
-                    ? children[index + 1]
-                    : const SizedBox.shrink(),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppSpacing.lg),
-        ],
+        Expanded(child: _SettingsColumn(children: left)),
+        const SizedBox(width: AppSpacing.lg),
+        Expanded(child: _SettingsColumn(children: right)),
       ],
     );
   }
@@ -1646,9 +1671,9 @@ class _SettingsColumn extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        for (final child in children) ...[
-          child,
-          const SizedBox(height: AppSpacing.lg),
+        for (var index = 0; index < children.length; index++) ...[
+          if (index > 0) const SizedBox(height: AppSpacing.lg),
+          children[index],
         ],
       ],
     );
@@ -1700,7 +1725,8 @@ class _SettingsCardState extends State<_SettingsCard> {
       canRequestFocus: false,
       onFocusChange: _handleFocusChange,
       child: AnimatedScale(
-        scale: _focused ? 1.04 : 1,
+        // 双列卡片保持同一视觉基线，焦点态仅使用边框与阴影反馈。
+        scale: 1,
         duration: AppDurations.hover,
         curve: Curves.easeOutCubic,
         child: AnimatedContainer(
@@ -1789,22 +1815,69 @@ class _PathRow extends StatelessWidget {
   }
 }
 
+enum _StatusTileTone { blue, yellow, green, purple, red, cyan }
+
+class _StatusTileGrid extends StatelessWidget {
+  const _StatusTileGrid({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final crossAxisCount = constraints.maxWidth >= 700
+            ? 3
+            : constraints.maxWidth >= 420
+            ? 2
+            : 1;
+        final mainAxisExtent = crossAxisCount == 3 ? 126.0 : 116.0;
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: AppSpacing.md,
+          mainAxisSpacing: AppSpacing.md,
+          mainAxisExtent: mainAxisExtent,
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          children: children,
+        );
+      },
+    );
+  }
+}
+
 class _StatusTile extends StatelessWidget {
   const _StatusTile({
     required this.icon,
     required this.label,
     required this.value,
+    this.tone = _StatusTileTone.blue,
+    this.width = 150,
   });
 
   final IconData icon;
   final String label;
   final String value;
+  final _StatusTileTone tone;
+  final double width;
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
+    final accent = switch (tone) {
+      _StatusTileTone.blue => tokens.accent,
+      _StatusTileTone.yellow => tokens.brickYellow,
+      _StatusTileTone.green => tokens.brickGreen,
+      _StatusTileTone.purple => tokens.brickPurple,
+      _StatusTileTone.red => tokens.brickRed,
+      _StatusTileTone.cyan => AppTokens.cyanAccent,
+    };
+    final iconForeground = switch (tone) {
+      _StatusTileTone.yellow || _StatusTileTone.cyan => AppTokens.onLightBrick,
+      _ => tokens.brickHighlight,
+    };
     return Container(
-      width: 150,
+      width: width,
       padding: const EdgeInsets.all(AppSpacing.md),
       decoration: BoxDecoration(
         color: tokens.surfaceVariant.withValues(alpha: 0.64),
@@ -1826,12 +1899,16 @@ class _StatusTile extends StatelessWidget {
             height: 32,
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: tokens.accent,
+              color: accent,
               borderRadius: const BorderRadius.all(
                 Radius.circular(AppRadius.sm),
               ),
             ),
-            child: BlockIcon.fromMaterial(icon, size: 26),
+            child: BlockIcon.fromMaterial(
+              icon,
+              size: 26,
+              color: iconForeground,
+            ),
           ),
           const SizedBox(height: AppSpacing.sm),
           Text(

@@ -45,7 +45,7 @@ void main() {
       AppSection.gacha.color,
       AppSection.favorites.color,
       AppSection.settings.color,
-      AppSection.settings.color,
+      AppSection.home.color,
     ]);
     final animationButton = tester.widget<TextButton>(
       find.widgetWithText(TextButton, '动画'),

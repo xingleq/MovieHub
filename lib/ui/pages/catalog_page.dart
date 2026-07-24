@@ -36,7 +36,6 @@ class CatalogPage extends StatefulWidget {
 class _CatalogPageState extends State<CatalogPage> {
   final _searchController = TextEditingController();
   var _sortKey = SortKey.addedAt;
-  var _posterSize = PosterSize.large;
 
   @override
   void initState() {
@@ -105,28 +104,24 @@ class _CatalogPageState extends State<CatalogPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
+            mainAxisAlignment: MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               _TitleBlock(asset: titleAsset, color: blockColor),
               const SizedBox(width: AppSpacing.md),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      widget.title,
-                      style: Theme.of(context).textTheme.headlineMedium,
-                    ),
-                    const SizedBox(height: AppSpacing.xs),
-                    Text(
-                      query.isEmpty
-                          ? '共 ${visibleGroups.length} 部影片'
-                          : '找到 ${visibleGroups.length} 部影片',
-                      style: TextStyle(
-                        color: tokens.textSecondary,
-                        fontSize: 13,
-                      ),
-                    ),
-                  ],
+              Text(
+                widget.title,
+                style: Theme.of(context).textTheme.headlineMedium,
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Text(
+                query.isEmpty
+                    ? '共 ${visibleGroups.length} 部影片'
+                    : '找到 ${visibleGroups.length} 部影片',
+                style: TextStyle(
+                  color: tokens.textSecondary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
@@ -135,9 +130,7 @@ class _CatalogPageState extends State<CatalogPage> {
           CatalogToolbar(
             searchController: _searchController,
             sortKey: _sortKey,
-            posterSize: _posterSize,
             onSortChanged: (key) => setState(() => _sortKey = key),
-            onPosterSizeChanged: (size) => setState(() => _posterSize = size),
             onClearSearch: _searchController.clear,
           ),
           const SizedBox(height: AppSpacing.lg),
@@ -148,12 +141,12 @@ class _CatalogPageState extends State<CatalogPage> {
                     illustrationAsset: widget.title.contains('收藏')
                         ? AppAssets.hat
                         : AppAssets.mascot,
+                    accentColor: blockColor,
                     title: '没有影片',
                     message: query.isEmpty ? widget.emptyMessage : '换个关键词试试。',
                   )
                 : PosterGrid(
                     groups: visibleGroups,
-                    posterSize: _posterSize,
                     onOpenDetail: widget.onOpenEntry,
                     onPlay: widget.onPlayEntry,
                   ),

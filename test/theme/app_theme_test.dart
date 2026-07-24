@@ -28,6 +28,8 @@ void main() {
     expect(AppRadius.md, 12);
     expect(theme.cardTheme.elevation, 3);
     expect(theme.textTheme.headlineLarge?.fontFamily, AppFonts.pixelChinese);
+    expect(theme.textTheme.bodyMedium?.fontFamily, AppFonts.pixelChinese);
+    expect(theme.textTheme.labelLarge?.fontFamily, AppFonts.pixelChinese);
     expect(theme.focusColor, tokens.brickHighlight.withValues(alpha: 0.1));
     expect(theme.highlightColor, tokens.brickHighlight.withValues(alpha: 0.1));
 

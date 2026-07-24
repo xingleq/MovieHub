@@ -18,13 +18,11 @@ class HomePage extends StatefulWidget {
     super.key,
     required this.onOpenItem,
     required this.onPlayItem,
-    required this.onToggleFavorite,
     required this.onGoToSettings,
   });
 
   final ValueChanged<MediaItem> onOpenItem;
   final ValueChanged<MediaItem> onPlayItem;
-  final ValueChanged<MediaItem> onToggleFavorite;
   final VoidCallback onGoToSettings;
 
   @override
@@ -160,8 +158,6 @@ class _HomePageState extends State<HomePage> {
                               },
                               onPlay: () => widget.onPlayItem(item),
                               onOpenDetails: () => widget.onOpenItem(item),
-                              onToggleFavorite: () =>
-                                  widget.onToggleFavorite(item),
                             );
                           },
                         ),

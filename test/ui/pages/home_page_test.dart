@@ -50,7 +50,6 @@ void main() {
     await library.load();
     var detailOpens = 0;
     var plays = 0;
-    var favorites = 0;
 
     await tester.pumpWidget(
       MaterialApp(
@@ -60,7 +59,6 @@ void main() {
           child: HomePage(
             onOpenItem: (_) => detailOpens++,
             onPlayItem: (_) => plays++,
-            onToggleFavorite: (_) => favorites++,
             onGoToSettings: () {},
           ),
         ),
@@ -87,14 +85,11 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 250));
     expect(playButton, findsOneWidget);
+    expect(find.byTooltip('收藏'), findsNothing);
 
     await tester.tap(playButton);
     expect(detailOpens, 1);
     expect(plays, 1);
-
-    await tester.tap(find.byTooltip('收藏'));
-    expect(favorites, 1);
-    expect(detailOpens, 1);
 
     await tester.binding.setSurfaceSize(const Size(1920, 1080));
     await tester.pump();

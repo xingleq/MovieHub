@@ -12,6 +12,7 @@ class EmptyState extends StatelessWidget {
     required this.message,
     this.action,
     this.illustrationAsset,
+    this.accentColor,
   });
 
   final IconData icon;
@@ -19,6 +20,7 @@ class EmptyState extends StatelessWidget {
   final String message;
   final Widget? action;
   final String? illustrationAsset;
+  final Color? accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -26,38 +28,23 @@ class EmptyState extends StatelessWidget {
     return Center(
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 360),
-        child: Container(
+        child: Padding(
           padding: const EdgeInsets.all(AppSpacing.xl),
-          decoration: BoxDecoration(
-            color: tokens.surface.withValues(alpha: 0.9),
-            borderRadius: const BorderRadius.all(Radius.circular(AppRadius.lg)),
-            border: Border.all(color: tokens.cardBorder, width: 3),
-            boxShadow: [
-              BoxShadow(
-                color: tokens.accent.withValues(alpha: 0.16),
-                blurRadius: 18,
-                offset: const Offset(0, 6),
-              ),
-            ],
-          ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               if (illustrationAsset case final asset?)
-                BlockIllustration(asset: asset, size: 150, semanticLabel: title)
+                BlockIcon(
+                  asset,
+                  size: 96,
+                  color: accentColor ?? tokens.accent,
+                  semanticLabel: title,
+                )
               else
-                Container(
-                  width: 72,
-                  height: 72,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: tokens.brickYellow,
-                    borderRadius: const BorderRadius.all(
-                      Radius.circular(AppRadius.md),
-                    ),
-                    border: Border.all(color: tokens.cardBorder, width: 2),
-                  ),
-                  child: BlockIcon.fromMaterial(icon, size: 46),
+                BlockIcon.fromMaterial(
+                  icon,
+                  size: 72,
+                  color: accentColor ?? tokens.brickYellow,
                 ),
               const SizedBox(height: AppSpacing.lg),
               Text(

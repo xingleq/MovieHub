@@ -12,17 +12,13 @@ class CatalogToolbar extends StatelessWidget {
     super.key,
     required this.searchController,
     required this.sortKey,
-    required this.posterSize,
     required this.onSortChanged,
-    required this.onPosterSizeChanged,
     required this.onClearSearch,
   });
 
   final TextEditingController searchController;
   final SortKey sortKey;
-  final PosterSize posterSize;
   final ValueChanged<SortKey> onSortChanged;
-  final ValueChanged<PosterSize> onPosterSizeChanged;
   final VoidCallback onClearSearch;
 
   @override
@@ -70,7 +66,7 @@ class CatalogToolbar extends StatelessWidget {
               vertical: AppSpacing.sm + 2,
             ),
             decoration: BoxDecoration(
-              color: tokens.surface.withValues(alpha: 0.5),
+              color: tokens.brickYellow,
               borderRadius: const BorderRadius.all(
                 Radius.circular(AppRadius.md),
               ),
@@ -86,98 +82,30 @@ class CatalogToolbar extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                BlockIcon.fromMaterial(Icons.sort, size: 24),
+                BlockIcon.fromMaterial(
+                  Icons.sort,
+                  size: 24,
+                  color: AppTokens.onLightBrick,
+                ),
                 const SizedBox(width: AppSpacing.sm),
                 Text(
                   sortKey.label,
-                  style: TextStyle(color: tokens.textSecondary),
+                  style: const TextStyle(
+                    color: AppTokens.onLightBrick,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.xs),
                 Icon(
                   Icons.keyboard_arrow_down,
                   size: 18,
-                  color: tokens.textSecondary,
+                  color: AppTokens.onLightBrick,
                 ),
               ],
             ),
           ),
         ),
-        const SizedBox(width: AppSpacing.md),
-        _ViewToggle(posterSize: posterSize, onChanged: onPosterSizeChanged),
       ],
-    );
-  }
-}
-
-class _ViewToggle extends StatelessWidget {
-  const _ViewToggle({required this.posterSize, required this.onChanged});
-
-  final PosterSize posterSize;
-  final ValueChanged<PosterSize> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.xs),
-      decoration: BoxDecoration(
-        color: tokens.surface.withValues(alpha: 0.5),
-        borderRadius: const BorderRadius.all(Radius.circular(AppRadius.md)),
-        border: Border.all(color: tokens.cardBorder, width: 2),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          _ViewToggleButton(
-            selected: posterSize == PosterSize.large,
-            icon: Icons.grid_view,
-            onTap: () => onChanged(PosterSize.large),
-          ),
-          _ViewToggleButton(
-            selected: posterSize == PosterSize.small,
-            icon: Icons.apps,
-            onTap: () => onChanged(PosterSize.small),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ViewToggleButton extends StatelessWidget {
-  const _ViewToggleButton({
-    required this.selected,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final bool selected;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-    return GestureDetector(
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: AppDurations.hover,
-        padding: const EdgeInsets.all(AppSpacing.sm + 2),
-        decoration: BoxDecoration(
-          gradient: selected
-              ? const LinearGradient(colors: AppTokens.candyGradient)
-              : null,
-          borderRadius: const BorderRadius.all(Radius.circular(AppRadius.sm)),
-          border: selected
-              ? Border.all(
-                  color: tokens.brickHighlight.withValues(alpha: 0.7),
-                  width: 2,
-                )
-              : null,
-        ),
-        child: BlockIcon.fromMaterial(icon, size: 24),
-      ),
     );
   }
 }

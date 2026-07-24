@@ -6,8 +6,8 @@ import '../../theme/app_assets.dart';
 import '../../theme/app_tokens.dart';
 import '../catalog/catalog_options.dart';
 import 'cached_tmdb_image.dart';
-import 'block_asset.dart';
 import 'hoverable.dart';
+import 'poster_play_button.dart';
 import 'poster_placeholder.dart';
 
 /// Portrait poster card for a wall entry (movie or aggregated series):
@@ -108,27 +108,7 @@ class PosterCard extends StatelessWidget {
                                 ),
                               ),
                               child: Center(
-                                child: IconButton.filled(
-                                  tooltip: '播放',
-                                  style: IconButton.styleFrom(
-                                    backgroundColor: tokens.accent,
-                                    foregroundColor: tokens.brickHighlight,
-                                    side: BorderSide(
-                                      color: tokens.brickYellow,
-                                      width: 3,
-                                    ),
-                                    shape: const RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.all(
-                                        Radius.circular(AppRadius.md),
-                                      ),
-                                    ),
-                                  ),
-                                  onPressed: onPlay,
-                                  icon: const BlockIcon(
-                                    AppAssets.play,
-                                    size: 34,
-                                  ),
-                                ),
+                                child: PosterPlayButton(onPressed: onPlay),
                               ),
                             ),
                           ),

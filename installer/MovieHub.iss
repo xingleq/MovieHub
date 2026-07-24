@@ -1,7 +1,8 @@
 #define MyAppName "MovieHub"
-#define MyAppVersion "1.2.0"
 #define MyAppPublisher "MovieHub"
 #define MyAppExeName "moviehub.exe"
+#define MyAppExePath "..\build\windows\x64\runner\Release\" + MyAppExeName
+#define MyAppVersion GetStringFileInfo(MyAppExePath, "ProductVersion")
 
 [Setup]
 AppId={{F8C3A2B1-4E5D-6F7A-8B9C-0D1E2F3A4B5C}

@@ -5,7 +5,7 @@
 | 位置 | 用途 | 建议规格 | 建议文件名 |
 | --- | --- | --- | --- |
 | `assets/animations/mascot.json` | 左侧栏小恐龙 Lottie 动画 | 正方形，500 × 500 或更高 | `mascot.json` |
-| `assets/images/branding/moviehub-mascot.png` | 左上角 MovieHub 品牌图标 | 透明 PNG，正方形 | `moviehub-mascot.png` |
+| `assets/images/branding/moviehub-mascot.ico` | 左上角 MovieHub 品牌图标 | 透明 PNG，正方形 | `moviehub-mascot.ico` |
 | `assets/images/backgrounds/app-sky.webp` | 全局浅色天空背景 | 2560 × 1440，WebP/JPG | `app-sky.webp` |
 | `assets/images/decorations/cloud-top.webp` | 页面顶部云朵 | 800 × 360，透明 PNG/WebP | `cloud-top.webp` |
 | `assets/images/decorations/cloud-bottom.webp` | 页面右下云朵 | 720 × 320，透明 PNG/WebP | `cloud-bottom.webp` |

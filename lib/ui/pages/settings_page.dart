@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 
 import '../../app/library_controller.dart';
 import '../../app/library_scope.dart';
@@ -117,9 +118,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       },
                       child: SingleChildScrollView(
                         key: ValueKey(_category),
-                        padding: const EdgeInsets.only(
-                          bottom: AppSpacing.xxl,
-                        ),
+                        padding: const EdgeInsets.only(bottom: AppSpacing.xxl),
                         child: _buildCategoryContent(controller, settings),
                       ),
                     ),
@@ -271,9 +270,7 @@ class _SettingsNavItemState extends State<_SettingsNavItem> {
     final color = widget.category.blockColor(tokens);
     final selected = widget.selected;
     final highlighted = _hovered || _focused;
-    final foreground = selected
-        ? _foregroundOn(color)
-        : tokens.textPrimary;
+    final foreground = selected ? _foregroundOn(color) : tokens.textPrimary;
 
     return Tooltip(
       message: widget.category.subtitle,
@@ -284,87 +281,87 @@ class _SettingsNavItemState extends State<_SettingsNavItem> {
           _hovered = false;
           _pressed = false;
         }),
-      child: Listener(
-        onPointerDown: (_) => setState(() => _pressed = true),
-        onPointerUp: (_) => setState(() => _pressed = false),
-        onPointerCancel: (_) => setState(() => _pressed = false),
-        child: AnimatedScale(
-          scale: _pressed
-              ? 0.97
-              : highlighted && !selected
-              ? 1.03
-              : 1,
-          duration: AppDurations.hover,
-          curve: Curves.easeOutBack,
-          child: AnimatedContainer(
+        child: Listener(
+          onPointerDown: (_) => setState(() => _pressed = true),
+          onPointerUp: (_) => setState(() => _pressed = false),
+          onPointerCancel: (_) => setState(() => _pressed = false),
+          child: AnimatedScale(
+            scale: _pressed
+                ? 0.97
+                : highlighted && !selected
+                ? 1.03
+                : 1,
             duration: AppDurations.hover,
-            decoration: BoxDecoration(
-              color: selected
-                  ? color
-                  : highlighted
-                  ? color.withValues(alpha: 0.14)
-                  : tokens.surface.withValues(alpha: 0.78),
-              borderRadius: const BorderRadius.all(
-                Radius.circular(AppRadius.md),
-              ),
-              border: Border.all(
-                color: _focused
-                    ? tokens.accent
-                    : selected
+            curve: Curves.easeOutBack,
+            child: AnimatedContainer(
+              duration: AppDurations.hover,
+              decoration: BoxDecoration(
+                color: selected
                     ? color
-                    : tokens.cardBorder,
-                width: _focused ? 3 : 2,
-              ),
-              boxShadow: selected
-                  ? [
-                      BoxShadow(
-                        color: tokens.hardShadow,
-                        blurRadius: 0,
-                        offset: const Offset(4, 4),
-                      ),
-                    ]
-                  : const [],
-            ),
-            child: InkWell(
-              focusNode: _focusNode,
-              borderRadius: const BorderRadius.all(
-                Radius.circular(AppRadius.md),
-              ),
-              onTap: widget.onPressed,
-              // 分类的一句话说明，悬停可见。
-              enableFeedback: true,
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.md,
+                    : highlighted
+                    ? color.withValues(alpha: 0.14)
+                    : tokens.surface.withValues(alpha: 0.78),
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.md),
                 ),
-                child: Row(
-                  children: [
-                    BlockIcon(
-                      widget.category.icon,
-                      size: 26,
-                      color: selected ? foreground : color,
-                    ),
-                    const SizedBox(width: AppSpacing.sm),
-                    Expanded(
-                      child: Text(
-                        widget.category.title,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: foreground,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15,
+                border: Border.all(
+                  color: _focused
+                      ? tokens.accent
+                      : selected
+                      ? color
+                      : tokens.cardBorder,
+                  width: _focused ? 3 : 2,
+                ),
+                boxShadow: selected
+                    ? [
+                        BoxShadow(
+                          color: tokens.hardShadow,
+                          blurRadius: 0,
+                          offset: const Offset(4, 4),
+                        ),
+                      ]
+                    : const [],
+              ),
+              child: InkWell(
+                focusNode: _focusNode,
+                borderRadius: const BorderRadius.all(
+                  Radius.circular(AppRadius.md),
+                ),
+                onTap: widget.onPressed,
+                // 分类的一句话说明，悬停可见。
+                enableFeedback: true,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.md,
+                    vertical: AppSpacing.md,
+                  ),
+                  child: Row(
+                    children: [
+                      BlockIcon(
+                        widget.category.icon,
+                        size: 26,
+                        color: selected ? foreground : color,
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Expanded(
+                        child: Text(
+                          widget.category.title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: foreground,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 15,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
           ),
         ),
-      ),
       ),
     );
   }
@@ -1545,17 +1542,32 @@ class _AppearanceTab extends StatelessWidget {
   }
 }
 
-class _AboutTab extends StatelessWidget {
+class _AboutTab extends StatefulWidget {
   const _AboutTab({this.embedded = false});
 
   final bool embedded;
+
+  @override
+  State<_AboutTab> createState() => _AboutTabState();
+}
+
+class _AboutTabState extends State<_AboutTab> {
+  late final Future<String> _applicationVersion = _loadApplicationVersion();
+
+  static Future<String> _loadApplicationVersion() async {
+    try {
+      return (await PackageInfo.fromPlatform()).version;
+    } catch (_) {
+      return '未知';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
 
     return _SettingsScrollView(
-      embedded: embedded,
+      embedded: widget.embedded,
       children: [
         _SettingsCard(
           title: 'MovieHub',
@@ -1563,7 +1575,16 @@ class _AboutTab extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('当前版本：1.2.0', style: TextStyle(color: tokens.textSecondary)),
+              FutureBuilder<String>(
+                future: _applicationVersion,
+                builder: (context, snapshot) {
+                  final version = snapshot.data ?? '读取中';
+                  return Text(
+                    '当前版本：$version',
+                    style: TextStyle(color: tokens.textSecondary),
+                  );
+                },
+              ),
               const SizedBox(height: AppSpacing.md),
               Wrap(
                 spacing: AppSpacing.sm,
@@ -1577,11 +1598,15 @@ class _AboutTab extends StatelessWidget {
               ),
               const SizedBox(height: AppSpacing.lg),
               TextButton.icon(
-                onPressed: () {
+                onPressed: () async {
+                  final version = await _applicationVersion;
+                  if (!context.mounted) {
+                    return;
+                  }
                   showAboutDialog(
                     context: context,
                     applicationName: 'MovieHub',
-                    applicationVersion: '1.2.0',
+                    applicationVersion: version,
                   );
                 },
                 icon: const Icon(Icons.info_outline),

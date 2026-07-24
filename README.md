@@ -2,18 +2,22 @@
 
 MovieHub 是一款面向 Windows 的本地私人影视库应用。它直接读取电脑中的电影、动画和电视剧文件，自动整理为海报墙，记录观看进度，并提供内置播放器；不需要部署服务器、NAS 或 Docker。
 
-> 当前版本：`v1.0.1`  
+> 当前版本：以 [`pubspec.yaml`](pubspec.yaml) 的 `version` 字段为准
 > 目标平台：Windows 10/11 桌面端
 
 ## 功能截图
 
-### 首页与继续观看
+### 首页
 
-![MovieHub 首页](assets/images/screenshots/home.png)
+![MovieHub 首页](assets/images/screenshot/home.png)
 
-### 设置与媒体库管理
+### 动画
 
-![MovieHub 设置页](assets/images/screenshots/settings.png)
+![MovieHub 首页](assets/images/screenshot/tab.png)
+
+### 设置
+
+![MovieHub 设置页](assets/images/screenshot/settings.png)
 
 ## 主要功能
 
@@ -146,10 +150,13 @@ build\windows\x64\runner\Release
 installer\MovieHub.iss
 ```
 
+应用版本统一在 `pubspec.yaml` 的 `version` 字段维护。Windows 和 Android
+构建版本、应用内“关于”信息及 Windows 安装包版本都会从这里读取，无需在其他文件中重复修改。
+
 构建 Release 后，可使用 Inno Setup 打开该脚本并编译安装包。默认输出文件名为：
 
 ```text
-installer\MovieHub-1.0.1-setup.exe
+installer\MovieHub-<version>-setup.exe
 ```
 
 ## 当前限制与后续方向
@@ -171,5 +178,13 @@ installer\MovieHub-1.0.1-setup.exe
 
 - 感谢 [TMDB](https://www.themoviedb.org/) 提供影视资料数据服务。
 - 感谢 [Linux.do](https://linux.do/) 社区提供交流、反馈和推广支持。
+
+### 字体致谢
+
+本项目使用以下开源字体为像素风格界面提供支持：
+
+- 感谢 TakWolf 开源的 [Ark Pixel Font](https://github.com/TakWolf/ark-pixel-font)，为应用提供中文像素字体（Apache License 2.0）。
+- 感谢 Cody "CodeMan38" Boisclair 创作的 [Press Start 2P](https://fonts.google.com/specimen/Press+Start+2P)，为应用提供英文字母与数字像素字体（SIL Open Font License 1.1）。
+- 感谢 SolidZORO 开源的 [Zpix](https://github.com/SolidZORO/zpix-pixel-font)，为应用提供像素标签字体（Free for commercial and personal use）。
 
 本项目与 TMDB 官方无隶属关系，TMDB 相关数据和图片版权归其原始权利方所有。

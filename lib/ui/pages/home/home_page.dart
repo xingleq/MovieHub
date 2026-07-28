@@ -42,12 +42,7 @@ class _HomePageState extends State<HomePage> {
       );
     }
 
-    final continueWatching = controller.continueWatchingItems;
-    final candidates = continueWatching.isNotEmpty
-        ? continueWatching
-        : controller.spotlightItems.isNotEmpty
-        ? controller.spotlightItems
-        : controller.items.take(16).toList(growable: false);
+    final candidates = controller.homeShelfItems;
     final selected = _focusedIdentity != null
         ? candidates.cast<MediaItem?>().firstWhere(
             (item) => item?.identity == _focusedIdentity,

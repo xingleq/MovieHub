@@ -86,14 +86,16 @@ class LibraryController extends ChangeNotifier {
           return bDate.compareTo(aDate);
         });
 
-    // Episodes of a series share one home-shelf card, even when the user has
-    // progress in different seasons. Items are already newest-first, so the
-    // first one retained is always the most recently watched episode and
-    // remains the resume target for that series.
+    // Episodes of a series share one home-shelf card across ALL seasons.
+    // Use tmdbId for matched series, or seriesTitle for unmatched ones.
+    // Items are already newest-first, so the first one retained is always
+    // the most recently watched episode.
     final uniqueItems = <String, MediaItem>{};
     for (final item in items) {
       final key = item.isEpisode
-          ? MediaGroup.keyOf(item)
+          ? (item.tmdbMediaType == 'tv' && item.tmdbId != null
+              ? 'series:${item.sourceId}:tmdb:${item.tmdbId}'
+              : 'series:${item.sourceId}:${(item.seriesTitle ?? item.title).toLowerCase()}')
           : 'movie:${item.sourceId}:${item.path}';
       uniqueItems.putIfAbsent(key, () => _withGroupArtwork(item));
     }
@@ -166,6 +168,52 @@ class LibraryController extends ChangeNotifier {
       }
     }
     return [...withBackdrop, ...fallback].take(3).toList(growable: false);
+  }
+
+  /// Home shelf items: merge recent playback with library items. If there's
+  /// playback history, insert those items at the front and fill remaining
+  /// slots with items from the library; otherwise return the first 8 items.
+  List<MediaItem> get homeShelfItems {
+    const maxItems = 8;
+
+    if (_items.isEmpty) {
+      return const [];
+    }
+
+    // Get continue watching items (already sorted by lastPlayedAt, most recent first)
+    final playedItems = continueWatchingItems;
+
+    if (playedItems.isEmpty) {
+      // No playback history: return first 8 items from library
+      return _items.take(maxItems).toList(growable: false);
+    }
+
+    // Build a map to track which original items are already in the played list.
+    // continueWatchingItems may return items enhanced with group artwork,
+    // so we match by the underlying source+path identity.
+    final playedIdentities = <MediaIdentity>{};
+    for (final played in playedItems) {
+      // Find the original item in _items by identity
+      for (final original in _items) {
+        if (original.identity == played.identity) {
+          playedIdentities.add(original.identity);
+          break;
+        }
+      }
+    }
+
+    // Get remaining items that haven't been played
+    final unplayedItems = _items
+        .where((item) => !playedIdentities.contains(item.identity))
+        .toList();
+
+    // Merge: played items first, then fill with unplayed items
+    final result = <MediaItem>[
+      ...playedItems,
+      ...unplayedItems,
+    ].take(maxItems).toList(growable: false);
+
+    return result;
   }
 
   MediaItem? itemByIdentity(MediaIdentity identity) {

@@ -211,6 +211,7 @@ class _HeroBackdrop extends StatelessWidget {
         url: TmdbClient.backdropUrlLarge(backdropPath),
         alignment: Alignment.topCenter,
         placeholderIconSize: 64,
+        placeholder: const BackdropPlaceholder(),
       );
     }
 
@@ -219,9 +220,10 @@ class _HeroBackdrop extends StatelessWidget {
       return CachedTmdbImage(
         url: TmdbClient.posterUrl(posterPath),
         placeholderIconSize: 64,
+        placeholder: const BackdropPlaceholder(),
       );
     }
 
-    return const PosterPlaceholder(iconSize: 64);
+    return const BackdropPlaceholder();
   }
 }

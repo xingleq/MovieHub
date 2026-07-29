@@ -1484,7 +1484,7 @@ class _AppearanceTab extends StatelessWidget {
               ] else
                 _EmptySettingsState(
                   icon: Icons.wallpaper_outlined,
-                  message: '当前使用默认浅蓝动态背景。',
+                  message: '当前使用默认积木世界背景。',
                   illustrationAsset: AppAssets.flower,
                 ),
               const SizedBox(height: AppSpacing.lg),

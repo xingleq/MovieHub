@@ -28,10 +28,27 @@ class ImageCacheStore {
     return _directory ??= _defaultCacheDirectory();
   }
 
-  /// Returns the cached file immediately when this URL has already been
-  /// resolved this session (lets widgets render synchronously, no flicker).
+  /// Returns the cached file immediately when it is already available either
+  /// in this session or on disk, so a cold app start does not briefly render a
+  /// placeholder for artwork downloaded in an earlier session.
   File? cachedFileSync(String url) {
-    return _resolved[url];
+    final known = _resolved[url];
+    if (known != null) {
+      return known;
+    }
+    final file = _fileFor(url);
+    if (file == null) {
+      return null;
+    }
+    try {
+      if (file.existsSync() && file.lengthSync() > 0) {
+        _resolved[url] = file;
+        return file;
+      }
+    } on FileSystemException {
+      return null;
+    }
+    return null;
   }
 
   /// Returns the local file for [url], downloading it on first use.

@@ -1,66 +1,39 @@
 import 'package:flutter/material.dart';
 
 import '../../theme/app_assets.dart';
-import '../../theme/app_tokens.dart';
-import 'block_asset.dart';
 
-/// Gradient placeholder shown where a poster or backdrop is missing or still
-/// downloading — the icon pulses gently as a lightweight skeleton.
-class PosterPlaceholder extends StatefulWidget {
+/// Shared fallback shown when a title has no recognized poster or while its
+/// remote poster is loading.
+class PosterPlaceholder extends StatelessWidget {
   const PosterPlaceholder({super.key, this.iconSize = 40});
 
+  // Kept for source compatibility with existing call sites. The fallback is
+  // now a complete illustration rather than a scalable icon.
   final double iconSize;
 
   @override
-  State<PosterPlaceholder> createState() => _PosterPlaceholderState();
+  Widget build(BuildContext context) {
+    return Image.asset(
+      AppAssets.defaultPoster,
+      fit: BoxFit.cover,
+      filterQuality: FilterQuality.medium,
+      semanticLabel: '未识别影视默认封面',
+    );
+  }
 }
 
-class _PosterPlaceholderState extends State<PosterPlaceholder>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulse = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1300),
-    )..repeat(reverse: true);
-  }
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
+/// Shared fallback for full-width artwork such as Home and detail backdrops.
+class BackdropPlaceholder extends StatelessWidget {
+  const BackdropPlaceholder({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            tokens.surfaceVariant,
-            tokens.accent.withValues(alpha: 0.16),
-          ],
-        ),
-      ),
-      child: Center(
-        child: FadeTransition(
-          opacity: Tween<double>(
-            begin: 0.35,
-            end: 0.85,
-          ).animate(CurvedAnimation(parent: _pulse, curve: Curves.easeInOut)),
-          child: BlockIcon(
-            AppAssets.movie,
-            size: widget.iconSize,
-            semanticLabel: '影视封面占位',
-          ),
-        ),
-      ),
+    return Image.asset(
+      AppAssets.defaultBackdrop,
+      fit: BoxFit.cover,
+      alignment: Alignment.center,
+      filterQuality: FilterQuality.medium,
+      semanticLabel: '影视默认背景',
     );
   }
 }

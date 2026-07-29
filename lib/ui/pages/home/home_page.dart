@@ -1,13 +1,17 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
 import '../../../app/library_scope.dart';
+import '../../../core/images/image_cache_store.dart';
 import '../../../core/media/media_item.dart';
 import '../../../core/tmdb/tmdb_client.dart';
 import '../../../theme/app_assets.dart';
 import '../../../theme/app_tokens.dart';
+import '../../widgets/cached_tmdb_image.dart';
 import '../../widgets/message_banner.dart';
+import '../../widgets/poster_placeholder.dart';
 import 'widgets/lego_button.dart';
 import 'widgets/movie_card.dart';
 
@@ -31,6 +35,7 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   MediaIdentity? _focusedIdentity;
+  String? _prefetchSignature;
 
   @override
   Widget build(BuildContext context) {
@@ -43,6 +48,7 @@ class _HomePageState extends State<HomePage> {
     }
 
     final candidates = controller.homeShelfItems;
+    _prefetchBackdrops(candidates);
     final selected = _focusedIdentity != null
         ? candidates.cast<MediaItem?>().firstWhere(
             (item) => item?.identity == _focusedIdentity,
@@ -66,15 +72,7 @@ class _HomePageState extends State<HomePage> {
           fit: StackFit.expand,
           children: [
             Positioned.fill(
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 420),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: _TmdbBackdrop(
-                  key: ValueKey(selected?.identity),
-                  item: selected ?? candidates.first,
-                ),
-              ),
+              child: _TmdbBackdrop(item: selected ?? candidates.first),
             ),
             Positioned.fill(child: _BackdropScrim(compact: compact)),
             if (selected != null)
@@ -167,6 +165,31 @@ class _HomePageState extends State<HomePage> {
       },
     );
   }
+
+  void _prefetchBackdrops(List<MediaItem> candidates) {
+    final urls = candidates
+        .map((item) => item.backdropPath)
+        .whereType<String>()
+        .where((path) => path.isNotEmpty)
+        .map(TmdbClient.backdropUrl)
+        .toSet()
+        .toList(growable: false);
+    final signature = urls.join('|');
+    if (signature == _prefetchSignature || urls.isEmpty) {
+      return;
+    }
+    _prefetchSignature = signature;
+
+    // Give the initially visible background first use of the connection, then
+    // warm the remaining shelf artwork for focus/hover switches.
+    unawaited(
+      ImageCacheStore.instance.resolve(urls.first).then((_) {
+        for (final url in urls.skip(1)) {
+          unawaited(ImageCacheStore.instance.resolve(url));
+        }
+      }),
+    );
+  }
 }
 
 class _TmdbBackdrop extends StatelessWidget {
@@ -176,19 +199,14 @@ class _TmdbBackdrop extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tokens = AppTokens.of(context);
     final path = item.backdropPath;
-    if (path == null || path.isEmpty) {
-      return ColoredBox(color: tokens.background);
-    }
     return SizedBox.expand(
-      child: Image.network(
-        TmdbClient.backdropUrl(path),
+      child: CachedTmdbImage(
+        url: path == null || path.isEmpty ? null : TmdbClient.backdropUrl(path),
         fit: BoxFit.cover,
         alignment: Alignment.center,
-        filterQuality: FilterQuality.high,
-        gaplessPlayback: true,
-        errorBuilder: (_, _, _) => ColoredBox(color: tokens.background),
+        placeholder: const BackdropPlaceholder(),
+        retainPreviousImage: true,
       ),
     );
   }
@@ -399,46 +417,50 @@ class _EmptyHome extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tokens = AppTokens.of(context);
-    return ColoredBox(
-      color: tokens.background,
-      child: Center(
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 460),
-          child: Padding(
-            padding: const EdgeInsets.all(AppSpacing.xl),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  Icons.video_library_rounded,
-                  size: 72,
-                  color: tokens.accent,
-                ),
-                const SizedBox(height: AppSpacing.lg),
-                Text(
-                  '欢迎来到 MovieHub',
-                  style: Theme.of(context).textTheme.headlineMedium,
-                ),
-                const SizedBox(height: AppSpacing.md),
-                Text(
-                  hasRoots ? '目录已添加，请重新扫描媒体库。' : '先添加媒体文件夹，就可以建立你的影视墙。',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: tokens.textSecondary, height: 1.6),
-                ),
-                const SizedBox(height: AppSpacing.xl),
-                SizedBox(
-                  width: 220,
-                  child: LegoButton(
-                    label: '前往设置',
-                    iconAsset: AppAssets.settings,
-                    onPressed: onGoToSettings,
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        const BackdropPlaceholder(),
+        ColoredBox(color: tokens.scrim.withValues(alpha: 0.24)),
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 460),
+            child: Padding(
+              padding: const EdgeInsets.all(AppSpacing.xl),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.video_library_rounded,
+                    size: 72,
+                    color: tokens.accent,
                   ),
-                ),
-              ],
+                  const SizedBox(height: AppSpacing.lg),
+                  Text(
+                    '欢迎来到 MovieHub',
+                    style: Theme.of(context).textTheme.headlineMedium,
+                  ),
+                  const SizedBox(height: AppSpacing.md),
+                  Text(
+                    hasRoots ? '目录已添加，请重新扫描媒体库。' : '先添加媒体文件夹，就可以建立你的影视墙。',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: tokens.textSecondary, height: 1.6),
+                  ),
+                  const SizedBox(height: AppSpacing.xl),
+                  SizedBox(
+                    width: 220,
+                    child: LegoButton(
+                      label: '前往设置',
+                      iconAsset: AppAssets.settings,
+                      onPressed: onGoToSettings,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
-      ),
+      ],
     );
   }
 }

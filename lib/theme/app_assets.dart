@@ -7,6 +7,10 @@ abstract final class AppFonts {
 abstract final class AppAssets {
   static const String _icons = 'assets/icons';
   static const String _decorations = 'assets/decoration';
+  static const String _backgrounds = 'assets/images/backgrounds';
+
+  static const String defaultBackdrop = '$_backgrounds/bg.png';
+  static const String defaultPoster = '$_backgrounds/default.png';
 
   static const String search = '$_icons/search.svg';
   static const String home = '$_icons/home.svg';

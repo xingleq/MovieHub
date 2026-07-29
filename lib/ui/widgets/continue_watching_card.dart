@@ -152,6 +152,7 @@ class _BackdropImage extends StatelessWidget {
         url: TmdbClient.backdropUrl(backdropPath),
         cacheWidth: 640,
         placeholderIconSize: 32,
+        placeholder: const BackdropPlaceholder(),
       );
     }
 
@@ -164,6 +165,6 @@ class _BackdropImage extends StatelessWidget {
       );
     }
 
-    return const PosterPlaceholder(iconSize: 32);
+    return const BackdropPlaceholder();
   }
 }

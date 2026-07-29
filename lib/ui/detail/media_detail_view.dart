@@ -359,9 +359,10 @@ class DetailBackdropLayer extends StatelessWidget {
           CachedTmdbImage(
             url: TmdbClient.backdropUrlLarge(backdropPath),
             alignment: Alignment.topCenter,
+            placeholder: const BackdropPlaceholder(),
           )
         else
-          ColoredBox(color: tokens.surfaceVariant),
+          const BackdropPlaceholder(),
         DecoratedBox(
           decoration: BoxDecoration(
             gradient: LinearGradient(

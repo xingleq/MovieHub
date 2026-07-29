@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import '../core/media/media_group.dart';
 import '../core/media/media_item.dart';
 import '../core/system/platform_services.dart';
+import '../theme/app_assets.dart';
 import '../theme/app_tokens.dart';
 import '../ui/catalog/media_category.dart';
 import '../ui/detail/media_detail_view.dart';
@@ -18,7 +19,6 @@ import '../ui/pages/home_page.dart';
 import '../ui/pages/home/widgets/lego_nav_bar.dart';
 import '../ui/pages/settings_page.dart';
 import '../ui/player/player_page.dart';
-import '../ui/widgets/candy_background.dart';
 import '../ui/widgets/manual_match_dialog.dart';
 import '../ui/widgets/window_control_buttons.dart';
 import 'app_section.dart';
@@ -343,12 +343,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               body: ListenableBuilder(
                 listenable: Listenable.merge([_library, _settings]),
                 builder: (context, _) {
+                  final wallpaperPath = _settings.backgroundImagePath;
+                  final hasReadableWallpaper =
+                      wallpaperPath.isNotEmpty &&
+                      File(wallpaperPath).existsSync();
                   return Stack(
                     fit: StackFit.expand,
                     children: [
-                      const CandyBackground(),
-                      if (_settings.backgroundImagePath.isNotEmpty)
-                        _WallpaperLayer(path: _settings.backgroundImagePath),
+                      const _DefaultBackgroundLayer(),
+                      if (hasReadableWallpaper)
+                        _WallpaperLayer(path: wallpaperPath),
                       Padding(
                         padding:
                             _section == AppSection.home ||
@@ -836,6 +840,30 @@ class _AnimatedSectionState extends State<_AnimatedSection>
           ),
         ),
       ),
+    );
+  }
+}
+
+/// Default full-window artwork for all sections. Individual Home/detail pages
+/// draw their own backdrops above it, while the other tabs share this layer.
+class _DefaultBackgroundLayer extends StatelessWidget {
+  const _DefaultBackgroundLayer();
+
+  @override
+  Widget build(BuildContext context) {
+    final tokens = AppTokens.of(context);
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        Image.asset(
+          AppAssets.defaultBackdrop,
+          fit: BoxFit.cover,
+          alignment: Alignment.center,
+          filterQuality: FilterQuality.medium,
+          semanticLabel: '应用默认背景',
+        ),
+        ColoredBox(color: tokens.background.withValues(alpha: 0.42)),
+      ],
     );
   }
 }

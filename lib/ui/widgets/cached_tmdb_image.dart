@@ -15,6 +15,8 @@ class CachedTmdbImage extends StatefulWidget {
     this.alignment = Alignment.center,
     this.cacheWidth,
     this.placeholderIconSize = 40,
+    this.placeholder,
+    this.retainPreviousImage = false,
   });
 
   final String? url;
@@ -22,6 +24,11 @@ class CachedTmdbImage extends StatefulWidget {
   final Alignment alignment;
   final int? cacheWidth;
   final double placeholderIconSize;
+  final Widget? placeholder;
+
+  /// Keeps the currently displayed file visible while a replacement URL is
+  /// resolved. This avoids a flash of placeholder when switching backdrops.
+  final bool retainPreviousImage;
 
   @override
   State<CachedTmdbImage> createState() => _CachedTmdbImageState();
@@ -40,7 +47,11 @@ class _CachedTmdbImageState extends State<CachedTmdbImage> {
   void didUpdateWidget(CachedTmdbImage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.url != widget.url) {
-      _file = null;
+      if (!widget.retainPreviousImage ||
+          widget.url == null ||
+          widget.url!.isEmpty) {
+        _file = null;
+      }
       _load();
     }
   }
@@ -58,10 +69,12 @@ class _CachedTmdbImageState extends State<CachedTmdbImage> {
     }
 
     ImageCacheStore.instance.resolve(url).then((file) {
-      if (!mounted || file == null || widget.url != url) {
+      if (!mounted || widget.url != url) {
         return;
       }
       setState(() {
+        // A failed replacement must clear a retained previous image; showing
+        // artwork from another title is more misleading than the fallback.
         _file = file;
       });
     });
@@ -71,16 +84,35 @@ class _CachedTmdbImageState extends State<CachedTmdbImage> {
   Widget build(BuildContext context) {
     final file = _file;
     if (file == null) {
-      return PosterPlaceholder(iconSize: widget.placeholderIconSize);
+      return _buildPlaceholder();
     }
-    return Image.file(
-      file,
-      fit: widget.fit,
-      alignment: widget.alignment,
-      cacheWidth: widget.cacheWidth,
-      gaplessPlayback: true,
-      errorBuilder: (context, error, stackTrace) =>
-          PosterPlaceholder(iconSize: widget.placeholderIconSize),
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 280),
+      switchInCurve: Curves.easeOutCubic,
+      switchOutCurve: Curves.easeInCubic,
+      layoutBuilder: (currentChild, previousChildren) {
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            ...previousChildren,
+            if (currentChild != null) currentChild,
+          ],
+        );
+      },
+      child: Image.file(
+        file,
+        key: ValueKey(file.path),
+        fit: widget.fit,
+        alignment: widget.alignment,
+        cacheWidth: widget.cacheWidth,
+        gaplessPlayback: true,
+        errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
+      ),
     );
+  }
+
+  Widget _buildPlaceholder() {
+    return widget.placeholder ??
+        PosterPlaceholder(iconSize: widget.placeholderIconSize);
   }
 }

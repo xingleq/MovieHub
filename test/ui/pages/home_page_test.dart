@@ -8,6 +8,7 @@ import 'package:moviehub/app/settings_controller.dart';
 import 'package:moviehub/core/media/media_item.dart';
 import 'package:moviehub/core/media/media_library_store.dart';
 import 'package:moviehub/core/media/sources/media_source.dart';
+import 'package:moviehub/theme/app_assets.dart';
 import 'package:moviehub/theme/app_theme.dart';
 import 'package:moviehub/ui/pages/home_page.dart';
 
@@ -73,6 +74,8 @@ void main() {
     );
     expect(poster, findsOneWidget);
     expect(tester.getSize(poster).width, 180);
+    expect(_assetImage(AppAssets.defaultPoster), findsOneWidget);
+    expect(_assetImage(AppAssets.defaultBackdrop), findsOneWidget);
 
     await tester.tap(poster);
     expect(detailOpens, 1);
@@ -95,6 +98,47 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('媒体库为空时首页使用默认背景', (tester) async {
+    final settings = SettingsController();
+    final library = LibraryController(
+      settings: settings,
+      store: _MemoryLibraryStore(
+        const MediaLibrarySnapshot(roots: [], items: []),
+      ),
+    );
+    addTearDown(() {
+      library.dispose();
+      settings.dispose();
+    });
+    await library.load();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: buildDarkTheme(),
+        home: LibraryScope(
+          controller: library,
+          child: HomePage(
+            onOpenItem: (_) {},
+            onPlayItem: (_) {},
+            onGoToSettings: () {},
+          ),
+        ),
+      ),
+    );
+
+    expect(_assetImage(AppAssets.defaultBackdrop), findsOneWidget);
+    expect(find.text('欢迎来到 MovieHub'), findsOneWidget);
+  });
+}
+
+Finder _assetImage(String assetName) {
+  return find.byWidgetPredicate(
+    (widget) =>
+        widget is Image &&
+        widget.image is AssetImage &&
+        (widget.image as AssetImage).assetName == assetName,
+  );
 }
 
 MediaItem _mediaItem() {

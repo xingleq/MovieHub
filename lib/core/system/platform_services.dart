@@ -5,6 +5,7 @@ import 'windows/windows_cursor_service.dart';
 import 'windows/windows_session_events.dart';
 import 'windows/windows_shell_integration.dart';
 import 'windows/windows_startup_service.dart';
+import 'windows/windows_video_output_policy.dart';
 import 'windows/windows_window_controls.dart';
 
 /// Native window chrome actions (custom title bar buttons).
@@ -76,6 +77,14 @@ abstract interface class CursorService {
   Future<void> setPixelStyleEnabled(bool enabled);
 }
 
+/// Player video-output policy.
+///
+/// This controls only how media_kit publishes decoded frames to Flutter. The
+/// player engine and its hardware decoding remain owned by media_kit.
+abstract interface class VideoOutputPolicy {
+  bool get enableHardwareAcceleration;
+}
+
 /// The platform seam: one bundle of per-OS service implementations, picked
 /// once per process. New platforms (Android/TV) add a branch in
 /// [forCurrentPlatform] with their own implementations — call sites never
@@ -88,7 +97,9 @@ class PlatformServices {
     required this.paths,
     required this.shell,
     CursorService? cursor,
-  }) : cursor = cursor ?? const NoopCursorService();
+    VideoOutputPolicy? videoOutput,
+  }) : cursor = cursor ?? const NoopCursorService(),
+       videoOutput = videoOutput ?? const HardwareVideoOutputPolicy();
 
   final WindowControls windowControls;
   final SessionEvents sessionEvents;
@@ -96,6 +107,7 @@ class PlatformServices {
   final AppPaths paths;
   final ShellIntegration shell;
   final CursorService cursor;
+  final VideoOutputPolicy videoOutput;
 
   /// Process-wide bundle, lazily created for the running OS. Tests may
   /// replace it wholesale.
@@ -110,6 +122,7 @@ class PlatformServices {
         paths: WindowsAppPaths(),
         shell: WindowsShellIntegration(),
         cursor: WindowsCursorService(),
+        videoOutput: const WindowsVideoOutputPolicy(),
       );
     }
     if (Platform.isMacOS) {
@@ -152,6 +165,13 @@ class NoopCursorService implements CursorService {
 
   @override
   Future<void> setPixelStyleEnabled(bool enabled) async {}
+}
+
+class HardwareVideoOutputPolicy implements VideoOutputPolicy {
+  const HardwareVideoOutputPolicy();
+
+  @override
+  bool get enableHardwareAcceleration => true;
 }
 
 /// Fallbacks for platforms without a dedicated implementation — the minimum

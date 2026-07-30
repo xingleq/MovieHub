@@ -88,7 +88,13 @@ class _PlayerPageState extends State<PlayerPage> {
     super.initState();
     _currentItem = widget.item;
     _player = Player();
-    _controller = VideoController(_player);
+    _controller = VideoController(
+      _player,
+      configuration: VideoControllerConfiguration(
+        enableHardwareAcceleration:
+            PlatformServices.instance.videoOutput.enableHardwareAcceleration,
+      ),
+    );
     _positionSubscription = _player.stream.position.listen((position) {
       _lastPosition = position;
     });

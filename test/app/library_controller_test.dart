@@ -65,37 +65,49 @@ class _RecordingShell implements ShellIntegration {
   }
 }
 
-MediaItem _item(String path, {String sourceId = 'stream'}) {
+MediaItem _item(
+  String path, {
+  String sourceId = 'stream',
+  String title = 'a',
+  String? seriesTitle,
+  int? seasonNumber,
+  int? episodeNumber,
+  int? tmdbId,
+  String? tmdbMediaType,
+  int playbackPositionMs = 0,
+  int playbackDurationMs = 0,
+  DateTime? lastPlayedAt,
+}) {
   final stamp = DateTime(2026, 1, 1);
   return MediaItem(
     path: path,
     sourceId: sourceId,
-    title: 'a',
+    title: title,
     extension: 'mkv',
     sizeBytes: 1,
     modifiedAt: stamp,
     addedAt: stamp,
     favorite: false,
     following: false,
-    seriesTitle: null,
-    seasonNumber: null,
-    episodeNumber: null,
-    tmdbId: null,
+    seriesTitle: seriesTitle,
+    seasonNumber: seasonNumber,
+    episodeNumber: episodeNumber,
+    tmdbId: tmdbId,
     tmdbTitle: null,
     overview: null,
     posterPath: null,
     backdropPath: null,
     releaseDate: null,
     voteAverage: null,
-    tmdbMediaType: null,
+    tmdbMediaType: tmdbMediaType,
     genreIds: null,
     genres: null,
     directors: null,
     cast: null,
     runtimeMinutes: null,
-    playbackPositionMs: 0,
-    playbackDurationMs: 0,
-    lastPlayedAt: null,
+    playbackPositionMs: playbackPositionMs,
+    playbackDurationMs: playbackDurationMs,
+    lastPlayedAt: lastPlayedAt,
   );
 }
 
@@ -168,6 +180,85 @@ void main() {
 
     expect(library.itemByIdentity(local.identity)!.favorite, isFalse);
     expect(library.itemByIdentity(nas.identity)!.favorite, isTrue);
+  });
+
+  test('首页无播放记录时同一剧集只显示一张卡片', () async {
+    library.dispose();
+    final episode2 = _item(
+      'series/s01e02.mkv',
+      title: '测试剧 S01E02',
+      seriesTitle: '测试剧',
+      seasonNumber: 1,
+      episodeNumber: 2,
+      tmdbId: 100,
+      tmdbMediaType: 'tv',
+    );
+    final episode1 = _item(
+      'series/s01e01.mkv',
+      title: '测试剧 S01E01',
+      seriesTitle: '测试剧',
+      seasonNumber: 1,
+      episodeNumber: 1,
+      tmdbId: 100,
+      tmdbMediaType: 'tv',
+    );
+    final movie = _item('movies/movie.mkv', title: '测试电影');
+    library = LibraryController(
+      settings: settings,
+      store: _MemoryLibraryStore(
+        MediaLibrarySnapshot(
+          roots: const [],
+          items: [episode2, episode1, movie],
+        ),
+      ),
+      scanner: MediaScanner(source: const _StreamSource()),
+    );
+    await library.load();
+
+    expect(library.homeShelfItems.map((item) => item.identity), [
+      episode2.identity,
+      movie.identity,
+    ]);
+  });
+
+  test('首页补位不会再次加入继续播放剧集的其他集', () async {
+    library.dispose();
+    final unwatchedEpisode = _item(
+      'series/s01e01.mkv',
+      title: '测试剧 S01E01',
+      seriesTitle: '测试剧',
+      seasonNumber: 1,
+      episodeNumber: 1,
+    );
+    final movie = _item('movies/movie.mkv', title: '测试电影');
+    final playedEpisode = _item(
+      'series/s01e02.mkv',
+      title: '测试剧 S01E02',
+      seriesTitle: '测试剧',
+      seasonNumber: 1,
+      episodeNumber: 2,
+      tmdbId: 100,
+      tmdbMediaType: 'tv',
+      playbackPositionMs: 100,
+      playbackDurationMs: 1000,
+      lastPlayedAt: DateTime(2026, 1, 2),
+    );
+    library = LibraryController(
+      settings: settings,
+      store: _MemoryLibraryStore(
+        MediaLibrarySnapshot(
+          roots: const [],
+          items: [unwatchedEpisode, movie, playedEpisode],
+        ),
+      ),
+      scanner: MediaScanner(source: const _StreamSource()),
+    );
+    await library.load();
+
+    expect(library.homeShelfItems.map((item) => item.identity), [
+      playedEpisode.identity,
+      movie.identity,
+    ]);
   });
 
   test('打开文件位置经由注入的 ShellIntegration', () async {

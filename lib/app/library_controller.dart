@@ -94,8 +94,8 @@ class LibraryController extends ChangeNotifier {
     for (final item in items) {
       final key = item.isEpisode
           ? (item.tmdbMediaType == 'tv' && item.tmdbId != null
-              ? 'series:${item.sourceId}:tmdb:${item.tmdbId}'
-              : 'series:${item.sourceId}:${(item.seriesTitle ?? item.title).toLowerCase()}')
+                ? 'series:${item.sourceId}:tmdb:${item.tmdbId}'
+                : 'series:${item.sourceId}:${(item.seriesTitle ?? item.title).toLowerCase()}')
           : 'movie:${item.sourceId}:${item.path}';
       uniqueItems.putIfAbsent(key, () => _withGroupArtwork(item));
     }
@@ -180,40 +180,40 @@ class LibraryController extends ChangeNotifier {
       return const [];
     }
 
-    // Get continue watching items (already sorted by lastPlayedAt, most recent first)
-    final playedItems = continueWatchingItems;
+    // Resolve every file identity to the actual wall group it belongs to.
+    // This is intentionally based on [groups], rather than MediaGroup.keyOf
+    // per item: an unmatched episode can share a group with a matched sibling
+    // whose TMDB id becomes the group's final key.
+    final groupKeyByIdentity = <MediaIdentity, String>{
+      for (final group in groups)
+        for (final identity in group.identities) identity: group.key,
+    };
+    String groupKeyOf(MediaItem item) =>
+        groupKeyByIdentity[item.identity] ??
+        'item:${item.sourceId}:${item.path}';
 
-    if (playedItems.isEmpty) {
-      // No playback history: return first 8 items from library
-      return _items.take(maxItems).toList(growable: false);
-    }
+    final result = <MediaItem>[];
+    final seenGroupKeys = <String>{};
 
-    // Build a map to track which original items are already in the played list.
-    // continueWatchingItems may return items enhanced with group artwork,
-    // so we match by the underlying source+path identity.
-    final playedIdentities = <MediaIdentity>{};
-    for (final played in playedItems) {
-      // Find the original item in _items by identity
-      for (final original in _items) {
-        if (original.identity == played.identity) {
-          playedIdentities.add(original.identity);
-          break;
-        }
+    void addIfNewGroup(MediaItem item) {
+      if (result.length >= maxItems || !seenGroupKeys.add(groupKeyOf(item))) {
+        return;
       }
+      result.add(item);
     }
 
-    // Get remaining items that haven't been played
-    final unplayedItems = _items
-        .where((item) => !playedIdentities.contains(item.identity))
-        .toList();
+    // Continue-watching representatives stay first. Filling from the raw
+    // library order afterwards preserves the existing newest-first behavior,
+    // while the shared group-key set prevents another episode of the same
+    // series from producing a duplicate card.
+    for (final item in continueWatchingItems) {
+      addIfNewGroup(item);
+    }
+    for (final item in _items) {
+      addIfNewGroup(item);
+    }
 
-    // Merge: played items first, then fill with unplayed items
-    final result = <MediaItem>[
-      ...playedItems,
-      ...unplayedItems,
-    ].take(maxItems).toList(growable: false);
-
-    return result;
+    return result.toList(growable: false);
   }
 
   MediaItem? itemByIdentity(MediaIdentity identity) {
